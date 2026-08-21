@@ -42,6 +42,10 @@ export function notificationMeta(
       return { icon: "hand-left", color: colors.secondary, label: "Hatırlatma" };
     case "task_completed":
       return { icon: "checkmark-done", color: colors.success, label: "Görev tamamlandı" };
+    case "super_admin_expiring":
+      return { icon: "shield-half", color: colors.warning, label: "Süper yönetici süresi doluyor" };
+    case "super_admin_expired":
+      return { icon: "shield-checkmark", color: colors.primary, label: "Süper yönetici süresi doldu" };
     default:
       return { icon: "notifications", color: colors.textSecondary, label: "Bildirim" };
   }

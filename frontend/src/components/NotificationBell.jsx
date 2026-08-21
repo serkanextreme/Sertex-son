@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Bell, AlertTriangle, Check, CheckCheck, X, Clock, Link2, Link2Off, Building2, Volume2, VolumeX, Settings as SettingsIcon, KeyRound, PackageX, Share2, Trash2, CheckSquare, Square, BellRing, Moon } from "lucide-react";
+import { Bell, AlertTriangle, Check, CheckCheck, X, Clock, Link2, Link2Off, Building2, Volume2, VolumeX, Settings as SettingsIcon, KeyRound, PackageX, Share2, Trash2, CheckSquare, Square, BellRing, Moon, ShieldCheck, ShieldAlert } from "lucide-react";
 import { notificationsApi, companyPermissionsApi } from "../lib/api";
 import { toast } from "sonner";
 import {
@@ -564,12 +564,16 @@ const NotificationBell = () => {
             const isShared = n.type === "task_shared";
             const isNudge = n.type === "task_nudge";
             const isOverdueDaily = n.type === "overdue_daily";
+            const isSuperExpiring = n.type === "super_admin_expiring";
+            const isSuperExpired = n.type === "super_admin_expired";
             const daysUntil = n.days_until_due != null ? n.days_until_due : n.payload?.days_until_due;
 
             // Choose icon + colour class per notification family.
             let Icon = AlertTriangle;
             let iconCls = "text-sertex-danger";
             if (isDueSoon) { Icon = Clock; iconCls = "text-orange-300"; }
+            else if (isSuperExpiring) { Icon = ShieldAlert; iconCls = "text-amber-300"; }
+            else if (isSuperExpired) { Icon = ShieldCheck; iconCls = "text-purple-300"; }
             else if (isPermReq) { Icon = Link2; iconCls = "text-teal-300"; }
             else if (isPermResp) {
               Icon = n.payload?.approved ? Check : X;
@@ -622,9 +626,15 @@ const NotificationBell = () => {
                       {isDueSoon && (n.is_for_manager
                         ? `${n.owner_username} · ⏱ ${daysUntil === 0 ? "bugün son gün" : `${daysUntil} gün kaldı`}`
                         : `⏱ ${daysUntil === 0 ? "Bugün son gün" : `${daysUntil} gün kaldı`}`)}
-                      {!isPerm && !isDueSoon && !isUnlockOffer && !isOrphan && !isShared && !isNudge && !isOverdueDaily && (n.is_for_manager
+                      {!isPerm && !isDueSoon && !isUnlockOffer && !isOrphan && !isShared && !isNudge && !isOverdueDaily && !isSuperExpiring && !isSuperExpired && (n.is_for_manager
                         ? `${n.owner_username} kullanıcısının görevi geciktirmesi`
                         : "Görevin gecikti")}
+                      {isSuperExpiring && (n.is_for_manager
+                        ? <>🛡️ <b>{n.payload?.username || n.owner_username}</b> için süper yönetici süresi <b>{n.payload?.minutes_left ?? "az"} dk</b> içinde doluyor</>
+                        : <>🛡️ Süper yönetici yetkin <b>{n.payload?.minutes_left ?? "az"} dk</b> içinde sona eriyor</>)}
+                      {isSuperExpired && (n.is_for_manager
+                        ? <>🛡️ <b>{n.payload?.username || n.owner_username}</b> artık süper yönetici değil — <b>{n.payload?.reverted_role || "eski"}</b> rolüne döndü</>
+                        : <>🛡️ Süper yönetici süren doldu — <b>{n.payload?.reverted_role || "eski"}</b> rolüne döndün</>)}
                       {isShared && (
                         <>🔗 <b>{n.owner_username || "Bir kullanıcı"}</b> bir görevi seninle paylaştı · tıkla ▶</>
                       )}
@@ -656,6 +666,8 @@ const NotificationBell = () => {
                       data-testid={`notification-unread-dot-${n.id}`}
                       className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${
                         isDueSoon ? "bg-orange-400" :
+                        isSuperExpiring ? "bg-amber-300" :
+                        isSuperExpired ? "bg-purple-300" :
                         isPermReq ? "bg-teal-300" :
                         isPermResp ? (n.payload?.approved ? "bg-emerald-400" : "bg-rose-400") :
                         isPermRevoked ? "bg-amber-300" :

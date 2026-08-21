@@ -183,6 +183,17 @@ export default function NotificationsScreen() {
                       {n.task_title}
                     </Text>
                   )}
+                  {(n.type === "super_admin_expiring" || n.type === "super_admin_expired") && (
+                    <Text style={styles.itemTitle} numberOfLines={2}>
+                      {n.type === "super_admin_expiring"
+                        ? (n.is_for_manager
+                            ? `${(n.payload?.username as string) ?? n.owner_username ?? ""} · ${(n.payload?.minutes_left as number) ?? "az"} dk kaldı`
+                            : `${(n.payload?.minutes_left as number) ?? "az"} dk içinde sona eriyor`)
+                        : (n.is_for_manager
+                            ? `${(n.payload?.username as string) ?? n.owner_username ?? ""} → ${(n.payload?.reverted_role as string) ?? "eski rol"}`
+                            : `Eski rolüne döndün (${(n.payload?.reverted_role as string) ?? ""})`)}
+                    </Text>
+                  )}
                   <View style={styles.itemMeta}>
                     <Text style={styles.itemTime}>{relativeTime(n.created_at)}</Text>
                     {n.is_for_manager && !!n.owner_username && (

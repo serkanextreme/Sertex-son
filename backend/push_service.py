@@ -71,11 +71,22 @@ def notification_push_text(row: Dict[str, Any]) -> Tuple[str, str, str]:
         "cross_perm_response": "Yetki yanıtı",
         "cross_perm_revoked": "Yetki iptali",
         "tasks_orphaned": "Yarım kalan işler",
+        "super_admin_expiring": "Süper yönetici süresi doluyor",
+        "super_admin_expired": "Süper yönetici süresi doldu",
     }
     title = title_map.get(t, "SERTEX bildirimi")
     body = row.get("task_title") or ""
     if t == "due_soon_task" and row.get("days_until_due") is not None:
         suffix = f"{row['days_until_due']} gün kaldı"
         body = f"{body} — {suffix}" if body else suffix
+    elif t == "super_admin_expiring":
+        p = row.get("payload") or {}
+        mins = p.get("minutes_left")
+        who = p.get("username") or row.get("owner_username") or ""
+        body = f"{who}: {mins} dk içinde süper yönetici yetkisi sona eriyor" if mins is not None else f"{who} süper yönetici yetkisi yakında sona eriyor"
+    elif t == "super_admin_expired":
+        p = row.get("payload") or {}
+        who = p.get("username") or row.get("owner_username") or ""
+        body = f"{who} artık süper yönetici değil — eski rolüne döndü"
     url = f"/?task={row['task_id']}" if row.get("task_id") else "/"
     return title, body, url

@@ -2454,3 +2454,8 @@ Kullanıcı bildirimi: Bir iş kolu (ör. "ORTAK İŞLER") seçiliyken ARŞİV'e
 
 **Bilinen kozmetik:** DB'de ~60 eski test şirketi (COD$_*/TEST_*/E2E_*) "Ek şirket görme" chip bulutunu şişiriyor — opsiyonel tek seferlik temizlik.
 **Yayın notu:** canlıya çıkışta backend redeploy + mobil için yeni Publish gerekir. `EXPO_PUBLIC_BACKEND_URL`/`REACT_APP_BACKEND_URL` publish öncesi `https://sertex-ai.com` olmalı.
+
+## 🧹⏰🏁 Üçlü İyileştirme (2026-06 · fork) ✅ TAMAMLANDI
+1) **Şirket Temizliği:** 56 boş test şirketi (0 kullanıcı+0 görev; CoDS_/TEST_/E2E_/RBACX_/CAPCO_ vb.) silindi. 4 gerçek şirket korundu (AA_BadgeTest, ACME-RBAC-TEST, TEST_CoB_858c25, Test Company A). Orphan company_permissions + admin_caps.extra_company_ids temizlendi. "Ek şirket görme" chip bulutu artık tertemiz.
+2) **Süreli Süper Yönetici — Süre Uyarısı:** `team_service.scan_and_notify_super_admin_expiry` (mevcut `_scanner_loop`'a eklendi, 300s). Süreye `SERTEX_SUPER_EXPIRY_WARN_MIN` (vars. 60) dk kalınca bir kez uyarı; süre dolunca PROAKTİF geri dönüş + bilgi. Bildirimler hem kişiye hem KURUCU(lar)a gider. Yeni tipler: `super_admin_expiring`/`super_admin_expired` (push_service metinleri + web `NotificationBell` shield ikonlu render + mobil `notify.ts`+`notifications.tsx`). Grant `super_admin_expiry_warned=False` set eder, revoke/lazy-revert unset eder. Test: warn (self+owner, tekrar yok) + expired (role→admin, self+owner) direkt scan ile doğrulandı; web bell ekran görüntüsüyle onaylandı.
+3) **Tamamlanma Süresi Etiketi:** Web zaten vardı (`TaskCard.taskDurationLabel` → "3 günde"). Mobil eklendi: `format.taskDurationLabel` + `TaskRow` yeşil "🕐 X günde" pill'i + `task-row-completed`/`task-row-duration` testID. Ekran görüntüsüyle doğrulandı ("15 günde"/"1 günde").

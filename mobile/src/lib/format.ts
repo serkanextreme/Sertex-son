@@ -25,6 +25,20 @@ export function formatDateTime(iso?: string | null): string | null {
   return `${dd}.${mm}.${yy} ${hh}:${mi}`;
 }
 
+// Tamamlanma süresi (oluşturmadan bitişe) — web TaskCard ile birebir sözlük.
+export function taskDurationLabel(start?: string | null, end?: string | null): string | null {
+  if (!start || !end) return null;
+  const ms = new Date(end).getTime() - new Date(start).getTime();
+  if (isNaN(ms) || ms < 0) return null;
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) return "anında";
+  if (mins < 60) return `${mins} dakikada`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} saatte`;
+  const days = Math.floor(hours / 24);
+  return `${days} günde`;
+}
+
 type StatusMeta = { label: string; color: string };
 
 export function statusMeta(status: string): StatusMeta {

@@ -13,6 +13,8 @@ export const TASKS = {
   taskToggle: 'task-toggle',
   taskStart: 'task-row-start',
   taskDue: 'task-row-due',
+  taskCompleted: 'task-row-completed',
+  taskDuration: 'task-row-duration',
   taskReminder: 'task-row-reminder',
   taskAssignees: 'task-row-assignees',
   taskGroupBadge: 'task-row-group-badge',

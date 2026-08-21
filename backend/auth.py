@@ -229,7 +229,8 @@ async def get_current_user_factory(db):
                         await db.users.update_one(
                             {"id": user["id"]},
                             {"$set": {"role": reverted},
-                             "$unset": {"super_admin_until": "", "prev_role": ""}},
+                             "$unset": {"super_admin_until": "", "prev_role": "",
+                                        "super_admin_expiry_warned": ""}},
                         )
                         user["role"] = reverted
                         user.pop("super_admin_until", None)

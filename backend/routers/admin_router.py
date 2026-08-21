@@ -863,6 +863,7 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
                 "prev_role": prev_role or "employee",
                 "super_admin_granted_by": user["id"],
                 "super_admin_granted_at": datetime.now(timezone.utc).isoformat(),
+                "super_admin_expiry_warned": False,
             }},
         )
         updated = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
@@ -884,7 +885,8 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
             {"id": uid},
             {"$set": {"role": reverted},
              "$unset": {"super_admin_until": "", "prev_role": "",
-                        "super_admin_granted_by": "", "super_admin_granted_at": ""}},
+                        "super_admin_granted_by": "", "super_admin_granted_at": "",
+                        "super_admin_expiry_warned": ""}},
         )
         return {"ok": True, "role": reverted}
 

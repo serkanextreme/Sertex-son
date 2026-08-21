@@ -307,4 +307,5 @@ export type AppNotification = {
   days_until_due?: number | null;
   created_at: string;
   read_at?: string | null;
+  payload?: Record<string, unknown> | null;
 };

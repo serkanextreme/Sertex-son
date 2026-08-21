@@ -14,6 +14,7 @@ import {
   initials,
   statusMeta,
   subtaskCounts,
+  taskDurationLabel,
 } from "@/src/lib/format";
 import { colors, monoFont, radius, spacing } from "@/src/theme/colors";
 import { TASKS } from "@/constants/testIds";
@@ -66,6 +67,8 @@ const TaskRowBase = ({ task, busy, highlight, onToggle, onPress, groupBadge }: P
   const meta = statusMeta(task.status);
   const start = formatDateTime(task.start_date);
   const due = formatDateTime(task.due_date);
+  const completedAt = done ? formatDateTime(task.completed_at) : null;
+  const durationLabel = done ? taskDurationLabel(task.created_at, task.completed_at) : null;
   const urgency = dueUrgency(task.due_date, task.status);
   const counts = subtaskCounts(task.subtasks);
 
@@ -153,6 +156,20 @@ const TaskRowBase = ({ task, busy, highlight, onToggle, onPress, groupBadge }: P
                 size={12}
                 color={colors.secondary}
               />
+            </View>
+          )}
+
+          {!!completedAt && (
+            <View style={styles.metaItem} testID={`${TASKS.taskCompleted}-${task.id}`}>
+              <Ionicons name="checkmark-done-circle-outline" size={12} color={colors.success} />
+              <Text style={[styles.metaText, { color: colors.success }]}>{completedAt}</Text>
+            </View>
+          )}
+
+          {!!durationLabel && (
+            <View style={styles.durationPill} testID={`${TASKS.taskDuration}-${task.id}`}>
+              <Ionicons name="time-outline" size={11} color={colors.success} />
+              <Text style={styles.durationText}>{durationLabel}</Text>
             </View>
           )}
 
@@ -255,6 +272,18 @@ const styles = StyleSheet.create({
   pillText: { fontSize: 10, fontWeight: "700", letterSpacing: 0.5, fontFamily: monoFont },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 3 },
   metaText: { color: colors.textMuted, fontSize: 11, fontFamily: monoFont },
+  durationPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    borderWidth: 1,
+    borderColor: "rgba(74,222,128,0.35)",
+    backgroundColor: "rgba(74,222,128,0.10)",
+    borderRadius: radius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  durationText: { color: colors.success, fontSize: 10, fontWeight: "700", fontFamily: monoFont },
   groupBadge: {
     flexDirection: "row",
     alignItems: "center",

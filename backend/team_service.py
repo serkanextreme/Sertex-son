@@ -66,6 +66,13 @@ NOTIF_TYPE_TASKS_ORPHANED = "tasks_orphaned"
 # Görev Paylaşımı — sent to a user when a task is shared with them (ÖZELLİK B).
 NOTIF_TYPE_TASK_SHARED = "task_shared"
 NOTIF_TYPE_TASK_NUDGE = "task_nudge"          # manager pokes an employee about a task
+# 2026-06 — Süreli süper yönetici uyarıları. `expiring` = süre dolmadan (varsayılan
+# 60 dk önce) hem kişiye hem kurucuya; `expired` = süre dolunca (proaktif geri
+# dönüş + bilgi). task_id yok → dedup, kullanıcı üzerindeki `super_admin_expiry_warned`
+# bayrağı + geri dönüşte rol değişimi ile sağlanır.
+NOTIF_TYPE_SUPER_EXPIRING = "super_admin_expiring"
+NOTIF_TYPE_SUPER_EXPIRED = "super_admin_expired"
+SUPER_EXPIRY_WARN_MINUTES = int(os.environ.get("SERTEX_SUPER_EXPIRY_WARN_MIN", "60"))
 # System-wide fallback (must match server.SYSTEM_DEFAULT_REMINDER_DAYS).
 SYSTEM_DEFAULT_REMINDER_DAYS = 3
 _ALLOWED_THRESHOLD_DAYS = {1, 2, 3, 5, 7, 14}
@@ -863,6 +870,69 @@ async def scan_and_notify_due_soon(db) -> Dict[str, int]:
 _scanner_task: Optional[asyncio.Task] = None
 
 
+async def scan_and_notify_super_admin_expiry(db) -> Dict[str, int]:
+    """Süreli süper yöneticileri tarar. Süresine `SUPER_EXPIRY_WARN_MINUTES`
+    dakika kalanları (bir kez) uyarır; süresi dolanları PROAKTİF olarak eski
+    rolüne döndürür ve bilgilendirir. Hem ilgili kişiye hem de kuruculara
+    (owner) bildirim gider. Kurucu (is_owner) hiçbir zaman taranmaz."""
+    now = datetime.now(timezone.utc)
+    warn_delta = timedelta(minutes=SUPER_EXPIRY_WARN_MINUTES)
+    owner_docs = await db.users.find({"is_owner": True}, {"_id": 0, "id": 1}).to_list(length=100)
+    owner_ids = [o["id"] for o in owner_docs]
+    warned = 0
+    expired = 0
+    cur = db.users.find(
+        {"role": "super_admin", "is_owner": {"$ne": True}, "super_admin_until": {"$ne": None}},
+        {"_id": 0, "id": 1, "username": 1, "super_admin_until": 1, "prev_role": 1,
+         "super_admin_expiry_warned": 1},
+    )
+    async for u in cur:
+        until = _parse_iso(u.get("super_admin_until"))
+        if not until:
+            continue
+        uname = u.get("username")
+        if until <= now:
+            reverted = u.get("prev_role") or "employee"
+            await db.users.update_one(
+                {"id": u["id"]},
+                {"$set": {"role": reverted},
+                 "$unset": {"super_admin_until": "", "prev_role": "",
+                            "super_admin_expiry_warned": "", "super_admin_granted_by": "",
+                            "super_admin_granted_at": ""}},
+            )
+            payload = {"username": uname, "reverted_role": reverted}
+            await _insert_notification(db, Notification(
+                user_id=u["id"], type=NOTIF_TYPE_SUPER_EXPIRED,
+                owner_user_id=u["id"], owner_username=uname, payload=payload,
+            ))
+            for oid in owner_ids:
+                if oid == u["id"]:
+                    continue
+                await _insert_notification(db, Notification(
+                    user_id=oid, type=NOTIF_TYPE_SUPER_EXPIRED, is_for_manager=True,
+                    owner_user_id=u["id"], owner_username=uname, payload=payload,
+                ))
+            expired += 1
+        elif (until - now) <= warn_delta and not u.get("super_admin_expiry_warned"):
+            mins_left = max(1, int((until - now).total_seconds() // 60))
+            payload = {"username": uname, "minutes_left": mins_left,
+                       "super_admin_until": u.get("super_admin_until")}
+            await _insert_notification(db, Notification(
+                user_id=u["id"], type=NOTIF_TYPE_SUPER_EXPIRING,
+                owner_user_id=u["id"], owner_username=uname, payload=payload,
+            ))
+            for oid in owner_ids:
+                if oid == u["id"]:
+                    continue
+                await _insert_notification(db, Notification(
+                    user_id=oid, type=NOTIF_TYPE_SUPER_EXPIRING, is_for_manager=True,
+                    owner_user_id=u["id"], owner_username=uname, payload=payload,
+                ))
+            await db.users.update_one({"id": u["id"]}, {"$set": {"super_admin_expiry_warned": True}})
+            warned += 1
+    return {"warned": warned, "expired": expired}
+
+
 async def _scanner_loop(db) -> None:
     """Long-running background loop. Cheap by construction (dedup index)."""
     while True:
@@ -873,6 +943,9 @@ async def _scanner_loop(db) -> None:
             due_counts = await scan_and_notify_due_soon(db)
             if due_counts["self"] or due_counts["manager"]:
                 logger.info("due_soon_scanner: %s", due_counts)
+            sup = await scan_and_notify_super_admin_expiry(db)
+            if sup["warned"] or sup["expired"]:
+                logger.info("super_admin_expiry: %s", sup)
         except Exception as e:
             logger.exception("scanner iteration failed: %s", e)
         await asyncio.sleep(OVERDUE_SCAN_INTERVAL_S)
