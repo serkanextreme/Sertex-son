@@ -14,6 +14,20 @@ export const SETTINGS = {
   navCompanies: 'settings-nav-companies',
   navLicenses: 'settings-nav-licenses',
   navPermissions: 'settings-nav-permissions',
+  navSuperAdmins: 'settings-nav-super-admins',
+};
+
+// Süper Yönetici paneli (yalnızca süper yönetici).
+export const SUPERADMIN = {
+  screen: 'super-admins-screen',
+  list: 'super-admins-list',
+  adminRow: (id) => `super-admin-caps-${id}`,
+  capViewTasks: (id) => `super-cap-view-tasks-${id}`,
+  capCreateCompany: (id) => `super-cap-create-company-${id}`,
+  extraCompany: (id, cid) => `super-extra-company-${id}-${cid}`,
+  grantHours: (id) => `super-grant-hours-${id}`,
+  promote: (id) => `super-promote-${id}`,
+  revoke: (id) => `super-revoke-${id}`,
 };
 
 // Mobil Kullanıcı Detay ekranı (admin → Kullanıcılar → kişi).

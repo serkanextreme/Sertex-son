@@ -157,8 +157,8 @@ export const ShareTaskModal = ({ task, onClose, onSaved }) => {
                     {u.role === "manager" && (
                       <span className="hud-text text-purple-300/70 ml-2">MÜDÜR</span>
                     )}
-                    {u.role === "admin" && (
-                      <span className="hud-text text-yellow-300/70 ml-2">YÖNETİCİ</span>
+                    {(u.role === "admin" || u.role === "super_admin" || u.is_owner) && (
+                      <span className="hud-text text-yellow-300/70 ml-2">{u.is_owner ? "KURUCU" : (u.role === "super_admin" ? "SÜPER YÖNETİCİ" : "YÖNETİCİ")}</span>
                     )}
                   </span>
                   {u.company_name && (

@@ -20,6 +20,10 @@ from permissions import (
     CompanyPermissionCreate,
     get_or_create_company,
     normalize_role,
+    acting_role,
+    is_super_admin,
+    get_admin_caps,
+    admin_effective_company_ids,
 )
 
 
@@ -31,20 +35,28 @@ def build_permissions_router(db, current_user_dep) -> APIRouter:
     # -----------------------------------------------------------------
     @router.get("/companies")
     async def list_companies(user: dict = Depends(current_user_dep)):
-        """List companies. Admin sees all, others only see own company."""
-        role = normalize_role(user.get("role"))
-        q: dict = {}
-        if role != "admin":
-            cid = user.get("company_id")
-            if not cid:
+        """Süper yönetici tüm şirketleri; yönetici yalnızca etkin şirketlerini
+        (kendi + tanınan ek şirketler); diğerleri yalnızca kendi şirketini görür."""
+        if is_super_admin(user):
+            return await db.companies.find({}, {"_id": 0}).sort("name", 1).to_list(length=2000)
+        if acting_role(user) == "admin":
+            eff = admin_effective_company_ids(user)
+            if not eff:
                 return []
-            q = {"id": cid}
-        docs = await db.companies.find(q, {"_id": 0}).sort("name", 1).to_list(length=2000)
-        return docs
+            return await db.companies.find(
+                {"id": {"$in": eff}}, {"_id": 0}).sort("name", 1).to_list(length=2000)
+        cid = user.get("company_id")
+        if not cid:
+            return []
+        return await db.companies.find({"id": cid}, {"_id": 0}).sort("name", 1).to_list(length=2000)
 
     @router.post("/companies", response_model=Company)
     async def create_company(req: CompanyCreate, user: dict = Depends(current_user_dep)):
-        require_admin(user)
+        # Şirket açma: süper yönetici serbest. Yönetici yalnızca kendisine
+        # 'can_create_company' yetkisi tanındıysa açabilir.
+        if not is_super_admin(user):
+            if not (acting_role(user) == "admin" and get_admin_caps(user).get("can_create_company")):
+                raise HTTPException(status_code=403, detail="Yeni şirket açma yetkiniz yok")
         name = (req.name or "").strip()
         if len(name) < 2:
             raise HTTPException(status_code=400, detail="Şirket adı en az 2 karakter olmalı")
@@ -59,7 +71,7 @@ def build_permissions_router(db, current_user_dep) -> APIRouter:
         # Faz 8 CP5 — Admin can update any company. Manager can update
         # `due_soon_threshold` for their OWN company only. Name changes still
         # require admin (organization-wide identity).
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         is_admin = role == "admin"
         is_own_manager = (
             role == "manager"
@@ -141,7 +153,7 @@ def build_permissions_router(db, current_user_dep) -> APIRouter:
         """List every user whose `company_ids` contains `cid`. Visible to
         admin (any company) or to a member of the target company."""
         from permissions import get_user_company_ids as _gcids
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if role != "admin" and cid not in _gcids(user):
             raise HTTPException(status_code=403, detail="Yetkiniz yok")
         docs = await db.users.find(
@@ -155,7 +167,7 @@ def build_permissions_router(db, current_user_dep) -> APIRouter:
         """Admin can add anyone anywhere. A manager can add users to their
         OWN company only (must be a member of `cid`)."""
         from permissions import get_user_company_ids as _gcids
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if role == "admin":
             pass
         elif role == "manager" and cid in _gcids(user):
@@ -190,7 +202,7 @@ def build_permissions_router(db, current_user_dep) -> APIRouter:
         the target user are flipped to `orphaned=True` so the company's
         manager can reclaim them from the "Yarım Kalan İşler" tab."""
         from permissions import get_user_company_ids as _gcids
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if role == "admin":
             pass
         elif role == "manager" and cid in _gcids(user):
@@ -306,7 +318,7 @@ def build_permissions_router(db, current_user_dep) -> APIRouter:
         touching any of their own companies (as viewer or target — so they
         can see pending requests directed at them too)."""
         from permissions import get_user_company_ids as _gcids
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         q: dict = {}
         if viewer_company_id:
             q["viewer_company_id"] = viewer_company_id
@@ -338,7 +350,7 @@ def build_permissions_router(db, current_user_dep) -> APIRouter:
             notify_cross_perm_request as _fanout_request,
             notify_cross_perm_response as _fanout_response,
         )
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if req.viewer_company_id == req.target_company_id:
             raise HTTPException(
                 status_code=400,
@@ -406,7 +418,7 @@ def build_permissions_router(db, current_user_dep) -> APIRouter:
         row = await db.company_permissions.find_one({"id": cpid}, {"_id": 0})
         if not row:
             raise HTTPException(status_code=404, detail="İstek bulunamadı")
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if role == "admin":
             pass
         elif role == "manager" and row.get("target_company_id") in _gcids(user):
@@ -442,7 +454,7 @@ def build_permissions_router(db, current_user_dep) -> APIRouter:
         row = await db.company_permissions.find_one({"id": cpid}, {"_id": 0})
         if not row:
             raise HTTPException(status_code=404, detail="Kayıt bulunamadı")
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         touched_cids = {row.get("viewer_company_id"), row.get("target_company_id")}
         if role == "admin":
             pass

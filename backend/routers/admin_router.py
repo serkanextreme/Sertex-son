@@ -19,7 +19,14 @@ from permissions import (
     normalize_role,
     get_or_create_company,
     get_user_company_ids,
+    is_super_admin,
+    is_privileged,
+    acting_role,
+    get_admin_caps,
+    admin_effective_company_ids,
+    _regex_escape,
 )
+from auth import require_super_admin, require_owner
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +125,20 @@ class ClientLogRequest(BaseModel):
     ts_client: Optional[str] = None
 
 
+class AdminCapsUpdate(BaseModel):
+    # Süper yönetici → bir Yönetici'ye tanınan özel fonksiyonlar.
+    extra_company_ids: Optional[list] = None
+    can_create_company: Optional[bool] = None
+    can_view_company_tasks: Optional[bool] = None
+
+
+class SuperAdminGrant(BaseModel):
+    # Kurucu → süreli süper yönetici ataması. `hours` verilirse şimdi+hours;
+    # `until` (ISO) verilirse o ana kadar. En az biri gerekli.
+    hours: Optional[int] = Field(default=None, ge=1, le=8760)
+    until: Optional[str] = None
+
+
 def build_admin_router(db, current_user_dep, require_admin, hash_password) -> APIRouter:
     router = APIRouter()
 
@@ -127,6 +148,58 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
             return int(doc["quota_mb"])
         return DEFAULT_SYSTEM_QUOTA_MB
 
+    async def _find_company_by_name(name: str) -> Optional[dict]:
+        return await db.companies.find_one(
+            {"name": {"$regex": f"^{_regex_escape(name.strip())}$", "$options": "i"}},
+            {"_id": 0},
+        )
+
+    async def _resolve_company_for_actor(actor: dict, company_id, company_name):
+        """Resolve a (company_id, company_name) target for create/update.
+        Super admin: unrestricted. Company admin: only companies in their
+        effective set; creating a brand-new company requires the
+        `can_create_company` capability."""
+        super_ = is_super_admin(actor)
+        eff = set(admin_effective_company_ids(actor))
+        if company_id:
+            comp = await db.companies.find_one({"id": company_id}, {"_id": 0})
+            if not comp:
+                raise HTTPException(status_code=404, detail="Şirket bulunamadı")
+            if not super_ and comp["id"] not in eff:
+                raise HTTPException(status_code=403, detail="Bu şirkete kullanıcı atama yetkiniz yok")
+            return comp["id"], comp["name"]
+        if company_name and company_name.strip():
+            existing = await _find_company_by_name(company_name)
+            if existing:
+                if not super_ and existing["id"] not in eff:
+                    raise HTTPException(status_code=403, detail="Bu şirkete kullanıcı atama yetkiniz yok")
+                return existing["id"], existing["name"]
+            if not super_ and not get_admin_caps(actor).get("can_create_company"):
+                raise HTTPException(status_code=403, detail="Yeni şirket açma yetkiniz yok")
+            try:
+                comp = await get_or_create_company(db, company_name.strip(), created_by=actor["id"])
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e))
+            return comp["id"], comp["name"]
+        return None, None
+
+    def _assert_can_manage_target(actor: dict, target: dict):
+        """Owner is untouchable by anyone but themselves. A temp super_admin is
+        untouchable by non-owners. A company admin may only manage users inside
+        their effective companies."""
+        if target.get("is_owner") and not actor.get("is_owner"):
+            raise HTTPException(status_code=403, detail="Kurucu üzerinde işlem yapılamaz")
+        if is_super_admin(actor):
+            return
+        # From here the actor is a company admin.
+        if target.get("role") == "super_admin":
+            raise HTTPException(status_code=403, detail="Süper yönetici üzerinde işlem yapamazsınız")
+        eff = set(admin_effective_company_ids(actor))
+        tcids = set(get_user_company_ids(target))
+        if not eff or not (eff & tcids):
+            raise HTTPException(status_code=403, detail="Bu kullanıcı yönetim kapsamınızda değil")
+
+
     # ------------------------------------------------------------------
     # Companies list (legacy: distinct company_name)
     # ------------------------------------------------------------------
@@ -134,7 +207,16 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
     async def admin_list_companies(user: dict = Depends(current_user_dep)):
         require_admin(user)
         try:
-            names = await db.users.distinct("company_name", {"company_name": {"$ne": None, "$exists": True}})
+            if is_super_admin(user):
+                names = await db.users.distinct("company_name", {"company_name": {"$ne": None, "$exists": True}})
+            else:
+                eff = admin_effective_company_ids(user)
+                if not eff:
+                    names = []
+                else:
+                    comps = await db.companies.find(
+                        {"id": {"$in": eff}}, {"_id": 0, "name": 1}).to_list(length=2000)
+                    names = [c.get("name") for c in comps]
             names = sorted([n for n in names if n and n.strip()], key=lambda s: s.lower())
         except Exception:
             names = []
@@ -146,7 +228,20 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
     @router.get("/admin/users")
     async def admin_list_users(user: dict = Depends(current_user_dep)):
         require_admin(user)
-        users = await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", 1).to_list(length=500)
+        if is_super_admin(user):
+            user_q: Dict[str, Any] = {}
+        else:
+            # Company admin sees only users in their effective companies (+ self).
+            eff = admin_effective_company_ids(user)
+            if not eff:
+                user_q = {"id": user["id"]}
+            else:
+                user_q = {"$or": [
+                    {"id": user["id"]},
+                    {"company_id": {"$in": eff}},
+                    {"company_ids": {"$in": eff}},
+                ]}
+        users = await db.users.find(user_q, {"_id": 0, "password_hash": 0}).sort("created_at", 1).to_list(length=500)
         collections = [
             "tasks", "notes", "files", "conversations", "messages",
             "memories", "email_accounts", "reminders", "file_chunks",
@@ -169,7 +264,7 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
             used = totals.get(u["id"], 0)
             u["usage_bytes"] = used
             u["usage_mb"] = round(used / (1024 * 1024), 2)
-            if u.get("role") == "admin":
+            if u.get("is_owner") or u.get("role") in ("admin", "super_admin"):
                 u["quota_mb"] = None
                 u["quota_source"] = "system"
                 u["quota_percent"] = None
@@ -202,7 +297,7 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
     # ------------------------------------------------------------------
     @router.get("/admin/system-quota")
     async def get_system_quota(user: dict = Depends(current_user_dep)):
-        require_admin(user)
+        require_super_admin(user)
         return {
             "quota_mb": await _get_system_quota_mb(),
             "min_mb": MIN_SYSTEM_QUOTA_MB,
@@ -212,7 +307,7 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
 
     @router.put("/admin/system-quota")
     async def set_system_quota(req: SystemQuotaUpdate, user: dict = Depends(current_user_dep)):
-        require_admin(user)
+        require_super_admin(user)
         await db.system_settings.update_one(
             {"key": "global"},
             {"$set": {
@@ -230,7 +325,7 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
     # ------------------------------------------------------------------
     @router.get("/admin/chat-prompt")
     async def get_chat_prompt(user: dict = Depends(current_user_dep)):
-        require_admin(user)
+        require_super_admin(user)
         from routers.chat_router import SYSTEM_PROMPT_TR, SYSTEM_PROMPT_EN
         doc = await db.system_settings.find_one({"key": "global"}, {"_id": 0}) or {}
         return {
@@ -242,7 +337,7 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
 
     @router.put("/admin/chat-prompt")
     async def set_chat_prompt(req: ChatPromptUpdate, user: dict = Depends(current_user_dep)):
-        require_admin(user)
+        require_super_admin(user)
         await db.system_settings.update_one(
             {"key": "global"},
             {"$set": {
@@ -262,7 +357,8 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
     @router.get("/stats/summary")
     async def stats_summary(user: dict = Depends(current_user_dep)):
         uid = user["id"]
-        is_admin = user.get("role") == "admin"
+        is_super_scope = is_super_admin(user)
+        is_priv = is_privileged(user)
         task_active_q = {
             "user_id": uid,
             "status": {"$ne": "done"},
@@ -302,7 +398,7 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
                     logger.warning("per-user storage aggregate failed for collection %r: %s", name, exc)
             return total
 
-        db_bytes = await _sum_bsonsize(None if is_admin else {"user_id": uid})
+        db_bytes = await _sum_bsonsize(None if is_super_scope else {"user_id": uid})
         db_mb = round(db_bytes / (1024 * 1024), 2)
 
         from license_service import (
@@ -311,8 +407,8 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
         quota_mb: Optional[int] = None
         quota_percent: Optional[float] = None
         license_type: Optional[str] = None
-        license_label: str = "Sistem" if is_admin else "Ücretsiz"
-        if is_admin:
+        license_label: str = "Sistem" if is_priv else "Ücretsiz"
+        if is_priv:
             quota_mb = await _get_system_quota_mb()
         else:
             user_doc = await db.users.find_one({"id": uid}, {"_id": 0, "custom_quota_mb": 1})
@@ -340,7 +436,7 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
             "email_accounts": email_accounts_c,
             "db_bytes": db_bytes,
             "db_mb": db_mb,
-            "is_admin_scope": is_admin,
+            "is_admin_scope": is_super_scope,
             "quota_mb": quota_mb,
             "quota_percent": quota_percent,
             "license_type": license_type,
@@ -390,20 +486,22 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
         if req.custom_quota_mb and req.custom_quota_mb > 0:
             new_user["custom_quota_mb"] = int(req.custom_quota_mb)
         if req.company_id:
-            company = await db.companies.find_one({"id": req.company_id}, {"_id": 0})
-            if not company:
-                raise HTTPException(status_code=404, detail="Şirket bulunamadı")
-            new_user["company_id"] = company["id"]
-            new_user["company_name"] = company["name"]
+            cid, cname = await _resolve_company_for_actor(user, req.company_id, None)
+            new_user["company_id"] = cid
+            new_user["company_name"] = cname
         elif req.company_name and req.company_name.strip():
-            try:
-                company = await get_or_create_company(
-                    db, req.company_name.strip(), created_by=user["id"],
-                )
-            except ValueError as e:
-                raise HTTPException(status_code=400, detail=str(e))
-            new_user["company_id"] = company["id"]
-            new_user["company_name"] = company["name"]
+            cid, cname = await _resolve_company_for_actor(user, None, req.company_name)
+            new_user["company_id"] = cid
+            new_user["company_name"] = cname
+        elif not is_super_admin(user):
+            # Company admin must place new users inside a company they manage;
+            # default to their own primary company when none was specified.
+            own = user.get("company_id")
+            if own:
+                comp = await db.companies.find_one({"id": own}, {"_id": 0})
+                if comp:
+                    new_user["company_id"] = comp["id"]
+                    new_user["company_name"] = comp["name"]
         await db.users.insert_one(new_user)
         new_user.pop("password_hash", None)
         new_user.pop("_id", None)
@@ -435,16 +533,17 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
         target = await db.users.find_one({"id": uid})
         if not target:
             raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+        _assert_can_manage_target(user, target)
         old_company_id = target.get("company_id")
         updates: Dict[str, Any] = {}
         if req.role is not None:
             new_role = normalize_role(req.role)
             if new_role not in ("admin", "manager", "employee"):
-                raise HTTPException(status_code=400, detail="Geçersiz rol")
-            if target.get("role") == "admin" and new_role != "admin":
-                admin_count = await db.users.count_documents({"role": "admin"})
-                if admin_count <= 1:
-                    raise HTTPException(status_code=400, detail="Son yöneticiyi düşüremezsiniz")
+                raise HTTPException(status_code=400, detail="Geçersiz rol (süper yönetici için ayrı akış kullanın)")
+            if target.get("is_owner"):
+                raise HTTPException(status_code=400, detail="Kurucunun rolü değiştirilemez")
+            if target.get("role") == "super_admin":
+                raise HTTPException(status_code=400, detail="Süper yönetici rolü buradan değiştirilemez — süper yönetici geri alma akışını kullanın")
             updates["role"] = new_role
         if req.new_password is not None:
             if len(req.new_password) < 6:
@@ -463,23 +562,18 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
                 unset_fields["company_id"] = ""
                 unset_fields["company_name"] = ""
             else:
-                company = await db.companies.find_one({"id": stripped_cid}, {"_id": 0})
-                if not company:
-                    raise HTTPException(status_code=404, detail="Şirket bulunamadı")
-                updates["company_id"] = company["id"]
-                updates["company_name"] = company["name"]
+                cid, cname = await _resolve_company_for_actor(user, stripped_cid, None)
+                updates["company_id"] = cid
+                updates["company_name"] = cname
         elif req.company_name is not None:
             stripped = req.company_name.strip()
             if stripped == "":
                 unset_fields["company_name"] = ""
                 unset_fields["company_id"] = ""
             else:
-                try:
-                    company = await get_or_create_company(db, stripped, created_by=user["id"])
-                except ValueError as e:
-                    raise HTTPException(status_code=400, detail=str(e))
-                updates["company_name"] = company["name"]
-                updates["company_id"] = company["id"]
+                cid, cname = await _resolve_company_for_actor(user, None, stripped)
+                updates["company_name"] = cname
+                updates["company_id"] = cid
         if updates or unset_fields:
             op: Dict[str, Any] = {}
             if updates:
@@ -523,16 +617,18 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
         uptime, and a rolling error window. Non-admins are rejected with
         403 so this can't be used as a reconnaissance surface.
         """
-        require_admin(user)
+        require_super_admin(user)
         from monitoring_service import build_health_snapshot
         return await build_health_snapshot(db)
 
     @router.post("/admin/users/{uid}/impersonate")
     async def admin_impersonate(uid: str, user: dict = Depends(current_user_dep)):
-        require_admin(user)
+        require_super_admin(user)
         target = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
         if not target:
             raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+        if target.get("is_owner") and not user.get("is_owner"):
+            raise HTTPException(status_code=403, detail="Kurucunun kılığına giremezsiniz")
         from auth import get_jwt_secret, JWT_ALGORITHM
         import jwt as _jwt
         payload = {
@@ -565,10 +661,9 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
         target = await db.users.find_one({"id": uid})
         if not target:
             raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
-        if target.get("role") == "admin":
-            admin_count = await db.users.count_documents({"role": "admin"})
-            if admin_count <= 1:
-                raise HTTPException(status_code=400, detail="Son yöneticiyi silemezsiniz")
+        if target.get("is_owner"):
+            raise HTTPException(status_code=400, detail="Kurucu silinemez")
+        _assert_can_manage_target(user, target)
         if mode not in ("soft_orphan", "hard", "purge"):
             raise HTTPException(status_code=400, detail="Geçersiz mod")
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -694,7 +789,7 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
 
     @router.get("/admin/client-logs")
     async def admin_client_logs(limit: int = 100, user: dict = Depends(current_user_dep)):
-        require_admin(user)
+        require_super_admin(user)
         limit = max(1, min(int(limit), 500))
         docs = await db.client_logs.find(
             {}, {"_id": 0, "ts": 0},
@@ -706,8 +801,113 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
 
     @router.delete("/admin/client-logs")
     async def admin_clear_client_logs(user: dict = Depends(current_user_dep)):
-        require_admin(user)
+        require_super_admin(user)
         res = await db.client_logs.delete_many({})
         return {"deleted": int(getattr(res, "deleted_count", 0) or 0)}
+
+    # ------------------------------------------------------------------
+    # Süper Yönetici / Kurucu — rol yönetimi
+    # ------------------------------------------------------------------
+    def _serialize_super(u: dict) -> dict:
+        return {
+            "id": u["id"],
+            "username": u.get("username"),
+            "is_owner": bool(u.get("is_owner")),
+            "role": u.get("role"),
+            "super_admin_until": u.get("super_admin_until"),
+            "prev_role": u.get("prev_role"),
+        }
+
+    @router.get("/admin/super-admins")
+    async def list_super_admins(user: dict = Depends(current_user_dep)):
+        """Kurucu + aktif (süreli) süper yöneticiler. Süper yönetici görebilir."""
+        require_super_admin(user)
+        docs = await db.users.find(
+            {"$or": [{"is_owner": True}, {"role": "super_admin"}]},
+            {"_id": 0, "password_hash": 0},
+        ).to_list(length=500)
+        docs.sort(key=lambda d: (not d.get("is_owner"), d.get("username") or ""))
+        return {"super_admins": [_serialize_super(d) for d in docs]}
+
+    @router.post("/admin/users/{uid}/super-admin")
+    async def grant_super_admin(uid: str, req: SuperAdminGrant, user: dict = Depends(current_user_dep)):
+        """Kurucu → birini SÜRELİ süper yönetici yapar. Süre bitince otomatik
+        eski rolüne döner (lazy revert). Yalnızca kurucu yapabilir."""
+        require_owner(user)
+        target = await db.users.find_one({"id": uid})
+        if not target:
+            raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+        if target.get("is_owner"):
+            raise HTTPException(status_code=400, detail="Kurucu zaten kalıcı süper yöneticidir")
+        # Compute expiry.
+        if req.until:
+            try:
+                exp = datetime.fromisoformat(req.until)
+                if exp.tzinfo is None:
+                    exp = exp.replace(tzinfo=timezone.utc)
+            except Exception:
+                raise HTTPException(status_code=400, detail="Geçersiz tarih (until)")
+        elif req.hours:
+            exp = datetime.now(timezone.utc) + timedelta(hours=int(req.hours))
+        else:
+            raise HTTPException(status_code=400, detail="`hours` veya `until` gerekli")
+        if exp <= datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="Bitiş zamanı gelecekte olmalı")
+        # Preserve the role to revert to (don't overwrite an existing temp grant's prev_role).
+        prev_role = target.get("prev_role") if target.get("role") == "super_admin" else normalize_role(target.get("role"))
+        await db.users.update_one(
+            {"id": uid},
+            {"$set": {
+                "role": "super_admin",
+                "super_admin_until": exp.isoformat(),
+                "prev_role": prev_role or "employee",
+                "super_admin_granted_by": user["id"],
+                "super_admin_granted_at": datetime.now(timezone.utc).isoformat(),
+            }},
+        )
+        updated = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
+        return _serialize_super(updated)
+
+    @router.delete("/admin/users/{uid}/super-admin")
+    async def revoke_super_admin(uid: str, user: dict = Depends(current_user_dep)):
+        """Kurucu → süreli süper yöneticiyi erken geri alır (eski rolüne döner)."""
+        require_owner(user)
+        target = await db.users.find_one({"id": uid})
+        if not target:
+            raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+        if target.get("is_owner"):
+            raise HTTPException(status_code=400, detail="Kurucu geri alınamaz")
+        if target.get("role") != "super_admin":
+            raise HTTPException(status_code=400, detail="Bu kullanıcı süper yönetici değil")
+        reverted = target.get("prev_role") or "employee"
+        await db.users.update_one(
+            {"id": uid},
+            {"$set": {"role": reverted},
+             "$unset": {"super_admin_until": "", "prev_role": "",
+                        "super_admin_granted_by": "", "super_admin_granted_at": ""}},
+        )
+        return {"ok": True, "role": reverted}
+
+    @router.patch("/admin/users/{uid}/admin-caps")
+    async def set_admin_caps(uid: str, req: AdminCapsUpdate, user: dict = Depends(current_user_dep)):
+        """Süper yönetici → bir Yönetici'ye özel fonksiyon tanır/kaldırır:
+        ek şirket görme, yeni şirket açma, şirket görevlerini görme."""
+        require_super_admin(user)
+        target = await db.users.find_one({"id": uid})
+        if not target:
+            raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+        if acting_role(target) != "admin" or target.get("is_owner") or target.get("role") == "super_admin":
+            raise HTTPException(status_code=400, detail="Özel fonksiyonlar yalnızca Yönetici rolüne tanınır")
+        caps = get_admin_caps(target)
+        if req.extra_company_ids is not None:
+            valid = await db.companies.find(
+                {"id": {"$in": list(req.extra_company_ids)}}, {"_id": 0, "id": 1}).to_list(length=500)
+            caps["extra_company_ids"] = [c["id"] for c in valid]
+        if req.can_create_company is not None:
+            caps["can_create_company"] = bool(req.can_create_company)
+        if req.can_view_company_tasks is not None:
+            caps["can_view_company_tasks"] = bool(req.can_view_company_tasks)
+        await db.users.update_one({"id": uid}, {"$set": {"admin_caps": caps}})
+        return {"id": uid, "admin_caps": caps}
 
     return router

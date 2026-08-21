@@ -55,15 +55,23 @@ async def seed_initial_user(db):
             "id": str(uuid.uuid4()),
             "username": username,
             "password_hash": hash_password(password),
-            "role": "admin",
+            "role": "super_admin",
+            "is_owner": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.users.insert_one(user_doc)
     else:
-        # Ensure role is set (backward compat) and env-driven pw sync if not user-changed
+        # The founding account is the permanent, untouchable OWNER + super admin.
+        # Upgrade legacy 'admin' seed idempotently.
         updates = {}
-        if "role" not in existing:
-            updates["role"] = "admin"
+        if not existing.get("is_owner"):
+            updates["is_owner"] = True
+        if existing.get("role") != "super_admin":
+            updates["role"] = "super_admin"
+        # Owner is permanent — never carries a temp-expiry window.
+        if existing.get("super_admin_until"):
+            updates["super_admin_until"] = None
+            updates["prev_role"] = None
         if not existing.get("password_user_set") and not verify_password(password, existing["password_hash"]):
             updates["password_hash"] = hash_password(password)
         if updates:
@@ -71,8 +79,23 @@ async def seed_initial_user(db):
 
 
 def require_admin(user: dict):
-    if user.get("role") != "admin":
+    """admin OR super_admin (company-management gate)."""
+    from permissions import is_privileged
+    if not is_privileged(user):
         raise HTTPException(status_code=403, detail="Bu işlem için yönetici yetkisi gerekli")
+
+
+def require_super_admin(user: dict):
+    """super_admin (or owner) only — system-wide settings."""
+    from permissions import is_super_admin
+    if not is_super_admin(user):
+        raise HTTPException(status_code=403, detail="Bu işlem için süper yönetici yetkisi gerekli")
+
+
+def require_owner(user: dict):
+    """Kurucu (owner) only — appointing/revoking super admins."""
+    if not (user or {}).get("is_owner"):
+        raise HTTPException(status_code=403, detail="Bu işlem yalnızca kurucu tarafından yapılabilir")
 
 
 async def _check_lockout(db, identifier: str) -> Optional[int]:
@@ -160,6 +183,7 @@ async def login(db, username: str, password: str, ip: str):
             "id": user["id"],
             "username": user["username"],
             "role": user.get("role", "user"),
+            "is_owner": bool(user.get("is_owner")),
             "workspace_mode": user.get("workspace_mode", "personal"),
         },
     }
@@ -189,6 +213,29 @@ async def get_current_user_factory(db):
                     detail="SESSION_KICKED: Başka bir cihazdan giriş yapıldı — bu oturum sonlandırıldı",
                 )
             user.pop("_id", None)
+            # Lazy revert: an elapsed temporary super-admin grant drops the user
+            # back to their prior role. Owner is permanent and never reverts.
+            if (
+                not user.get("is_owner")
+                and user.get("role") == "super_admin"
+                and user.get("super_admin_until")
+            ):
+                try:
+                    exp = datetime.fromisoformat(user["super_admin_until"])
+                    if exp.tzinfo is None:
+                        exp = exp.replace(tzinfo=timezone.utc)
+                    if exp <= datetime.now(timezone.utc):
+                        reverted = user.get("prev_role") or "employee"
+                        await db.users.update_one(
+                            {"id": user["id"]},
+                            {"$set": {"role": reverted},
+                             "$unset": {"super_admin_until": "", "prev_role": ""}},
+                        )
+                        user["role"] = reverted
+                        user.pop("super_admin_until", None)
+                        user.pop("prev_role", None)
+                except Exception:
+                    pass
             return user
         except jwt.ExpiredSignatureError:
             raise HTTPException(status_code=401, detail="Oturum süresi doldu")

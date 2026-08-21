@@ -30,6 +30,7 @@ from pydantic import BaseModel, Field
 
 from notification_pubsub import pubsub as notif_pubsub
 import fcm_service  # Faz 9 CP7 — mobile push fan-out (best effort)
+from permissions import is_super_admin, admin_effective_company_ids
 
 
 logger = logging.getLogger(__name__)
@@ -174,11 +175,39 @@ def build_announcements_router(db, licensed_user_dep, current_user_dep, require_
             raise HTTPException(status_code=404, detail="Duyuru bulunamadı")
         return doc
 
+    def _assert_manage_ann(actor: dict, ann: dict):
+        """Süper yönetici her duyuruyu yönetir. Yönetici yalnızca kendi
+        oluşturduğu VEYA kendi şirketini hedefleyen duyuruları yönetir."""
+        if is_super_admin(actor):
+            return
+        eff = set(admin_effective_company_ids(actor))
+        if ann.get("created_by") == actor["id"]:
+            return
+        if ann.get("target_type") == "company" and ann.get("target_value") in eff:
+            return
+        raise HTTPException(status_code=403, detail="Bu duyuru üzerinde yetkiniz yok")
+
+    def _scope_create_for_admin(actor: dict, payload: "AnnouncementCreate"):
+        """Yönetici (süper değil) yalnızca KENDİ şirketi için duyuru yayınlar.
+        Hedef verilmemişse kendi birincil şirketine zorlanır."""
+        if is_super_admin(actor):
+            return
+        eff = set(admin_effective_company_ids(actor))
+        if payload.target_type != "company":
+            own = actor.get("company_id")
+            if not own:
+                raise HTTPException(status_code=403, detail="Şirketiniz tanımlı değil — duyuru yayınlayamazsınız")
+            payload.target_type = "company"
+            payload.target_value = own
+        if payload.target_value not in eff:
+            raise HTTPException(status_code=403, detail="Yalnızca kendi şirketiniz için duyuru yayınlayabilirsiniz")
+
     # ----------------- ADMIN: publish -----------------
     @router.post("", response_model=Announcement)
     async def create_announcement(payload: AnnouncementCreate, user: dict = Depends(current_user_dep)):
         require_admin(user)
         _validate_create(payload)
+        _scope_create_for_admin(user, payload)
         ann = Announcement(
             title=payload.title.strip(),
             message=payload.message.strip(),
@@ -230,7 +259,15 @@ def build_announcements_router(db, licensed_user_dep, current_user_dep, require_
     @router.get("", response_model=List[Announcement])
     async def list_announcements(user: dict = Depends(current_user_dep)):
         require_admin(user)
-        cur = db.announcements.find({}, {"_id": 0}).sort("created_at", -1)
+        if is_super_admin(user):
+            q: dict = {}
+        else:
+            eff = admin_effective_company_ids(user)
+            q = {"$or": [
+                {"created_by": user["id"]},
+                {"target_type": "company", "target_value": {"$in": eff}},
+            ]}
+        cur = db.announcements.find(q, {"_id": 0}).sort("created_at", -1)
         return [doc async for doc in cur]
 
     # ----------------- USER: active (targeted at me) -----------------
@@ -283,8 +320,13 @@ def build_announcements_router(db, licensed_user_dep, current_user_dep, require_
     ):
         require_admin(user)
         current = await _load_or_404(aid)
+        _assert_manage_ann(user, current)
         # Validate incoming diff against the same rules as create.
         merged = {**current, **{k: v for k, v in payload.model_dump(exclude_none=True).items()}}
+        if not is_super_admin(user):
+            eff = set(admin_effective_company_ids(user))
+            if merged.get("target_type") != "company" or merged.get("target_value") not in eff:
+                raise HTTPException(status_code=403, detail="Yönetici yalnızca kendi şirket duyurusunu düzenleyebilir")
         # Re-run the shared validator on the merged doc.
         check = AnnouncementCreate(
             title=merged.get("title", ""),
@@ -305,7 +347,8 @@ def build_announcements_router(db, licensed_user_dep, current_user_dep, require_
     @router.delete("/{aid}")
     async def delete_announcement(aid: str, user: dict = Depends(current_user_dep)):
         require_admin(user)
-        await _load_or_404(aid)
+        ann = await _load_or_404(aid)
+        _assert_manage_ann(user, ann)
         # Soft delete: flip is_active so historical audit stays intact.
         await db.announcements.update_one(
             {"id": aid},
@@ -317,6 +360,8 @@ def build_announcements_router(db, licensed_user_dep, current_user_dep, require_
     @router.delete("/{aid}/purge")
     async def purge_announcement(aid: str, user: dict = Depends(current_user_dep)):
         require_admin(user)
+        ann = await _load_or_404(aid)
+        _assert_manage_ann(user, ann)
         r = await db.announcements.delete_one({"id": aid})
         if r.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Duyuru bulunamadı")
@@ -327,6 +372,7 @@ def build_announcements_router(db, licensed_user_dep, current_user_dep, require_
     async def announcement_stats(aid: str, user: dict = Depends(current_user_dep)):
         require_admin(user)
         ann = await _load_or_404(aid)
+        _assert_manage_ann(user, ann)
         target_ids = await _resolve_target_user_ids(db, ann)
         ack_count = await db.announcement_acks.count_documents({"announcement_id": aid})
         return {

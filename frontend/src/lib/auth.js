@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { api } from "./api";
+import { isAdminLike } from "./roles";
 
 const TOKEN_KEY = "sertex_token_v1";
 
@@ -115,7 +116,7 @@ export const AuthProvider = ({ children }) => {
   // Faz 8: managers are always in team view — the assignee dropdown, the
   // "Ekibim" tab, and RBAC-gated UI depend on this flag. Admin bypasses the
   // toggle; employees can opt in via workspace_mode='team' from settings.
-  const isTeamView = user?.role === "admin" || user?.role === "manager" || workspaceMode === "team";
+  const isTeamView = isAdminLike(user) || user?.role === "manager" || workspaceMode === "team";
 
   return (
     <AuthContext.Provider

@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Palette, RotateCcw, LayoutTemplate, User, LogOut, Lock, KeyRound, Users, Bell, Play, Upload, Trash2, Volume2, Briefcase, Building2, Tag, Clock, Activity, Megaphone, MessageSquare, Archive } from "lucide-react";
+import { X, Palette, RotateCcw, LayoutTemplate, User, LogOut, Lock, KeyRound, Users, Bell, Play, Upload, Trash2, Volume2, Briefcase, Building2, Tag, Clock, Activity, Megaphone, MessageSquare, Archive, ShieldCheck } from "lucide-react";
 import { useSettings, setColor, resetColors, DEFAULT_COLORS } from "../lib/settings";
 import { useAuth } from "../lib/auth";
+import { isAdminLike, isSuperAdmin, isManager, roleLabel } from "../lib/roles";
 import { api, reminderConfigApi, companiesApi } from "../lib/api";
 import { toast } from "sonner";
 import UserManagement from "./UserManagement";
@@ -15,6 +16,7 @@ import MonitoringDashboard from "./MonitoringDashboard";
 // Faz 9 CP6 — Global Announcement System.
 import AnnouncementManager from "./AnnouncementManager";
 import ChatPromptEditor from "./ChatPromptEditor";
+import SuperAdminPanel from "./SuperAdminPanel";
 import TaskPolicySettings from "./TaskPolicySettings";
 import NotificationSettings from "./NotificationSettings";
 import PushToggle from "./PushToggle";
@@ -78,16 +80,17 @@ const SETTINGS_TABS = [
   { key: "account", label: "Hesap", color: "cyan" },
   { key: "workspace", label: "Mod", icon: Briefcase, color: "cyan" },
   { key: "reminders", label: "Uyarılar", icon: Clock, color: "orange" },
-  { key: "monitoring", label: "İstatistik", icon: Activity, color: "emerald", show: (r) => r === "admin" },
-  { key: "users", label: "Kullanıcılar", icon: Users, color: "yellow", show: (r) => r === "admin" },
-  { key: "licenses", label: "Lisanslar", icon: KeyRound, color: "yellow", show: (r) => r === "admin" },
-  { key: "companies", label: "Şirketler", icon: Building2, color: "yellow", show: (r) => r === "admin" },
-  { key: "visibility", label: "Yetkiler", icon: Briefcase, color: "purple", show: (r) => r === "admin" },
-  { key: "categories", label: "İş Kolları", icon: Tag, color: "cyan", show: (r) => r === "admin" || r === "manager" },
-  { key: "archive", label: "Arşiv", icon: Archive, color: "orange", show: (r, caps) => r === "admin" || r === "manager" || !!caps?.manage_policy },
-  { key: "announcements", label: "Duyurular", icon: Megaphone, color: "emerald", show: (r) => r === "admin" },
-  { key: "prompt", label: "Sertex Prompt", icon: MessageSquare, color: "purple", show: (r) => r === "admin" },
-  { key: "mylicense", label: "Lisansım", icon: KeyRound, color: "cyan", show: (r) => r !== "admin" },
+  { key: "monitoring", label: "İstatistik", icon: Activity, color: "emerald", show: (u) => isSuperAdmin(u) },
+  { key: "users", label: "Kullanıcılar", icon: Users, color: "yellow", show: (u) => isAdminLike(u) },
+  { key: "licenses", label: "Lisanslar", icon: KeyRound, color: "yellow", show: (u) => isSuperAdmin(u) },
+  { key: "companies", label: "Şirketler", icon: Building2, color: "yellow", show: (u) => isAdminLike(u) },
+  { key: "visibility", label: "Yetkiler", icon: Briefcase, color: "purple", show: (u) => isAdminLike(u) },
+  { key: "categories", label: "İş Kolları", icon: Tag, color: "cyan", show: (u) => isAdminLike(u) || isManager(u) },
+  { key: "archive", label: "Arşiv", icon: Archive, color: "orange", show: (u, caps) => isAdminLike(u) || isManager(u) || !!caps?.manage_policy },
+  { key: "announcements", label: "Duyurular", icon: Megaphone, color: "emerald", show: (u) => isAdminLike(u) },
+  { key: "prompt", label: "Sertex Prompt", icon: MessageSquare, color: "purple", show: (u) => isSuperAdmin(u) },
+  { key: "roles", label: "Süper Yönetici", icon: ShieldCheck, color: "purple", show: (u) => isSuperAdmin(u) },
+  { key: "mylicense", label: "Lisansım", icon: KeyRound, color: "cyan", show: (u) => !isAdminLike(u) },
 ];
 
 const TAB_ACTIVE_CLS = {
@@ -289,7 +292,7 @@ const SettingsPanel = ({ open, onClose, initialTab }) => {
                 className="flex flex-col w-[176px] shrink-0 border-r border-sertex-cyan/20 overflow-y-auto scrollbar-sertex py-1"
                 data-testid="settings-tabs"
               >
-                {SETTINGS_TABS.filter((t) => !t.show || t.show(user?.role, archiveCaps)).map((t) => {
+                {SETTINGS_TABS.filter((t) => !t.show || t.show(user, archiveCaps)).map((t) => {
                   const active = tab === t.key;
                   const Icon = t.icon;
                   return (
@@ -395,16 +398,17 @@ const SettingsPanel = ({ open, onClose, initialTab }) => {
                 </>
               )}
 
-              {tab === "users" && user?.role === "admin" && <UserManagement onClose={onClose} />}
-              {tab === "monitoring" && user?.role === "admin" && <MonitoringDashboard />}
-              {tab === "licenses" && user?.role === "admin" && <LicenseManagement />}
-              {tab === "companies" && user?.role === "admin" && <CompaniesManagement />}
-              {tab === "visibility" && user?.role === "admin" && <ManagerVisibilityManagement />}
-              {tab === "categories" && (user?.role === "admin" || user?.role === "manager") && <TaskCategoriesManagement />}
-              {tab === "announcements" && user?.role === "admin" && <AnnouncementManager />}
-              {tab === "prompt" && user?.role === "admin" && <ChatPromptEditor />}
+              {tab === "users" && isAdminLike(user) && <UserManagement onClose={onClose} />}
+              {tab === "monitoring" && isSuperAdmin(user) && <MonitoringDashboard />}
+              {tab === "licenses" && isSuperAdmin(user) && <LicenseManagement />}
+              {tab === "companies" && isAdminLike(user) && <CompaniesManagement />}
+              {tab === "visibility" && isAdminLike(user) && <ManagerVisibilityManagement />}
+              {tab === "categories" && (isAdminLike(user) || isManager(user)) && <TaskCategoriesManagement />}
+              {tab === "announcements" && isAdminLike(user) && <AnnouncementManager />}
+              {tab === "prompt" && isSuperAdmin(user) && <ChatPromptEditor />}
+              {tab === "roles" && isSuperAdmin(user) && <SuperAdminPanel />}
               {tab === "archive" && <TaskPolicySettings />}
-              {tab === "mylicense" && user?.role !== "admin" && <MyLicense />}
+              {tab === "mylicense" && !isAdminLike(user) && <MyLicense />}
 
               {tab === "workspace" && (
                 <div className="space-y-4" data-testid="workspace-mode-tab">
@@ -412,7 +416,7 @@ const SettingsPanel = ({ open, onClose, initialTab }) => {
                     Sertex'i nasıl kullanacaksın? Kişisel modda ekip özellikleri
                     (görev sahibi etiketi, şirket alanı, gruplama vb.) gizlenir —
                     ekran temiz kalır. Ekip modu tüm B2B özelliklerini açar.
-                    {user?.role === "admin" && (
+                    {isAdminLike(user) && (
                       <div className="mt-2 text-yellow-300/90">
                         Not: Yönetici olarak ekip özelliklerini zaten hep görürsün.
                         Bu ayar sadece kendi görünümün için değil, yeni kullanıcıların
@@ -739,9 +743,9 @@ const SettingsPanel = ({ open, onClose, initialTab }) => {
                       <div className="text-sertex-cyan font-mono text-base">
                         {user?.username || "-"}
                       </div>
-                      {user?.role === "admin" && (
+                      {(isAdminLike(user) || isManager(user)) && (
                         <span className="hud-text text-yellow-300 px-2 py-0.5 border border-yellow-400/40 rounded bg-yellow-500/10">
-                          YÖNETİCİ
+                          {roleLabel(user?.role, user?.is_owner).toUpperCase()}
                         </span>
                       )}
                     </div>
@@ -854,7 +858,7 @@ export default SettingsPanel;
 const REMINDER_DAY_OPTIONS = [1, 2, 3, 5, 7, 14];
 
 const ReminderSettingsTab = ({ cfg, saving, onSaveUser, onSaveCompany, role, workspaceMode, companyId }) => {
-  const canEditCompany = (role === "admin" || role === "manager") && !!companyId && workspaceMode === "team";
+  const canEditCompany = (role === "admin" || role === "super_admin" || role === "manager") && !!companyId && workspaceMode === "team";
   const currentUser = cfg?.user_threshold;
   const currentCompany = cfg?.company_threshold;
   const effective = cfg?.effective ?? 3;

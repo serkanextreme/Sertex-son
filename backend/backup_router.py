@@ -25,10 +25,11 @@ def build_backup_router(db, current_user):
     router = APIRouter(prefix="/backup", tags=["backup"])
 
     async def _admin_only(user: dict = Depends(current_user)):
-        if user.get("role") != "admin":
+        from permissions import is_super_admin
+        if not is_super_admin(user):
             raise HTTPException(
                 status_code=403,
-                detail="Yalnızca yönetici bu işlemi yapabilir",
+                detail="Yalnızca süper yönetici bu işlemi yapabilir",
             )
         return user
 

@@ -105,6 +105,91 @@ def normalize_role(role: Optional[str]) -> str:
     return role
 
 
+# ---------------------------------------------------------------------------
+# Role hierarchy — Süper Yönetici (super_admin) > Yönetici (admin) > Müdür
+# (manager) > İşçi (employee).
+#   * `is_owner=True`  → the founding super admin. Permanent + untouchable
+#     (no one may delete/demote/modify/impersonate/restrict the owner).
+#   * A TEMPORARY super admin carries `super_admin_until` (ISO) + `prev_role`;
+#     get_current_user reverts it to `prev_role` lazily once the window elapses.
+# ---------------------------------------------------------------------------
+ROLE_SUPER_ADMIN = "super_admin"
+ROLE_ADMIN = "admin"
+ROLE_MANAGER = "manager"
+ROLE_EMPLOYEE = "employee"
+
+
+def effective_role(user: Optional[dict]) -> str:
+    """Resolve the ACTIVE role: honor the owner flag and expire an elapsed
+    temporary super-admin grant. Defensive — get_current_user already persists
+    the revert, so this normally just echoes the stored role."""
+    if not user:
+        return ROLE_EMPLOYEE
+    if user.get("is_owner"):
+        return ROLE_SUPER_ADMIN
+    role = normalize_role(user.get("role"))
+    if role == ROLE_SUPER_ADMIN:
+        until = user.get("super_admin_until")
+        if until:
+            try:
+                exp = datetime.fromisoformat(until)
+                if exp.tzinfo is None:
+                    exp = exp.replace(tzinfo=timezone.utc)
+                if exp <= datetime.now(timezone.utc):
+                    return normalize_role(user.get("prev_role") or ROLE_EMPLOYEE)
+            except Exception:
+                pass
+    return role
+
+
+def acting_role(user: Optional[dict]) -> str:
+    """Role for LEGACY per-object RBAC gates. Collapses super_admin → 'admin'
+    so every historical `role == "admin"` check keeps behaving exactly as
+    before for the super tier. The real (company-scoped) admin tier is scoped
+    separately inside the visibility helpers below."""
+    r = effective_role(user)
+    return ROLE_ADMIN if r == ROLE_SUPER_ADMIN else r
+
+
+def is_super_admin(user: Optional[dict]) -> bool:
+    return effective_role(user) == ROLE_SUPER_ADMIN
+
+
+def is_owner(user: Optional[dict]) -> bool:
+    return bool(user and user.get("is_owner"))
+
+
+def is_admin_role(user: Optional[dict]) -> bool:
+    return effective_role(user) == ROLE_ADMIN
+
+
+def is_privileged(user: Optional[dict]) -> bool:
+    """admin OR super_admin (both bypass license + hold task-level privilege)."""
+    return effective_role(user) in (ROLE_ADMIN, ROLE_SUPER_ADMIN)
+
+
+def get_admin_caps(user: Optional[dict]) -> dict:
+    """Super-admin-granted capabilities for a company admin."""
+    caps = (user or {}).get("admin_caps") or {}
+    return {
+        "extra_company_ids": list(caps.get("extra_company_ids") or []),
+        "can_create_company": bool(caps.get("can_create_company")),
+        "can_view_company_tasks": bool(caps.get("can_view_company_tasks")),
+    }
+
+
+def admin_effective_company_ids(user: Optional[dict]) -> List[str]:
+    """Companies a company-admin may act on: own memberships + super-granted
+    extra companies (dedup, order-preserving)."""
+    out: List[str] = []
+    seen = set()
+    for c in list(get_user_company_ids(user)) + list(get_admin_caps(user)["extra_company_ids"]):
+        if c and c not in seen:
+            seen.add(c)
+            out.append(c)
+    return out
+
+
 async def get_or_create_company(db, name: str, created_by: Optional[str] = None) -> dict:
     """Idempotent case-insensitive upsert. Returns the company doc (with id)."""
     name = (name or "").strip()
@@ -139,14 +224,29 @@ async def can_view_user(db, viewer: dict, target_user_id: str) -> bool:
     """
     if not viewer:
         return False
-    viewer_role = normalize_role(viewer.get("role"))
-    if viewer_role == "admin":
+    viewer_role = effective_role(viewer)
+    if viewer_role == ROLE_SUPER_ADMIN:
         return True
     if viewer["id"] == target_user_id:
         return True
-    if viewer_role == "employee":
+    if viewer_role == ROLE_ADMIN:
+        # Company admin may see a user's TASKS only when the super admin granted
+        # `can_view_company_tasks` AND the target belongs to one of the admin's
+        # effective companies (own + granted extra).
+        if not get_admin_caps(viewer).get("can_view_company_tasks"):
+            return False
+        eff = set(admin_effective_company_ids(viewer))
+        if not eff:
+            return False
+        target = await db.users.find_one(
+            {"id": target_user_id}, {"_id": 0, "company_id": 1, "company_ids": 1},
+        )
+        if not target:
+            return False
+        return bool(eff & set(get_user_company_ids(target)))
+    if viewer_role == ROLE_EMPLOYEE:
         return False
-    if viewer_role != "manager":
+    if viewer_role != ROLE_MANAGER:
         return False
     # Manager path: needs explicit manager_visibility row.
     mv = await db.manager_visibility.find_one({
@@ -211,13 +311,15 @@ async def can_view_company(db, viewer: dict, target_company_id: str) -> bool:
     """
     if not viewer:
         return False
-    viewer_role = normalize_role(viewer.get("role"))
-    if viewer_role == "admin":
+    viewer_role = effective_role(viewer)
+    if viewer_role == ROLE_SUPER_ADMIN:
         return True
+    if viewer_role == ROLE_ADMIN:
+        return target_company_id in set(admin_effective_company_ids(viewer))
     viewer_cids = set(get_user_company_ids(viewer))
     if target_company_id in viewer_cids:
         return True
-    if viewer_role != "manager":
+    if viewer_role != ROLE_MANAGER:
         return False
     if not viewer_cids:
         return False
@@ -230,22 +332,37 @@ async def can_view_company(db, viewer: dict, target_company_id: str) -> bool:
 
 
 async def visible_user_ids(db, viewer: dict) -> Optional[List[str]]:
-    """List of user_ids the viewer may see. Returns None for admin (= no filter).
+    """List of user_ids the viewer may see (for task/team scope). Returns None
+    for super_admin (= no filter, sees everyone).
 
-    Multi-company aware: a manager sees self + everyone with a
-    `manager_visibility` row that passes the intersection check
-    (any of viewer.company_ids ∩ target.company_ids) OR whose company is
-    reachable via an active cross-company permission from any of the viewer's
-    companies.
+    * super_admin → None (all users).
+    * admin       → self only, UNLESS super granted `can_view_company_tasks`,
+                    then self + every user in the admin's effective companies.
+    * manager     → self + manager_visibility rows (multi-company aware).
+    * employee    → self only.
     """
     if not viewer:
         return []
-    role = normalize_role(viewer.get("role"))
-    if role == "admin":
+    role = effective_role(viewer)
+    if role == ROLE_SUPER_ADMIN:
         return None
-    if role == "employee":
+    if role == ROLE_ADMIN:
+        if not get_admin_caps(viewer).get("can_view_company_tasks"):
+            return [viewer["id"]]
+        eff = set(admin_effective_company_ids(viewer))
+        if not eff:
+            return [viewer["id"]]
+        users = await db.users.find(
+            {}, {"_id": 0, "id": 1, "company_id": 1, "company_ids": 1},
+        ).to_list(length=10000)
+        visible = {viewer["id"]}
+        for u in users:
+            if eff & set(get_user_company_ids(u)):
+                visible.add(u["id"])
+        return list(visible)
+    if role == ROLE_EMPLOYEE:
         return [viewer["id"]]
-    if role != "manager":
+    if role != ROLE_MANAGER:
         return [viewer["id"]]
     rows = await db.manager_visibility.find(
         {"manager_user_id": viewer["id"]}, {"_id": 0, "employee_user_id": 1},

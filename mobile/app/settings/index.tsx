@@ -7,16 +7,18 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, ApiError } from "@/src/api/client";
 import { DigestSettings } from "@/src/api/types";
 import { useAuth } from "@/src/auth/AuthContext";
+import { isAdminLike, isSuperAdmin } from "@/src/auth/roles";
 import { ScreenHeader } from "@/src/components/ScreenHeader";
 import { colors, monoFont, radius, spacing } from "@/src/theme/colors";
 import { SETTINGS } from "@/constants/testIds";
 
-const ADMIN_LINKS: { key: string; label: string; icon: keyof typeof import("@expo/vector-icons").Ionicons.glyphMap; route: string; testID: string; roles: string[] }[] = [
-  { key: "users", label: "Kullanıcılar", icon: "people-outline", route: "/settings/users", testID: SETTINGS.navUsers, roles: ["admin"] },
-  { key: "announcements", label: "Duyurular", icon: "megaphone-outline", route: "/settings/announcements", testID: SETTINGS.navAnnouncements, roles: ["admin"] },
-  { key: "companies", label: "Şirketler", icon: "business-outline", route: "/settings/companies", testID: SETTINGS.navCompanies, roles: ["admin"] },
-  { key: "licenses", label: "Lisanslar", icon: "key-outline", route: "/settings/licenses", testID: SETTINGS.navLicenses, roles: ["admin"] },
-  { key: "permissions", label: "Yetkiler (Müdür Görünürlüğü)", icon: "eye-outline", route: "/settings/permissions", testID: SETTINGS.navPermissions, roles: ["admin"] },
+const ADMIN_LINKS: { key: string; label: string; icon: keyof typeof import("@expo/vector-icons").Ionicons.glyphMap; route: string; testID: string; superOnly?: boolean }[] = [
+  { key: "users", label: "Kullanıcılar", icon: "people-outline", route: "/settings/users", testID: SETTINGS.navUsers },
+  { key: "announcements", label: "Duyurular", icon: "megaphone-outline", route: "/settings/announcements", testID: SETTINGS.navAnnouncements },
+  { key: "companies", label: "Şirketler", icon: "business-outline", route: "/settings/companies", testID: SETTINGS.navCompanies },
+  { key: "permissions", label: "Yetkiler (Müdür Görünürlüğü)", icon: "eye-outline", route: "/settings/permissions", testID: SETTINGS.navPermissions },
+  { key: "licenses", label: "Lisanslar", icon: "key-outline", route: "/settings/licenses", testID: SETTINGS.navLicenses, superOnly: true },
+  { key: "super", label: "Süper Yönetici", icon: "shield-checkmark-outline", route: "/settings/super-admins", testID: SETTINGS.navSuperAdmins, superOnly: true },
 ];
 
 const SettingRow = ({ label, value, onChange, testID }: { label: string; value: boolean; onChange: (v: boolean) => void; testID: string }) => (
@@ -35,8 +37,6 @@ const SettingRow = ({ label, value, onChange, testID }: { label: string; value: 
 export default function SettingsHome() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const role = user?.role || "employee";
-
   const [digest, setDigest] = useState<DigestSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -68,7 +68,7 @@ export default function SettingsHome() {
     }
   };
 
-  const links = ADMIN_LINKS.filter((l) => l.roles.includes(role));
+  const links = ADMIN_LINKS.filter((l) => (l.superOnly ? isSuperAdmin(user) : isAdminLike(user)));
 
   return (
     <View style={[styles.container]} testID={SETTINGS.screen}>

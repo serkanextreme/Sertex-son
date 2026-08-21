@@ -4,6 +4,7 @@ import { api, managerVisibilityApi } from "../lib/api";
 import { companiesApi } from "../lib/api";
 import { toast } from "sonner";
 import { useAuth } from "../lib/auth";
+import { isAdminLike, isSuperAdmin, roleLabel } from "../lib/roles";
 import { parseCapacityToMb, formatMb } from "../lib/capacity";
 import { promptDialog } from "../lib/confirm";
 // Faz 9 CP5 — UserLockPolicyModal extracted (behavior unchanged).
@@ -13,6 +14,7 @@ const NO_COMPANY_KEY = "__no_company__";
 
 // Role display metadata — single source of truth for badges + role picker.
 const ROLE_META = {
+  super_admin: { label: "SÜPER YÖNETİCİ", color: "text-purple-200", Icon: Shield },
   admin:    { label: "YÖNETİCİ", color: "text-yellow-300",  Icon: Shield },
   manager:  { label: "MÜDÜR",    color: "text-purple-300",  Icon: Briefcase },
   employee: { label: "ÇALIŞAN",  color: "text-sertex-cyan", Icon: UserIcon },
@@ -437,6 +439,9 @@ const UserManagement = ({ onClose }) => {
     const RoleIcon = meta.Icon;
     // Next role in the cycle (used for the Shield-tooltip).
     const nextRole = ROLE_CYCLE[roleKey] || "employee";
+    // Kurucu (owner) + süper yönetici dokunulmaz; impersonate yalnızca süper yönetici.
+    const isProtected = !!u.is_owner || u.role === "super_admin";
+    const canImpersonate = isSuperAdmin(currentUser) && !u.is_owner;
     return (
     <>
       <div className="flex items-center justify-between gap-2">
@@ -463,7 +468,7 @@ const UserManagement = ({ onClose }) => {
               className={`hud-text ${meta.color}`}
               data-testid={`admin-role-badge-${u.username}`}
             >
-              {meta.label}
+              {u.is_owner ? "KURUCU" : meta.label}
             </div>
           </div>
         </div>
@@ -479,7 +484,7 @@ const UserManagement = ({ onClose }) => {
                 toast.error("Görüntülenemedi");
               }
             }}
-            disabled={isMe}
+            disabled={isMe || !canImpersonate}
             data-testid={`admin-view-${u.username}`}
             title="Hesaba gir ve görevlerini gör"
             className="p-1.5 border border-yellow-400/40 text-yellow-300 hover:bg-yellow-500/10 rounded disabled:opacity-30 disabled:cursor-not-allowed"
@@ -536,9 +541,9 @@ const UserManagement = ({ onClose }) => {
           </button>
           <button
             onClick={() => toggleRole(u)}
-            disabled={isMe}
+            disabled={isMe || isProtected}
             data-testid={`admin-toggle-role-${u.username}`}
-            title={`Sonraki rol: ${ROLE_META[nextRole]?.label || nextRole}`}
+            title={isProtected ? "Süper yönetici / kurucu rolü buradan değiştirilemez" : `Sonraki rol: ${ROLE_META[nextRole]?.label || nextRole}`}
             className="p-1.5 border border-sertex-cyan/25 text-sertex-cyan hover:bg-sertex-cyan/10 rounded disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <Shield className="h-3.5 w-3.5" />
@@ -573,9 +578,9 @@ const UserManagement = ({ onClose }) => {
           </button>
           <button
             onClick={() => removeUser(u)}
-            disabled={isMe}
+            disabled={isMe || isProtected}
             data-testid={`admin-delete-${u.username}`}
-            title="Sil"
+            title={isProtected ? "Kurucu / süper yönetici silinemez" : "Sil"}
             className="p-1.5 border border-rose-400/40 text-rose-300 hover:bg-rose-500/10 rounded disabled:opacity-30 disabled:cursor-not-allowed"
           >
             <Trash2 className="h-3.5 w-3.5" />
@@ -957,7 +962,7 @@ const UserManagement = ({ onClose }) => {
               <div className="p-2 space-y-2">
                 {groupUsers.map((u) => {
                   const isMe = u.id === currentUser?.id;
-                  const isAdmin = u.role === "admin";
+                  const isAdmin = u.role === "admin" || u.role === "super_admin" || u.is_owner;
                   return (
                     <div
                       key={u.id}
@@ -973,7 +978,7 @@ const UserManagement = ({ onClose }) => {
       })}
       {viewMode === "matrix" && (() => {
         // Non-admin users are the ones the admin can assign managers to.
-        const employees = users.filter((u) => u.role !== "admin");
+        const employees = users.filter((u) => u.role !== "admin" && u.role !== "super_admin" && !u.is_owner);
         // Only true managers can be assigned as employee supervisors — admins
         // already have global visibility and the backend rejects them.
         const managers = users.filter((u) => u.role === "manager");

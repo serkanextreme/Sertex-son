@@ -15,6 +15,7 @@ from auth import (
     change_password as auth_change_password,
     change_username as auth_change_username,
 )
+from permissions import is_super_admin as _is_super, get_admin_caps as _get_caps, effective_role as _eff_role
 
 # System-wide fallback when neither user nor company set a threshold.
 SYSTEM_DEFAULT_REMINDER_DAYS = 3
@@ -86,7 +87,11 @@ def build_auth_router(db, current_user_dep) -> APIRouter:
         return {
             "id": user["id"],
             "username": user["username"],
-            "role": user.get("role", "user"),
+            "role": _eff_role(user),
+            "is_owner": bool(user.get("is_owner")),
+            "is_super_admin": _is_super(user),
+            "admin_caps": _get_caps(user),
+            "super_admin_until": user.get("super_admin_until"),
             "workspace_mode": user.get("workspace_mode", "personal"),
             "due_soon_threshold": user.get("due_soon_threshold"),
             "company_id": user.get("company_id"),

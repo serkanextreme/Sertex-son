@@ -34,7 +34,7 @@ const ManagerVisibilityManagement = () => {
   useEffect(() => { load(); }, []);
 
   const managers = useMemo(() => users.filter((u) => u.role === "manager"), [users]);
-  const employees = useMemo(() => users.filter((u) => u.role !== "admin"), [users]);
+  const employees = useMemo(() => users.filter((u) => u.role !== "admin" && u.role !== "super_admin" && !u.is_owner), [users]);
 
   const hasVis = (mgrId, empId) =>
     visibility.some((v) => v.manager_user_id === mgrId && v.employee_user_id === empId);

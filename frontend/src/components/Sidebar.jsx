@@ -21,6 +21,7 @@ import { chatApi, notesApi, statsApi } from "../lib/api";
 import { parseCapacityToMb, formatMb } from "../lib/capacity";
 import { toast } from "sonner";
 import { useAuth } from "../lib/auth";
+import { isAdminLike, isSuperAdmin } from "../lib/roles";
 import NeuralLinkHeader from "./sidebar/NeuralLinkHeader";
 import SidebarTabBar from "./sidebar/SidebarTabBar";
 import SidebarTabContent from "./sidebar/SidebarTabContent";
@@ -59,10 +60,11 @@ const DOCK_LABEL = { right: "SAĞ", left: "SOL", top: "ÜST", bottom: "ALT" };
 
 const Sidebar = ({ lang, open, setOpen, activeConversationId, onSelectConversation, onNewChat, refreshKey }) => {
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = isAdminLike(user);
+  const isSuper = isSuperAdmin(user);
   // Faz 8 CP3 — managers get the extra "Ekibim" tab that surfaces per-member
   // task rollups. Employees don't need it (they only see themselves).
-  const isManagerOrAdmin = user?.role === "admin" || user?.role === "manager";
+  const isManagerOrAdmin = isAdminLike(user) || user?.role === "manager";
   const [tab, setTab] = useState("history");
   const [conversations, setConversations] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -80,7 +82,7 @@ const Sidebar = ({ lang, open, setOpen, activeConversationId, onSelectConversati
 
   // ---- Role-based tab visibility helper --------------------------------
   const canSeeTab = (tk) => {
-    if (tk === "backup") return isAdmin;
+    if (tk === "backup") return isSuper;
     if (tk === "team") return isManagerOrAdmin;
     // Faz 8 CP6 — "Yarım Kalan İşler" tab is only relevant for managers +
     // admin (they reassign orphans). Employees never see it.
@@ -98,7 +100,7 @@ const Sidebar = ({ lang, open, setOpen, activeConversationId, onSelectConversati
       // "orphans" lives right after "team" (also manager/admin only).
       order.splice(idx + 2, 0, "orphans");
     }
-    if (isAdmin) order.push("backup");
+    if (isSuper) order.push("backup");
     return order;
   })();
   const [tabOrder, setTabOrder] = useState(() => {

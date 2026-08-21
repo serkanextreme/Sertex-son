@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field
 
 import fcm_service
+from auth import require_super_admin
 
 
 logger = logging.getLogger(__name__)
@@ -93,7 +94,7 @@ def build_fcm_router(db, current_user_dep, require_admin) -> APIRouter:
 
     @router.get("/status")
     async def fcm_status(user: dict = Depends(current_user_dep)):
-        require_admin(user)
+        require_super_admin(user)
         # Trigger init to reflect real state.
         ready = fcm_service._ensure_admin()
         total = await db.fcm_tokens.count_documents({"revoked_at": None})
@@ -109,7 +110,7 @@ def build_fcm_router(db, current_user_dep, require_admin) -> APIRouter:
 
     @router.post("/test-send")
     async def test_send(payload: TestSendIn, user: dict = Depends(current_user_dep)):
-        require_admin(user)
+        require_super_admin(user)
         target = await db.users.find_one({"id": payload.user_id}, {"_id": 0, "id": 1, "username": 1})
         if not target:
             raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
@@ -121,7 +122,7 @@ def build_fcm_router(db, current_user_dep, require_admin) -> APIRouter:
         """Manually trigger the overdue-task digest push (normally runs at
         09:00 Europe/Istanbul). Useful for admins wanting to nudge everyone
         with pending overdue tasks right now."""
-        require_admin(user)
+        require_super_admin(user)
         try:
             import overdue_push_service
             return await overdue_push_service.run_overdue_push_now(db)

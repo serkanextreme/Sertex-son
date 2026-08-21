@@ -160,12 +160,14 @@ async def _startup():
         init_storage()
     except Exception as e:
         logging.getLogger(__name__).error(f"Storage init failed at startup: {e}")
-    # Determine admin user id (seeded first user)
-    admin = await db.users.find_one({"role": "admin"})
-    if not admin:
-        admin = await db.users.find_one({})
-        if admin:
-            await db.users.update_one({"id": admin["id"]}, {"$set": {"role": "admin"}})
+    # Determine the founding OWNER / super-admin id (seeded first user). Used
+    # only for legacy data backfills below. Never mutate an arbitrary user's
+    # role here — the owner is guaranteed by seed_initial_user above.
+    admin = (
+        await db.users.find_one({"is_owner": True})
+        or await db.users.find_one({"role": "super_admin"})
+        or await db.users.find_one({"role": "admin"})
+    )
     admin_id = admin["id"] if admin else None
 
     # Faz 8 — Multi-tenant RBAC migrations (idempotent). Must run BEFORE any

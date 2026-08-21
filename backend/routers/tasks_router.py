@@ -26,6 +26,10 @@ from permissions import (
     can_view_company,
     visible_user_ids,
     normalize_role,
+    acting_role,
+    is_super_admin,
+    get_admin_caps,
+    admin_effective_company_ids,
     get_user_company_ids,
 )
 # Faz 9 CP7 — mobile push notifications (best-effort, silent no-op when SA missing).
@@ -113,7 +117,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
 
     async def _archive_caps(user: dict) -> Dict[str, bool]:
         """Kullanıcının arşiv yetkileri. Admin her zaman hepsine sahip."""
-        if normalize_role(user.get("role")) == "admin":
+        if acting_role(user) == "admin":
             return {"perm_delete": True, "empty_trash": True, "manage_policy": True}
         u = await db.users.find_one({"id": user.get("id")}, {"_id": 0, "archive_caps": 1})
         caps = (u or {}).get("archive_caps") or {}
@@ -141,7 +145,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         single PATCH that changes both `title` and `due_date` gets validated
         against BOTH `lock_edit` and `lock_change_date`.
         """
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if role == "admin":
             return
         # Creator bypass — the person who created the task can always edit it.
@@ -185,7 +189,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         value is > 0 AND the window is still open, guaranteeing at most one
         bypass per issued OTP even under concurrent traffic.
         """
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if role == "admin":
             return
         if task_doc.get("created_by") == user.get("id"):
@@ -290,7 +294,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
     async def _can_share_task(task_doc: dict, user: dict) -> bool:
         """Who may configure sharing/ACL on a task (S2-b):
         the creator, an admin, or a manager of the task's company/owner."""
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if role == "admin":
             return True
         if task_doc.get("created_by") == user["id"] or task_doc.get("user_id") == user["id"]:
@@ -506,7 +510,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         """
         n = len(req.ids)
         now = datetime.now(timezone.utc).isoformat()
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         for idx, tid in enumerate(req.ids):
             task_doc = await db.tasks.find_one({"id": tid}, {"_id": 0, "user_id": 1})
             if not task_doc:
@@ -553,7 +557,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
                 {"id": owner_id}, {"_id": 0, "company_id": 1, "company_ids": 1},
             )
             assignee_cids = get_user_company_ids(assignee_doc) if assignee_doc else []
-            if normalize_role(user.get("role")) != "admin" and resolved_company_id not in assignee_cids:
+            if acting_role(user) != "admin" and resolved_company_id not in assignee_cids:
                 raise HTTPException(status_code=400, detail="Görev sahibi bu şirkete üye değil")
         else:
             assignee_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "company_id": 1})
@@ -727,7 +731,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
                 cat = await db.task_categories.find_one({"id": cid_val}, {"_id": 0, "company_id": 1})
                 if not cat:
                     raise HTTPException(status_code=404, detail="İş kolu bulunamadı")
-                role = normalize_role(user.get("role"))
+                role = acting_role(user)
                 if role != "admin":
                     allowed = {user.get("company_id")} if user.get("company_id") else set()
                     if role == "manager" and user.get("company_id"):
@@ -791,7 +795,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
             set_fields["delete_reason"] = reason_txt[:500]
         r = await db.tasks.update_one({"id": tid}, {"$set": set_fields})
         if r.modified_count:
-            role = normalize_role(user.get("role"))
+            role = acting_role(user)
             creator_id = doc.get("created_by")
             lock_flags = doc.get("lock_flags") or {}
             self_lock_flags = doc.get("self_lock_flags") or {}
@@ -925,7 +929,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
           in `visible_to_user_ids`). Admin is subject to this too so the
           task panel stays uncluttered.
         """
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         uid = user.get("id")
         company_id = user.get("company_id")
 
@@ -1001,7 +1005,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         tamamlanan (done). Ağaç toplaması (rollup) frontend'de yapılır.
         Kapsam `scope=manage` ile aynı: admin tüm kollar; müdür kendi şirketi +
         aktif cross-company grant'lar; employee boş."""
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         company_id = user.get("company_id")
         if role == "employee":
             return {}
@@ -1036,7 +1040,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
 
     @router.post("/task-categories", response_model=TaskCategory)
     async def create_task_category(req: TaskCategoryCreate, user: dict = Depends(licensed_user_dep)):
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if role not in ("admin", "manager"):
             raise HTTPException(status_code=403, detail="Yalnızca müdür ve yönetici iş kolu oluşturabilir")
         name = (req.name or "").strip()
@@ -1095,7 +1099,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
 
     @router.patch("/task-categories/{cat_id}", response_model=TaskCategory)
     async def update_task_category(cat_id: str, req: TaskCategoryUpdate, user: dict = Depends(licensed_user_dep)):
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         existing = await db.task_categories.find_one({"id": cat_id}, {"_id": 0})
         if not existing:
             raise HTTPException(status_code=404, detail="İş kolu bulunamadı")
@@ -1176,7 +1180,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
 
     @router.delete("/task-categories/{cat_id}")
     async def delete_task_category(cat_id: str, user: dict = Depends(licensed_user_dep)):
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         existing = await db.task_categories.find_one({"id": cat_id})
         if not existing:
             raise HTTPException(status_code=404, detail="İş kolu bulunamadı")
@@ -1214,7 +1218,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
             raise HTTPException(status_code=404, detail="Görev bulunamadı")
         is_orphan_reclaim = False
         if doc.get("orphaned"):
-            role = normalize_role(user.get("role"))
+            role = acting_role(user)
             src_cid = doc.get("orphaned_from_company_id")
             if role == "admin":
                 is_orphan_reclaim = True
@@ -1278,7 +1282,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         """Görevin devredilebileceği şirketler. Admin → hepsi; müdür → kendi
         şirket(ler)i + aktif çapraz-şirket izni (company_permissions) olanlar.
         Additive endpoint — mevcut /companies davranışına dokunmaz."""
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if role == "admin":
             return await db.companies.find({}, {"_id": 0}).sort("name", 1).to_list(length=2000)
         if role != "manager":
@@ -1307,7 +1311,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         doc = await db.tasks.find_one({"id": tid}, {"_id": 0})
         if not doc:
             raise HTTPException(status_code=404, detail="Görev bulunamadı")
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         # Bu görev üzerinde işlem yapabilme yetkisi (reassign ile aynı kapı).
         is_orphan_source = False
         if doc.get("orphaned"):
@@ -1736,7 +1740,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         doc = await db.tasks.find_one({"id": tid}, {"_id": 0})
         if not doc:
             raise HTTPException(status_code=404, detail="Görev bulunamadı")
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         creator_id = doc.get("created_by")
         # Allowed lockers: task creator, admin, or a manager who can see the
         # current assignee (visible_user_ids includes the assignee).
@@ -1787,7 +1791,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         doc = await db.tasks.find_one({"id": tid}, {"_id": 0})
         if not doc:
             raise HTTPException(status_code=404, detail="Görev bulunamadı")
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         allowed = role == "admin" or doc.get("user_id") == user.get("id")
         if not allowed:
             raise HTTPException(status_code=403, detail="Sadece görevin sahibi self-lock koyabilir")
@@ -1838,7 +1842,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         doc = await db.tasks.find_one({"id": tid}, {"_id": 0})
         if not doc:
             raise HTTPException(status_code=404, detail="Görev bulunamadı")
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         creator_id = doc.get("created_by")
         allowed = False
         if role == "admin":
@@ -2041,7 +2045,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         Codes are never stored — only metadata (who / when / what). Admins can
         view the trail even for a task that has since been deleted."""
         doc = await db.tasks.find_one({"id": tid}, {"_id": 0})
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if not doc:
             # Deleted task — only admin may read the historical audit.
             if role != "admin":
@@ -2075,7 +2079,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
     async def _can_manage_user_policy(target_id: str, user: dict) -> bool:
         """Admin OK; the user themselves OK; a manager who can view the target
         OK. Employees can only manage their OWN policy."""
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if role == "admin":
             return True
         if target_id == user.get("id"):
@@ -2139,7 +2143,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
             raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
         if not await _can_manage_user_policy(uid, user):
             raise HTTPException(status_code=403, detail="Bu kullanıcının politikasına erişim yetkiniz yok")
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         is_self = uid == user.get("id")
         clean: Dict[str, bool] = {k: bool(v) for k, v in req.lock_flags.items() if k in _LOCK_FLAG_KEYS}
         stored = {k: v for k, v in clean.items() if v}
@@ -2211,7 +2215,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         """Kişi bazlı arşiv yetkilerini ver/al — YALNIZCA admin. Kalıcı Sil /
         Çöp Boşalt / Arşiv Politikası Düzenle yetkilerini müdür veya normal
         kullanıcıya buradan açıp kapatır."""
-        if normalize_role(user.get("role")) != "admin":
+        if acting_role(user) != "admin":
             raise HTTPException(status_code=403, detail="Yetki verme işlemi yalnızca admin'de")
         u = await db.users.find_one({"id": uid}, {"_id": 0, "archive_caps": 1, "username": 1})
         if not u:
@@ -2233,7 +2237,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
     async def list_lock_policy_templates(user: dict = Depends(licensed_user_dep)):
         """List all lock policy templates. Admin/manager can see them; regular
         employees see none (templates are an admin/manager concept)."""
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if role not in ("admin", "manager"):
             return {"count": 0, "templates": []}
         cur = db.lock_policy_templates.find({}, {"_id": 0}).sort("created_at", 1)
@@ -2244,7 +2248,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
 
     @router.post("/lock-policy-templates", response_model=LockPolicyTemplate, status_code=201)
     async def create_lock_policy_template(req: LockPolicyTemplateCreate, user: dict = Depends(licensed_user_dep)):
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if role not in ("admin", "manager"):
             raise HTTPException(status_code=403, detail="Şablon oluşturma yetkiniz yok")
         # Faz 9 CP4.35 — strict input validation. Silent truncation hides
@@ -2286,7 +2290,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         doc = await db.lock_policy_templates.find_one({"id": tpl_id}, {"_id": 0})
         if not doc:
             raise HTTPException(status_code=404, detail="Şablon bulunamadı")
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if role != "admin" and doc.get("created_by") != user.get("id"):
             raise HTTPException(status_code=403, detail="Bu şablonu güncelleme yetkiniz yok")
         set_ops = {"updated_at": _now_iso()}
@@ -2316,7 +2320,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         doc = await db.lock_policy_templates.find_one({"id": tpl_id}, {"_id": 0, "created_by": 1})
         if not doc:
             return {"deleted": 0}
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if role != "admin" and doc.get("created_by") != user.get("id"):
             raise HTTPException(status_code=403, detail="Bu şablonu silme yetkiniz yok")
         r = await db.lock_policy_templates.delete_one({"id": tpl_id})
@@ -2327,7 +2331,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
     # ------------------------------------------------------------------
     @router.get("/orphan-tasks")
     async def list_orphan_tasks(user: dict = Depends(current_user_dep)):
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if role == "employee":
             return []
         q: dict = {"orphaned": True}
@@ -2341,7 +2345,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
 
     @router.get("/orphan-tasks/count")
     async def orphan_tasks_count(user: dict = Depends(current_user_dep)):
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if role == "employee":
             return {"count": 0}
         q: dict = {"orphaned": True}
@@ -2455,7 +2459,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
                 ordered_ids.append(t)
         if len(ordered_ids) < 2:
             raise HTTPException(status_code=400, detail="Bağlamak için en az 2 görev seçin")
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         docs = []
         for tid in ordered_ids:
             doc = await db.tasks.find_one({"id": tid}, {"_id": 0})
@@ -2490,7 +2494,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         group = await db.task_groups.find_one({"id": gid}, {"_id": 0})
         if not group:
             raise HTTPException(status_code=404, detail="Grup bulunamadı")
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if not (group.get("user_id") == user["id"] or role == "admin"
                 or (group.get("user_id") and await can_view_user(db, user, group.get("user_id")))):
             raise HTTPException(status_code=403, detail="Bu grubu düzenleme yetkiniz yok")
@@ -2529,7 +2533,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         group = await db.task_groups.find_one({"id": gid}, {"_id": 0})
         if not group:
             return {"deleted": 0}
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if not (group.get("user_id") == user["id"] or role == "admin"
                 or (group.get("user_id") and await can_view_user(db, user, group.get("user_id")))):
             raise HTTPException(status_code=403, detail="Bu grubu silme yetkiniz yok")
@@ -2543,7 +2547,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         group = await db.task_groups.find_one({"id": gid}, {"_id": 0})
         if not group:
             raise HTTPException(status_code=404, detail="Grup bulunamadı")
-        role = normalize_role(user.get("role"))
+        role = acting_role(user)
         if not (group.get("user_id") == user["id"] or role == "admin"
                 or (group.get("user_id") and await can_view_user(db, user, group.get("user_id")))):
             raise HTTPException(status_code=403, detail="Yetkiniz yok")

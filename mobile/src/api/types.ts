@@ -2,11 +2,31 @@
 // (routers/tasks_models.py, auth.py). Kept intentionally partial: only the
 // fields the mobile V1 (login + tasks list) actually reads.
 
+export type AdminCaps = {
+  extra_company_ids?: string[];
+  can_create_company?: boolean;
+  can_view_company_tasks?: boolean;
+};
+
 export type User = {
   id: string;
   username: string;
   role: string;
   workspace_mode: string;
+  is_owner?: boolean;
+  is_super_admin?: boolean;
+  admin_caps?: AdminCaps;
+  super_admin_until?: string | null;
+  company_id?: string | null;
+};
+
+export type SuperAdmin = {
+  id: string;
+  username: string;
+  is_owner: boolean;
+  role: string;
+  super_admin_until?: string | null;
+  prev_role?: string | null;
 };
 
 export type LoginResponse = {
@@ -214,6 +234,9 @@ export type AdminUser = {
   id: string;
   username: string;
   role: string;
+  is_owner?: boolean;
+  admin_caps?: AdminCaps;
+  super_admin_until?: string | null;
   company_id?: string | null;
   company_name?: string | null;
   quota_label?: string | null;

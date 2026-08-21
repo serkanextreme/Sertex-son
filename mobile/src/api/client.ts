@@ -147,6 +147,24 @@ export const api = {
   ) => request<AdminUser>(`/admin/users/${uid}`, { method: "PATCH", body }),
   deleteUser: (uid: string) => request<{ deleted: boolean }>(`/admin/users/${uid}`, { method: "DELETE" }),
 
+  // ── Süper Yönetici / Kurucu — rol yönetimi ──
+  superAdmins: () =>
+    request<{ super_admins: import("./types").SuperAdmin[] }>("/admin/super-admins"),
+  setAdminCaps: (uid: string, caps: Partial<import("./types").AdminCaps>) =>
+    request<{ id: string; admin_caps: import("./types").AdminCaps }>(
+      `/admin/users/${uid}/admin-caps`,
+      { method: "PATCH", body: caps },
+    ),
+  grantSuperAdmin: (uid: string, hours: number) =>
+    request<import("./types").SuperAdmin>(`/admin/users/${uid}/super-admin`, {
+      method: "POST",
+      body: { hours },
+    }),
+  revokeSuperAdmin: (uid: string) =>
+    request<{ ok: boolean; role: string }>(`/admin/users/${uid}/super-admin`, {
+      method: "DELETE",
+    }),
+
   announcements: () => request<Announcement[]>("/announcements"),
   createAnnouncement: (body: {
     title: string;

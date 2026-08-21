@@ -9,6 +9,7 @@ import React, { useEffect, useState } from "react";
 import { KeyRound, X, Lock, Trash2 } from "lucide-react";
 import { LOCK_KEY_LABELS, LOCK_KEY_ORDER } from "../../lib/taskLocks";
 import { userLockApi, lockPolicyTemplateApi, archiveCapsApi } from "../../lib/api";
+import { isAdminLike } from "../../lib/roles";
 import { toast } from "sonner";
 
 export const UserLockPolicyModal = ({ user, currentUser, onClose }) => {
@@ -28,7 +29,7 @@ export const UserLockPolicyModal = ({ user, currentUser, onClose }) => {
   const [tplSaveName, setTplSaveName] = useState("");
   const [tplSaving, setTplSaving] = useState(false);
   const isSelf = user.id === currentUser?.id;
-  const isPrivileged = currentUser?.role === "admin" || currentUser?.role === "manager";
+  const isPrivileged = isAdminLike(currentUser) || currentUser?.role === "manager";
   // Which channel are we editing? Non-privileged self → self_lock (soft);
   // otherwise → default lock_flags (strict, respects requires_otp).
   const editingSelf = isSelf && !isPrivileged;
@@ -145,7 +146,7 @@ export const UserLockPolicyModal = ({ user, currentUser, onClose }) => {
     LOCK_KEY_ORDER.forEach((k) => { next[k] = v; });
     setActiveFlags(next);
   };
-  const isAdminUser = currentUser?.role === "admin";
+  const isAdminUser = isAdminLike(currentUser);
   const toggleCap = async (key) => {
     if (!isAdminUser || capSaving) return;
     const next = { ...archiveCaps, [key]: !archiveCaps[key] };

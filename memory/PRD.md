@@ -2433,3 +2433,24 @@ Kullanıcı bildirimi: Bir iş kolu (ör. "ORTAK İŞLER") seçiliyken ARŞİV'e
 - **Düzeltme**: `showArchived` iken `filtered` artık `categoryFilter` ve durum `filters`'ı YOK SAYAR (yalnızca arşiv grubu yükü + arama uygulanır). Render dal koşulları da (`visibleTaskList` + ana liste render) arşivi "kategori filtresi yok" gibi ele alır → kalıntı seçim render yolunu değiştirmez, tutarlı.
 - **Test**: testing_agent iteration_123 — 3 senaryo PASS (KOLSUZ/Fason Verme/TÜMÜ seçiliyken arşiv araması görevi buluyor), aktif görünüm kategori filtresi + arşiv grup/sıralama çipleri regresyonsuz. Seed görev kalıcı silindi.
 - **Yayın**: preview'de; canlıya (sertex-ai.com) için yeniden Deploy gerekir.
+
+## 👑 Rol Hiyerarşisi — Süper Yönetici / Kurucu (owner) (2026-06 · fork) ✅ TAMAMLANDI
+**Problem:** admin ile kurucu (serkan) aynı yetkilere sahipti. İstenen: en üstte tek dokunulmaz **Kurucu**, altında **Süper Yönetici** (her şey), onun altında **şirket-kapsamlı Yönetici**.
+
+**Roller:** `super_admin` › `admin` › `manager` › `employee`. serkan → `super_admin` + `is_owner=true` (kalıcı, dokunulmaz).
+
+**Backend (Faz 1):**
+- `permissions.py`: `effective_role` (temp expiry + owner), `acting_role` (super→admin, tüm legacy `role=='admin'` gate'leri süper için korur), `is_super_admin/is_privileged/get_admin_caps/admin_effective_company_ids`. `visible_user_ids`/`can_view_user`/`can_view_company` şirket-kapsamlı (super=all, admin=own+extra companies, gated by `can_view_company_tasks`).
+- `auth.py`: seed serkan owner+super; `require_super_admin`/`require_owner`; `get_current_user` süreli süper yönetici için lazy revert. `license_service.is_admin` super'ı da kapsar (serkan license bypass).
+- Endpoint reclass: system (system-quota, chat-prompt, health, client-logs, impersonate, backup, fcm, lisans) → super-only. Kullanıcı CRUD → admin scoped + owner protection + rol limiti (super_admin API'den atanamaz). Duyuru/arşiv → admin kendi şirketi için.
+- Yeni endpoint: `GET /admin/super-admins`, `POST/DELETE /admin/users/{id}/super-admin` (owner-only, süreli+revoke), `PATCH /admin/users/{id}/admin-caps` (super).
+- 3 grantable fonksiyon: `can_view_company_tasks`, `can_create_company`, `extra_company_ids`.
+
+**Web (Faz 2):** `lib/roles.js` (isAdminLike/isSuperAdmin/isOwner/roleLabel). `SettingsPanel` tab gating helper'a taşındı; sistem sekmeleri (İstatistik/Lisanslar/Sertex Prompt/Backup) super-only; yeni **"Süper Yönetici"** sekmesi (`SuperAdminPanel.jsx`) — süper yönetici listesi + admin caps toggle + (owner) süreli atama/geri alma. `UserManagement` owner/super satırlarını korur (silme/rol/impersonate disabled). Sidebar/TaskCategories/UserLockPolicy/ShareTaskModal helper'a geçirildi.
+
+**Mobil (Faz 3):** `src/auth/roles.ts`; `settings/index.tsx` linkleri helper'a taşındı + `super-admins` linki (super-only); yeni `app/settings/super-admins.tsx` ekranı (caps chip + owner ATA/Geri Al). `tasks.tsx` isAdmin, `profile.tsx` roleLabel güncellendi. `api/client.ts` + `types.ts` yeni endpoint/tipler.
+
+**Test:** pytest `test_super_admin_hierarchy.py` (7) + `test_super_admin_extended.py` (5) = 12/12. testing_agent iteration_124 → backend + web + mobil TÜMÜ PASS, fonksiyonel hata yok.
+
+**Bilinen kozmetik:** DB'de ~60 eski test şirketi (COD$_*/TEST_*/E2E_*) "Ek şirket görme" chip bulutunu şişiriyor — opsiyonel tek seferlik temizlik.
+**Yayın notu:** canlıya çıkışta backend redeploy + mobil için yeni Publish gerekir. `EXPO_PUBLIC_BACKEND_URL`/`REACT_APP_BACKEND_URL` publish öncesi `https://sertex-ai.com` olmalı.

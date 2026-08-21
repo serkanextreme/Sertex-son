@@ -4,12 +4,12 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "@/src/auth/AuthContext";
+import { roleLabel as roleLabelFn } from "@/src/auth/roles";
 import { HudHeader } from "@/src/components/HudHeader";
 import { colors, monoFont, radius, spacing } from "@/src/theme/colors";
 import { LOGOUT, PROFILE, SETTINGS } from "@/constants/testIds";
 
-const roleLabel = (role: string) =>
-  role === "admin" ? "Yönetici" : role === "manager" ? "Müdür" : "Kullanıcı";
+const roleLabel = (role: string, isOwner?: boolean) => roleLabelFn(role, isOwner);
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -34,7 +34,7 @@ export default function ProfileScreen() {
           {user?.username ?? "—"}
         </Text>
         <Text style={styles.role} testID={PROFILE.role}>
-          {user ? roleLabel(user.role) : ""}
+          {user ? roleLabel(user.role, user.is_owner) : ""}
         </Text>
 
         <View style={styles.card}>
@@ -47,7 +47,7 @@ export default function ProfileScreen() {
           <View style={styles.divider} />
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>ROL</Text>
-            <Text style={styles.infoValue}>{user ? roleLabel(user.role) : "—"}</Text>
+            <Text style={styles.infoValue}>{user ? roleLabel(user.role, user.is_owner) : "—"}</Text>
           </View>
         </View>
 

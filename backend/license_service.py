@@ -179,7 +179,8 @@ async def get_user_license(db, user_id: str) -> Optional[Dict[str, Any]]:
 
 
 def is_admin(user: Dict[str, Any]) -> bool:
-    return user.get("role") == "admin"
+    # Privileged tiers (admin + super_admin/owner) bypass licensing.
+    return bool(user.get("is_owner")) or user.get("role") in ("admin", "super_admin")
 
 
 async def has_active_license(db, user: Dict[str, Any]) -> bool:

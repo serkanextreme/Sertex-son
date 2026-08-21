@@ -4,6 +4,7 @@ import { Tag, Plus, Pencil, Trash2, Check, X, Building2, Send, Lock, Users, Chev
 import { toast } from "sonner";
 import { api, taskCategoriesApi, companiesApi, companyPermissionsApi } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { isAdminLike } from "../lib/roles";
 import { rollupCategoryStats, getDescendantIds, getCategoryPathLabel } from "../lib/categoryTree";
 import { exportCategoryReportExcel, printCategoryReport } from "../lib/categoryExport";
 
@@ -42,7 +43,7 @@ const TaskCategoriesManagement = () => {
   const [moveFor, setMoveFor] = useState(null); // taşınan kol id
   const [moveTarget, setMoveTarget] = useState(""); // "" = kök (ana seviye)
 
-  const isAdmin = user?.role === "admin";
+  const isAdmin = isAdminLike(user);
   const isManager = user?.role === "manager";
 
   // Faz 9 CP4.15 — cross-company permission request (manager only).

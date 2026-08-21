@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, ApiError } from "@/src/api/client";
 import { Category, CompanyLite, Task, TaskGroup } from "@/src/api/types";
 import { useAuth } from "@/src/auth/AuthContext";
+import { isAdminLike } from "@/src/auth/roles";
 import { CategorySection } from "@/src/components/CategorySection";
 import { HudHeader } from "@/src/components/HudHeader";
 import { LinkTasksModal } from "@/src/components/LinkTasksModal";
@@ -34,7 +35,7 @@ const PREF_HIDE_EMPTY = "tasks.filter.hideEmpty";
 export default function TasksScreen() {
   const insets = useSafeAreaInsets();
   const { logout, user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = isAdminLike(user);
 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
