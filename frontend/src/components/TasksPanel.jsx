@@ -1497,14 +1497,24 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
   // ================= /GÖREV BAĞLAMA =================
 
   const filtered = (() => {
-    let list = filters.length === 0 ? sorted : sorted.filter((t) => filters.includes(bucketOf(t)));
+    // Arşiv görünümünde sidebar'daki iş kolu (kategori) çipleri ve durum filtre
+    // çipleri GİZLİDİR (bkz. !showArchived koşulları). Ancak categoryFilter /
+    // filters state'i aktif görünümden kalabilir; bunlar arşive uygulanırsa
+    // arşiv araması "seçili kola ait olmayan" görevleri bulamaz (bug). Arşivin
+    // kendi grup çipleri + sıralama + araması olduğu için burada bu iki filtreyi
+    // yok sayıyoruz — arama tüm arşiv grubunu kapsar.
+    let list = (showArchived || filters.length === 0)
+      ? sorted
+      : sorted.filter((t) => filters.includes(bucketOf(t)));
     // Faz 8 CP4 · category filter chip. Hiyerarşi: bir ana iş kolu seçilince
-    // o kolun + TÜM alt kollarının görevleri gösterilir.
-    if (categoryFilter === "__none__") {
-      list = list.filter((t) => !t.category_id);
-    } else if (categoryFilter) {
-      const ids = getDescendantIds(categoryFilter, categories);
-      list = list.filter((t) => t.category_id && ids.has(t.category_id));
+    // o kolun + TÜM alt kollarının görevleri gösterilir. (Arşivde uygulanmaz.)
+    if (!showArchived) {
+      if (categoryFilter === "__none__") {
+        list = list.filter((t) => !t.category_id);
+      } else if (categoryFilter) {
+        const ids = getDescendantIds(categoryFilter, categories);
+        list = list.filter((t) => t.category_id && ids.has(t.category_id));
+      }
     }
     // Personel Görevleri — filter to a single person, or show NOTHING when the
     // "Tümü" tick is cleared (personFilter === "__none__").
@@ -1644,7 +1654,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
   const searchActive = !!searchQuery.trim();
   const visibleTaskList = taskScope === "team"
     ? filtered
-    : (filters.length === 0 && !categoryFilter && !searchActive ? sorted : filtered);
+    : ((showArchived || (filters.length === 0 && !categoryFilter)) && !searchActive ? sorted : filtered);
   const visibleTaskIds = visibleTaskList.map((t) => t.id);
 
   // Toplu "iş kolu ağaçlarını aç/kapat" — kartlara CustomEvent yayar; her kart
@@ -2468,7 +2478,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
             )
           )}
         </div>
-      ) : filters.length === 0 && !categoryFilter && !searchActive ? (
+      ) : (showArchived || (filters.length === 0 && !categoryFilter)) && !searchActive ? (
         <Reorder.Group
           axis="y"
           values={rowKeys}

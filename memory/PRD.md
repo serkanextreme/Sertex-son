@@ -2426,3 +2426,10 @@ B2 KALAN dalgalar: 2) Paylaşım (`PUT /tasks/{id}/shares`), 3) Görev Bağlama 
 4. Kullanıcı sağ üstten yeniden **Publish** edip yeni build'i kursun.
 **YAN ETKİ:** Bu ayarla mobil ÖNİZLEME de canlı backend'e bağlanır (kullanıcı bunu kabul etti).
 **Ek destek:** `client.ts` giriş hatası bağlanılan adresi gösterir ("Adres: ..."); TANIMSIZ = adres build'e gömülmemiş.
+
+## 🐞 Bugfix — Arşiv Araması Sidebar İş Kolu Filtresine Takılıyordu (Web) (2026-06 · fork)
+Kullanıcı bildirimi: Bir iş kolu (ör. "ORTAK İŞLER") seçiliyken ARŞİV'e girip arama yapınca görev bulunamıyor; "TÜMÜ" seçiliyken aynı arama buluyor — tutarsız/anlamsız.
+- **Kök neden** (`TasksPanel.jsx`): Arşiv görünümünde iş kolu çipleri + durum filtre çipleri GİZLİ (`!showArchived`), ama `categoryFilter`/`filters` state'i aktif görünümden kalıyordu. `filtered` hesaplaması bu kalıntı filtreleri arşiv listesine de uyguladığından, seçili kola ait olmayan arşiv görevleri (ve arama sonuçları) eleniyordu.
+- **Düzeltme**: `showArchived` iken `filtered` artık `categoryFilter` ve durum `filters`'ı YOK SAYAR (yalnızca arşiv grubu yükü + arama uygulanır). Render dal koşulları da (`visibleTaskList` + ana liste render) arşivi "kategori filtresi yok" gibi ele alır → kalıntı seçim render yolunu değiştirmez, tutarlı.
+- **Test**: testing_agent iteration_123 — 3 senaryo PASS (KOLSUZ/Fason Verme/TÜMÜ seçiliyken arşiv araması görevi buluyor), aktif görünüm kategori filtresi + arşiv grup/sıralama çipleri regresyonsuz. Seed görev kalıcı silindi.
+- **Yayın**: preview'de; canlıya (sertex-ai.com) için yeniden Deploy gerekir.
