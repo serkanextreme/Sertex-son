@@ -12,6 +12,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.emergent.sertexenterprise.ek5u0l",
       "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "Göreve fotoğraf eklemek için kamera erişimi.",
         "NSPhotoLibraryUsageDescription": "Göreve resim/dosya eklemek için galeri erişimi."
       }
