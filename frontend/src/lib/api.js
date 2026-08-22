@@ -404,8 +404,15 @@ export const teamApi = {
 
 // Frontend Error Radar — admin: tarayıcı hata kayıtlarını görüntüle / temizle.
 export const clientLogsApi = {
-  list: (limit = 100) => api.get(`/admin/client-logs?limit=${limit}`).then((r) => r.data),
+  list: ({ limit = 100, status = "active", level = "" } = {}) => {
+    const p = new URLSearchParams({ limit: String(limit) });
+    if (status) p.set("status", status);
+    if (level) p.set("level", level);
+    return api.get(`/admin/client-logs?${p.toString()}`).then((r) => r.data);
+  },
   clear: () => api.delete("/admin/client-logs").then((r) => r.data),
+  resolve: (id, resolved = true) => api.post(`/admin/client-logs/${id}/resolve`, { resolved }).then((r) => r.data),
+  resolveBulk: (message, resolved = true) => api.post(`/admin/client-logs/resolve-bulk`, { message, resolved }).then((r) => r.data),
   getNotifySettings: () => api.get("/admin/client-logs/notify-settings").then((r) => r.data),
   setNotifySettings: (body) => api.put("/admin/client-logs/notify-settings", body).then((r) => r.data),
 };

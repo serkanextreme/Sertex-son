@@ -131,6 +131,17 @@ class ClientErrorNotifyUpdate(BaseModel):
     enabled: bool = True
 
 
+class ClientLogResolve(BaseModel):
+    # Tek bir hata kaydını çözüldü/aktif olarak işaretle.
+    resolved: bool = True
+
+
+class ClientLogResolveBulk(BaseModel):
+    # Aynı mesaja sahip TÜM kayıtları toplu çöz/geri al (grup çözümü).
+    message: str = Field(default="", max_length=2000)
+    resolved: bool = True
+
+
 class AdminCapsUpdate(BaseModel):
     # Süper yönetici → bir Yönetici'ye tanınan özel fonksiyonlar.
     extra_company_ids: Optional[list] = None
@@ -800,16 +811,32 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
         return {"ok": True}
 
     @router.get("/admin/client-logs")
-    async def admin_client_logs(limit: int = 100, user: dict = Depends(current_user_dep)):
+    async def admin_client_logs(
+        limit: int = 100,
+        status: str = "active",
+        level: Optional[str] = None,
+        user: dict = Depends(current_user_dep),
+    ):
         require_super_admin(user)
         limit = max(1, min(int(limit), 500))
+        q: Dict[str, Any] = {}
+        if status == "active":
+            q["resolved"] = {"$ne": True}
+        elif status == "resolved":
+            q["resolved"] = True
+        # status == "all" → çözülmüş filtresi yok
+        if level:
+            levels = [lv.strip().lower() for lv in level.split(",") if lv.strip()]
+            if levels:
+                q["level"] = {"$in": levels}
         docs = await db.client_logs.find(
-            {}, {"_id": 0, "ts": 0},
+            q, {"_id": 0, "ts": 0},
         ).sort("created_at", -1).to_list(length=limit)
         total = await db.client_logs.count_documents({})
+        active = await db.client_logs.count_documents({"resolved": {"$ne": True}})
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
         last_24h = await db.client_logs.count_documents({"created_at": {"$gte": cutoff}})
-        return {"logs": docs, "total": total, "last_24h": last_24h}
+        return {"logs": docs, "total": total, "active": active, "last_24h": last_24h}
 
     @router.delete("/admin/client-logs")
     async def admin_clear_client_logs(user: dict = Depends(current_user_dep)):
@@ -848,6 +875,31 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
         except Exception:
             pass
         return {"cooldown_min": int(req.cooldown_min), "enabled": bool(req.enabled)}
+
+    @router.post("/admin/client-logs/resolve-bulk")
+    async def resolve_client_logs_bulk(req: ClientLogResolveBulk, user: dict = Depends(current_user_dep)):
+        require_super_admin(user)
+        msg = (req.message or "").strip()
+        if not msg:
+            return {"updated": 0, "resolved": bool(req.resolved)}
+        now = datetime.now(timezone.utc).isoformat()
+        if req.resolved:
+            upd = {"$set": {"resolved": True, "resolved_at": now, "resolved_by": user.get("username") or user["id"]}}
+        else:
+            upd = {"$set": {"resolved": False}, "$unset": {"resolved_at": "", "resolved_by": ""}}
+        res = await db.client_logs.update_many({"message": msg}, upd)
+        return {"updated": int(getattr(res, "modified_count", 0) or 0), "resolved": bool(req.resolved)}
+
+    @router.post("/admin/client-logs/{log_id}/resolve")
+    async def resolve_client_log(log_id: str, req: ClientLogResolve, user: dict = Depends(current_user_dep)):
+        require_super_admin(user)
+        now = datetime.now(timezone.utc).isoformat()
+        if req.resolved:
+            upd = {"$set": {"resolved": True, "resolved_at": now, "resolved_by": user.get("username") or user["id"]}}
+        else:
+            upd = {"$set": {"resolved": False}, "$unset": {"resolved_at": "", "resolved_by": ""}}
+        res = await db.client_logs.update_one({"id": log_id}, upd)
+        return {"updated": int(getattr(res, "modified_count", 0) or 0), "resolved": bool(req.resolved)}
 
     # ------------------------------------------------------------------
     # Süper Yönetici / Kurucu — rol yönetimi

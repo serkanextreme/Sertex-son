@@ -62,7 +62,7 @@ const MonitoringDashboard = () => {
       setLoading(false);
     }
     try {
-      const cl = await clientLogsApi.list(100);
+      const cl = await clientLogsApi.list({ limit: 100 });
       setClientLogs(cl);
     } catch {
       /* silent — frontend error radar en iyi çaba (best-effort) */

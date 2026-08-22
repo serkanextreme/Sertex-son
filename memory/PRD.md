@@ -10,6 +10,13 @@ Tam liste: `/app/frontend/public/Sertex-Feature-Listesi.pdf` (üretici script: `
 
 ## ✅ Tamamlanan Fazlar
 
+### Hata Radarı — Çözümleme + Seviye Filtresi & Gruplama (2026-06 · fork) ✅
+Kullanıcı isteği: (1) bir hatayı "çözüldü" işaretleyip aktif listeden gizle (yalnızca aktif sorunlara odaklan); (2) seviyeye göre süz + en sık tekrar edenleri üstte grupla.
+- **Backend** (`routers/admin_router.py`): client_logs'a `resolved`/`resolved_at`/`resolved_by`. GET `/admin/client-logs` artık `status` (active[varsayılan]/resolved/all) + `level` (virgüllü) filtrelerini ve `active` sayacını döner — varsayılan aktif olduğu için çözülmüşler otomatik gizli (mobil ekran da bundan yararlanır). Yeni uçlar: `POST /admin/client-logs/{id}/resolve` (tekli), `POST /admin/client-logs/resolve-bulk {message}` (aynı mesajlı grubu toplu çöz/geri al).
+- **Web** (`ClientErrorRadar.jsx`, `api.js`, `MonitoringDashboard.jsx`): SEVİYE (Tümü / Hata+Kritik / Uyarı) + DURUM (Aktif / Çözüldü / Tümü) filtre çipleri, LİSTE/GRUPLA görünüm anahtarı. Liste satırında "Çöz / Geri Al" butonu; grup görünümü mesaja göre ×count ile sık→seyrek sıralı + "Çöz (N)" toplu çözüm + açılır occurrences. AKTİF SORUN sayacı.
+- **Test**: Backend curl e2e — status/level filtre (level=error→2), tekli resolve (active 3→2), toplu resolve RepeatErr (active→0, resolved→3) DOĞRULANDI. Web canlı (Playwright): liste + grup görünümü, çip filtreleri, Çöz/ÇÖZ(N) butonları render. Lint temiz. Test verileri temizlendi.
+- NOT: Mobil `client-logs` ekranı otomatik olarak yalnızca aktif hataları gösterir; resolve/filtre/gruplama UI'ı henüz mobilde yok (opsiyonel parite).
+
 ### Hata Radarı — Web Özel Sekme + Yeni-Hata Bildirimi (2026-06 · fork) ✅
 Kullanıcı isteği: (1) Hata Radarını web'de İstatistik sekmesinden çıkarıp AYRI bir sekme yaparak tek tık erişim; (2) yeni bir istemci hatası düşünce süper yöneticilere ANLIK bildirim — bildirim sıklığı AYARLANABİLİR.
 - **Backend** (`team_service.py`, `routers/admin_router.py`, `push_service.py`): Yeni `notify_super_admins_client_error(db, log_doc)` — `POST /api/client-log` sonrası best-effort çağrılır; Kurucu + aktif super_admin'lere `client_error` tipli çan bildirimi + web push gönderir. Spam koruması: AYARLANABİLİR cooldown (dk) içinde en fazla 1 toplu bildirim (in-memory `_last_client_error_notify_ts` guard + 60sn cfg cache; PUT'ta `invalidate_ce_cfg_cache()` ile anında geçerli). Ayar `system_settings.key='global'` → `client_error_notify_cooldown_min` + `client_error_notify_enabled`. Yeni uçlar: `GET/PUT /api/admin/client-logs/notify-settings` (super_admin). `push_service.notification_push_text`'e `client_error` başlık/gövde eklendi.
