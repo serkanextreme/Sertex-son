@@ -10,6 +10,14 @@ Tam liste: `/app/frontend/public/Sertex-Feature-Listesi.pdf` (üretici script: `
 
 ## ✅ Tamamlanan Fazlar
 
+### Çalışma Modu İyileştirmesi — Kişisel/Ekip + ÇİFT MOD + Sahip Bağışıklığı (2026-06 · fork) ✅
+Kullanıcı isteği: (1) Kişisel modda ekip/B2B özellikleri gizlensin (sadeleştirme); (2) ÇİFT MOD — kullanıcı Kişisel+Ekip'i birlikte kullanıp sol paneldeki hızlı düğmeyle tek tıkla geçebilsin; (3) KRİTİK: Sahip (serkan, is_owner) modtan TAMAMEN muaf — her zaman tüm sekmeleri görür.
+- **Backend** (`auth.py`, `routers/auth_router.py`): user'a `dual_mode:bool`. `PUT /api/settings/dual-mode {dual_mode}` + `PUT /api/settings/workspace-mode`. `/auth/me` + login yanıtı `workspace_mode` + `dual_mode` döner.
+- **Web** (`lib/auth.js`): `teamFeaturesVisible = isOwner || workspaceMode==='team'` (sahip bağışıklığı) + `setDualMode`. `SettingsPanel.jsx` "Mod" sekmesi: ÇİFT MOD toggle + Kişisel/Ekip kartları; ekip Ayarlar sekmeleri `(!t.team || teamFeaturesVisible)` ile gizlenir. `Sidebar.jsx` `canSeeTeam = isManagerOrAdmin && teamFeaturesVisible` → Ekibim/Yarım Kalan sekmeleri kişisel modda gizli (sahip hariç). `NeuralLinkHeader.jsx` Çift Mod açıkken hızlı geçiş düğmesi (`quick-mode-switch`).
+- **Bugfix (iteration_125 HIGH → iteration_126 FIXED)**: Menajerin hızlı geçişi Sidebar sekmelerini SAYFA YENİLENMEDEN güncellemiyordu. Kök neden: `tabOrder` state moda göre mount'ta bir kez tohumlanıyor + `SidebarTabBar` filtresizdi. Düzeltme: `DEFAULT_ORDER` artık team/orphans'ı ROL bazlı (isManagerOrAdmin) tohumluyor; yeni `handleReorder` görünür alt kümeyi birleştiriyor; `SidebarTabBar` render'da `visibleOrder = tabOrder.filter(canSeeTab)` kullanıyor.
+- **Test**: Backend pytest `test_workspace_dual_mode.py` (3/3) + testing agent iteration_125 (owner bağışıklığı + mod kartları + hızlı düğme GEÇTİ) → iteration_126 RETEST (hızlı geçiş anında sekme göster/gizle + reorder regresyonu + sahip bağışıklığı TÜMÜ GEÇTİ). Lint temiz. Test durumu temizlendi (serkan+mgr_test personal/dual=false).
+- **Yayın**: preview'de; canlıya (sertex-ai.com) için Deploy gerekir.
+
 ### Performans — "Otomatik" Seviye Algılama (2026-06 · fork) ✅
 Kullanıcı isteği: cihaz gücünü sezip ilk açılışta uygun seviyeyi otomatik uygulayan "Otomatik" seçeneği ekle.
 - **settings.js**: `detectDeviceTier()` — WebGL renderer (SwiftShader/yazılım → low), CPU çekirdek (`hardwareConcurrency`), RAM (`deviceMemory`), mobil tespiti ile puanlayıp `high|normal|low` döner (bir kez cache). `resolveQuality(q)` — `"auto"` → algılanan seviye. Varsayılan `DEFAULT_QUALITY` artık **"auto"** (ilk açılışta otomatik). `data-quality` = efektif seviye, `data-quality-mode` = ham seçim.

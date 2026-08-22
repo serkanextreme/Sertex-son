@@ -108,15 +108,28 @@ export const AuthProvider = ({ children }) => {
     return res.data.workspace_mode;
   }, []);
 
+  // Çift Mod: açıkken kullanıcı Kişisel⇄Ekip arasında tek tıkla geçer.
+  const setDualMode = useCallback(async (enabled) => {
+    const res = await api.put("/settings/dual-mode", { dual_mode: !!enabled });
+    setUser((prev) => (prev ? { ...prev, dual_mode: res.data.dual_mode } : prev));
+    return res.data.dual_mode;
+  }, []);
+
   // Convenience derived flag — true when the user is an admin OR their
   // workspace_mode is "team". Every team-only UI block should gate on this
   // so admins (like Serkan) always see the full B2B feature set regardless
   // of their personal preference.
   const workspaceMode = user?.workspace_mode || "personal";
+  const dualMode = !!user?.dual_mode;
+  const isOwner = !!user?.is_owner;
   // Faz 8: managers are always in team view — the assignee dropdown, the
   // "Ekibim" tab, and RBAC-gated UI depend on this flag. Admin bypasses the
   // toggle; employees can opt in via workspace_mode='team' from settings.
   const isTeamView = isAdminLike(user) || user?.role === "manager" || workspaceMode === "team";
+
+  // Ekip/B2B özelliklerinin GÖRÜNÜRLÜĞÜ. Kişisel modda ekip özellikleri gizlenir
+  // (sadeleştirme) — ANCAK sahip (is_owner) için mod hiçbir şeyi gizlemez.
+  const teamFeaturesVisible = isOwner || workspaceMode === "team";
 
   return (
     <AuthContext.Provider
@@ -128,8 +141,12 @@ export const AuthProvider = ({ children }) => {
         impersonate,
         stopImpersonating,
         workspaceMode,
+        dualMode,
+        isOwner,
         isTeamView,
+        teamFeaturesVisible,
         setWorkspaceMode,
+        setDualMode,
       }}
     >
       {children}

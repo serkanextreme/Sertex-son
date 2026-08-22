@@ -44,6 +44,10 @@ class WorkspaceModeUpdate(BaseModel):
     workspace_mode: str  # "personal" | "team"
 
 
+class DualModeUpdate(BaseModel):
+    dual_mode: bool = False
+
+
 class ReminderThresholdUpdate(BaseModel):
     # Null / 0 / negative → clear (fall back to company/system default).
     days: Optional[int] = None
@@ -93,6 +97,7 @@ def build_auth_router(db, current_user_dep) -> APIRouter:
             "admin_caps": _get_caps(user),
             "super_admin_until": user.get("super_admin_until"),
             "workspace_mode": user.get("workspace_mode", "personal"),
+            "dual_mode": bool(user.get("dual_mode")),
             "due_soon_threshold": user.get("due_soon_threshold"),
             "company_id": user.get("company_id"),
         }
@@ -117,6 +122,15 @@ def build_auth_router(db, current_user_dep) -> APIRouter:
             {"$set": {"workspace_mode": req.workspace_mode}},
         )
         return {"workspace_mode": req.workspace_mode}
+
+    @router.put("/settings/dual-mode")
+    async def set_dual_mode(req: DualModeUpdate, user: dict = Depends(current_user_dep)):
+        """Çift Mod: açıkken kullanıcı Kişisel⇄Ekip arasında tek tıkla geçebilir."""
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {"dual_mode": bool(req.dual_mode)}},
+        )
+        return {"dual_mode": bool(req.dual_mode)}
 
     @router.put("/settings/reminder-threshold")
     async def set_user_reminder_threshold(req: ReminderThresholdUpdate, user: dict = Depends(current_user_dep)):

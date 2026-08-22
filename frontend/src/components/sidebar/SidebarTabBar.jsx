@@ -140,6 +140,7 @@ const DraggableTab = ({
 
 const SidebarTabBar = ({
   tabOrder,
+  canSeeTab,
   tabMeta,
   activeTab,
   setActiveTab,
@@ -161,16 +162,21 @@ const SidebarTabBar = ({
     };
   }, []);
 
+  // Only render tabs the current role+mode can see. Filtering here (rather than
+  // in the parent's tabOrder state) means a Çift Mod quick-switch reveals/hides
+  // team tabs instantly — no page reload needed.
+  const visibleOrder = tabOrder.filter((tk) => (canSeeTab ? canSeeTab(tk) : true));
+
   return (
     <Reorder.Group
       axis="x"
-      values={tabOrder}
+      values={visibleOrder}
       onReorder={onReorder}
       className="flex border-b border-sertex-cyan/20"
       as="div"
       data-testid="sidebar-tab-bar"
     >
-      {tabOrder.map((tabKey) => {
+      {visibleOrder.map((tabKey) => {
         const meta = tabMeta[tabKey];
         if (!meta) return null;
         return (

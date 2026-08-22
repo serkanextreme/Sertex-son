@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Palette, RotateCcw, LayoutTemplate, User, LogOut, Lock, KeyRound, Users, Bell, Play, Upload, Trash2, Volume2, Briefcase, Building2, Tag, Clock, Activity, Megaphone, MessageSquare, Archive, ShieldCheck, AlertTriangle, Gauge } from "lucide-react";
+import { X, Palette, RotateCcw, LayoutTemplate, User, LogOut, Lock, KeyRound, Users, Bell, Play, Upload, Trash2, Volume2, Briefcase, Building2, Tag, Clock, Activity, Megaphone, MessageSquare, Archive, ShieldCheck, AlertTriangle, Gauge, Repeat } from "lucide-react";
 import { useSettings, setColor, resetColors, DEFAULT_COLORS } from "../lib/settings";
 import { useAuth } from "../lib/auth";
 import { isAdminLike, isSuperAdmin, isManager, roleLabel } from "../lib/roles";
@@ -83,17 +83,17 @@ const SETTINGS_TABS = [
   { key: "performance", label: "Performans", icon: Gauge, color: "emerald" },
   { key: "workspace", label: "Mod", icon: Briefcase, color: "cyan" },
   { key: "reminders", label: "Uyarılar", icon: Clock, color: "orange" },
-  { key: "monitoring", label: "İstatistik", icon: Activity, color: "emerald", show: (u) => isSuperAdmin(u) },
-  { key: "errorradar", label: "Hata Radarı", icon: AlertTriangle, color: "red", show: (u) => isSuperAdmin(u) },
-  { key: "users", label: "Kullanıcılar", icon: Users, color: "yellow", show: (u) => isAdminLike(u) },
-  { key: "licenses", label: "Lisanslar", icon: KeyRound, color: "yellow", show: (u) => isSuperAdmin(u) },
-  { key: "companies", label: "Şirketler", icon: Building2, color: "yellow", show: (u) => isAdminLike(u) },
-  { key: "visibility", label: "Yetkiler", icon: Briefcase, color: "purple", show: (u) => isAdminLike(u) },
-  { key: "categories", label: "İş Kolları", icon: Tag, color: "cyan", show: (u) => isAdminLike(u) || isManager(u) },
+  { key: "monitoring", label: "İstatistik", icon: Activity, color: "emerald", team: true, show: (u) => isSuperAdmin(u) },
+  { key: "errorradar", label: "Hata Radarı", icon: AlertTriangle, color: "red", team: true, show: (u) => isSuperAdmin(u) },
+  { key: "users", label: "Kullanıcılar", icon: Users, color: "yellow", team: true, show: (u) => isAdminLike(u) },
+  { key: "licenses", label: "Lisanslar", icon: KeyRound, color: "yellow", team: true, show: (u) => isSuperAdmin(u) },
+  { key: "companies", label: "Şirketler", icon: Building2, color: "yellow", team: true, show: (u) => isAdminLike(u) },
+  { key: "visibility", label: "Yetkiler", icon: Briefcase, color: "purple", team: true, show: (u) => isAdminLike(u) },
+  { key: "categories", label: "İş Kolları", icon: Tag, color: "cyan", team: true, show: (u) => isAdminLike(u) || isManager(u) },
   { key: "archive", label: "Arşiv", icon: Archive, color: "orange", show: (u, caps) => isAdminLike(u) || isManager(u) || !!caps?.manage_policy },
-  { key: "announcements", label: "Duyurular", icon: Megaphone, color: "emerald", show: (u) => isAdminLike(u) },
+  { key: "announcements", label: "Duyurular", icon: Megaphone, color: "emerald", team: true, show: (u) => isAdminLike(u) },
   { key: "prompt", label: "Sertex Prompt", icon: MessageSquare, color: "purple", show: (u) => isSuperAdmin(u) },
-  { key: "roles", label: "Süper Yönetici", icon: ShieldCheck, color: "purple", show: (u) => isSuperAdmin(u) },
+  { key: "roles", label: "Süper Yönetici", icon: ShieldCheck, color: "purple", team: true, show: (u) => isSuperAdmin(u) },
   { key: "mylicense", label: "Lisansım", icon: KeyRound, color: "cyan", show: (u) => !isAdminLike(u) },
 ];
 
@@ -108,7 +108,7 @@ const TAB_ACTIVE_CLS = {
 
 const SettingsPanel = ({ open, onClose, initialTab }) => {
   const { colors } = useSettings();
-  const { user, logout, workspaceMode, setWorkspaceMode } = useAuth();
+  const { user, logout, workspaceMode, dualMode, isOwner, teamFeaturesVisible, setWorkspaceMode, setDualMode } = useAuth();
   const [savingMode, setSavingMode] = useState(false);
   const [tab, setTab] = useState("custom");
   // Faz 9 CP3 — external callers (license-expiring banner, deep-links) can
@@ -141,6 +141,17 @@ const SettingsPanel = ({ open, onClose, initialTab }) => {
     reminderConfigApi.get().then(setReminderCfg).catch(() => setReminderCfg(null));
     api.get("/tasks/settings").then((r) => setArchiveCaps(r.data?.caps || null)).catch(() => setArchiveCaps(null));
   }, [open]);
+
+  // Görünür sekmeler — rol + (ekip özellikleri kişisel modda gizli, sahip hariç).
+  const isTabVisible = (t) =>
+    (!t.show || t.show(user, archiveCaps)) && (!t.team || teamFeaturesVisible);
+
+  // Aktif sekme gizlendiyse (ör. ekip → kişisel geçiş) güvenli sekmeye düş.
+  useEffect(() => {
+    const active = SETTINGS_TABS.find((t) => t.key === tab);
+    if (active && !isTabVisible(active)) setTab("custom");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamFeaturesVisible, workspaceMode, tab, archiveCaps]);
 
   useEffect(() => {
     if (open) {
@@ -297,7 +308,7 @@ const SettingsPanel = ({ open, onClose, initialTab }) => {
                 className="flex flex-col w-[176px] shrink-0 border-r border-sertex-cyan/20 overflow-y-auto scrollbar-sertex py-1"
                 data-testid="settings-tabs"
               >
-                {SETTINGS_TABS.filter((t) => !t.show || t.show(user, archiveCaps)).map((t) => {
+                {SETTINGS_TABS.filter(isTabVisible).map((t) => {
                   const active = tab === t.key;
                   const Icon = t.icon;
                   return (
@@ -420,16 +431,53 @@ const SettingsPanel = ({ open, onClose, initialTab }) => {
               {tab === "workspace" && (
                 <div className="space-y-4" data-testid="workspace-mode-tab">
                   <div className="hud-text text-sertex-textMuted normal-case tracking-normal text-[11px]">
-                    Sertex'i nasıl kullanacaksın? Kişisel modda ekip özellikleri
-                    (görev sahibi etiketi, şirket alanı, gruplama vb.) gizlenir —
-                    ekran temiz kalır. Ekip modu tüm B2B özelliklerini açar.
-                    {isAdminLike(user) && (
+                    Sertex nasıl kullanılsın? Kişisel mod ekip/B2B özelliklerini
+                    gizler, ekran sade kalır. Ekip modu tüm B2B özelliklerini açar.
+                    Çift Mod ile ikisini birlikte kullan — şirkette Ekip, dışarıda
+                    Kişisel; sol paneldeki hızlı düğmeyle tek tıkla geç.
+                    {isOwner && (
                       <div className="mt-2 text-yellow-300/90">
-                        Not: Yönetici olarak ekip özelliklerini zaten hep görürsün.
-                        Bu ayar sadece kendi görünümün için değil, yeni kullanıcıların
-                        varsayılan modunu belirlemez — onlara admin panelinden atarsın.
+                        Not: Sahip olarak mod, senin görünümünde hiçbir şeyi gizlemez —
+                        her zaman tüm özellikleri görürsün.
                       </div>
                     )}
+                  </div>
+
+                  {/* ÇİFT MOD toggle */}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (savingMode) return;
+                      setSavingMode(true);
+                      try {
+                        await setDualMode(!dualMode);
+                        toast.success(dualMode ? "Çift Mod kapatıldı" : "Çift Mod açıldı — hızlı geçiş düğmesi aktif");
+                      } catch (e) {
+                        toast.error("Değiştirilemedi");
+                      } finally {
+                        setSavingMode(false);
+                      }
+                    }}
+                    data-testid="workspace-dual-toggle"
+                    className={`w-full text-left p-3 rounded-md border transition-colors ${
+                      dualMode ? "border-emerald-400 bg-emerald-400/10" : "border-sertex-cyan/25 hover:border-sertex-cyan/60"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <Repeat className="h-4 w-4 text-emerald-300" />
+                      <span className="hud-text text-emerald-300 neon-glow">ÇİFT MOD</span>
+                      <span className={`ml-auto text-[10px] font-mono ${dualMode ? "text-emerald-300" : "text-sertex-textMuted"}`}>
+                        {dualMode ? "✓ AÇIK" : "KAPALI"}
+                      </span>
+                    </div>
+                    <div className="text-[11px] font-mono text-sertex-textMuted normal-case">
+                      Kişisel + Ekip modunu birlikte kullan. Açıkken sol paneldeki
+                      başlıkta hızlı geçiş düğmesi çıkar; tek tıkla anında geçersin.
+                    </div>
+                  </button>
+
+                  <div className="hud-text text-sertex-textMuted/70">
+                    {dualMode ? "— ŞU AN AKTİF GÖRÜNÜM —" : "— GÖRÜNÜM MODU —"}
                   </div>
 
                   {/* PERSONAL card */}

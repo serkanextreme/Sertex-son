@@ -9,7 +9,9 @@ import {
   Save,
   Trash2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { t } from "../../lib/i18n";
+import { useAuth } from "../../lib/auth";
 import NotificationBell from "../NotificationBell";
 import { NotificationPermBadge } from "./NotificationPermBadge";
 
@@ -41,6 +43,21 @@ const NeuralLinkHeader = ({
     e.stopPropagation();
     onStatClick?.(key);
   };
+  const { dualMode, workspaceMode, setWorkspaceMode } = useAuth();
+  const [switchingMode, setSwitchingMode] = React.useState(false);
+  const toggleActiveMode = async () => {
+    if (switchingMode) return;
+    setSwitchingMode(true);
+    const next = workspaceMode === "team" ? "personal" : "team";
+    try {
+      await setWorkspaceMode(next);
+      toast.success(next === "team" ? "Ekip moduna geçildi" : "Kişisel moda geçildi");
+    } catch (e) {
+      toast.error("Mod değiştirilemedi");
+    } finally {
+      setSwitchingMode(false);
+    }
+  };
   return (
     <>
       <div className="p-4 border-b border-sertex-cyan/20 flex items-start justify-between gap-2">
@@ -48,6 +65,23 @@ const NeuralLinkHeader = ({
           <div className="display-text text-sertex-cyan neon-glow text-lg mb-1 tracking-[0.2em]">
             NEURAL LINK
           </div>
+          {dualMode && (
+            <button
+              type="button"
+              onClick={toggleActiveMode}
+              disabled={switchingMode}
+              data-testid="quick-mode-switch"
+              title="Kişisel ⇄ Ekip modunu değiştir"
+              className={`mb-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border hud-text transition-colors disabled:opacity-50 ${
+                workspaceMode === "team"
+                  ? "border-purple-400/50 text-purple-300 bg-purple-500/10 hover:bg-purple-500/20"
+                  : "border-sertex-cyan/50 text-sertex-cyan bg-sertex-cyan/10 hover:bg-sertex-cyan/20"
+              }`}
+            >
+              <ArrowLeftRight className="h-3 w-3" />
+              {workspaceMode === "team" ? "EKİP" : "KİŞİSEL"}
+            </button>
+          )}
           {stats ? (
             <div
               className="hud-text text-sertex-textMuted flex flex-wrap gap-x-2 gap-y-0.5"

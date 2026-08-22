@@ -185,6 +185,7 @@ async def login(db, username: str, password: str, ip: str):
             "role": user.get("role", "user"),
             "is_owner": bool(user.get("is_owner")),
             "workspace_mode": user.get("workspace_mode", "personal"),
+            "dual_mode": bool(user.get("dual_mode")),
         },
     }
 

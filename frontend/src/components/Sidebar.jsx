@@ -59,12 +59,14 @@ const DOCK_NEXT = { right: "bottom", bottom: "left", left: "top", top: "right" }
 const DOCK_LABEL = { right: "SAĞ", left: "SOL", top: "ÜST", bottom: "ALT" };
 
 const Sidebar = ({ lang, open, setOpen, activeConversationId, onSelectConversation, onNewChat, refreshKey }) => {
-  const { user } = useAuth();
+  const { user, teamFeaturesVisible } = useAuth();
   const isAdmin = isAdminLike(user);
   const isSuper = isSuperAdmin(user);
   // Faz 8 CP3 — managers get the extra "Ekibim" tab that surfaces per-member
   // task rollups. Employees don't need it (they only see themselves).
   const isManagerOrAdmin = isAdminLike(user) || user?.role === "manager";
+  // Ekip sekmeleri kişisel modda gizli — sahip hariç (teamFeaturesVisible kapsar).
+  const canSeeTeam = isManagerOrAdmin && teamFeaturesVisible;
   const [tab, setTab] = useState("history");
   const [conversations, setConversations] = useState([]);
   const [notes, setNotes] = useState([]);
@@ -83,17 +85,25 @@ const Sidebar = ({ lang, open, setOpen, activeConversationId, onSelectConversati
   // ---- Role-based tab visibility helper --------------------------------
   const canSeeTab = (tk) => {
     if (tk === "backup") return isSuper;
-    if (tk === "team") return isManagerOrAdmin;
+    if (tk === "team") return canSeeTeam;
     // Faz 8 CP6 — "Yarım Kalan İşler" tab is only relevant for managers +
     // admin (they reassign orphans). Employees never see it.
-    if (tk === "orphans") return isManagerOrAdmin;
+    if (tk === "orphans") return canSeeTeam;
     return true;
   };
+
+  // Aktif sekme gizlendiyse (mod değişimi) güvenli sekmeye düş.
+  React.useEffect(() => {
+    if (!canSeeTab(tab)) setTab("history");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamFeaturesVisible, tab]);
 
   const DEFAULT_ORDER_BASE = ["history", "tasks", "memory", "files", "email", "notes"];
   const DEFAULT_ORDER = (() => {
     const order = [...DEFAULT_ORDER_BASE];
-    // Insert "team" right after "tasks" so it lives next to related content.
+    // Seed team/orphans by ROLE (manager/admin) — NOT by current mode — so the
+    // tabOrder always carries them; render-time `canSeeTab` filtering handles
+    // show/hide on Çift Mod switches without a reload.
     if (isManagerOrAdmin) {
       const idx = order.indexOf("tasks");
       order.splice(idx + 1, 0, "team");
@@ -120,6 +130,15 @@ const Sidebar = ({ lang, open, setOpen, activeConversationId, onSelectConversati
   const persistOrder = (next) => {
     setTabOrder(next);
     try { localStorage.setItem(TAB_ORDER_KEY, JSON.stringify(next)); } catch (e) { console.warn("[Sidebar.jsx] hata bastırıldı:", e); }
+  };
+
+  // Reorder only touches currently-visible tabs; merge the reordered visible
+  // subset back into the full order so hidden tabs (e.g. team/orphans while in
+  // personal mode) keep their slot and reappear correctly on a mode switch.
+  const handleReorder = (newVisible) => {
+    let vi = 0;
+    const merged = tabOrder.map((tk) => (canSeeTab(tk) ? (newVisible[vi++] ?? tk) : tk));
+    persistOrder(merged);
   };
 
   // ---- Floating (detached) tabs state -----------------------------------
@@ -737,10 +756,11 @@ const Sidebar = ({ lang, open, setOpen, activeConversationId, onSelectConversati
 
             <SidebarTabBar
               tabOrder={tabOrder}
+              canSeeTab={canSeeTab}
               tabMeta={TAB_META}
               activeTab={tab}
               setActiveTab={setTab}
-              onReorder={persistOrder}
+              onReorder={handleReorder}
               floatingTabs={floatingTabs}
               onDetach={detachTab}
               onFocusFloating={focusFloating}
