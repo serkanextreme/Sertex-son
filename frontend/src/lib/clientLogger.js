@@ -14,6 +14,18 @@ const seen = new Map(); // dedupe key -> son gönderim zamanı
 let windowStart = Date.now();
 let sentInWindow = 0;
 
+// Bot / crawler istekleri (Facebook, Google, Bing indeksleyicileri, headless
+// tarayıcılar) gerçek kullanıcı değildir; WebGL vb. eksikliğinden hata üretip
+// radarı kirletirler. Bu istemcilerde logger hiç kurulmaz.
+const BOT_RE = /bot|crawl|spider|slurp|mediapartners|facebookexternalhit|webindexer|bingpreview|headless|lighthouse|pingdom|gtmetrix|prerender|phantom/i;
+const isBotClient = () => {
+  try {
+    return typeof navigator !== "undefined" && BOT_RE.test(navigator.userAgent || "");
+  } catch {
+    return false;
+  }
+};
+
 const tokenSafe = () => {
   try {
     return localStorage.getItem(TOKEN_KEY);
@@ -76,7 +88,7 @@ const report = (level, message, extra = {}) => {
 };
 
 export function initClientLogger() {
-  if (installed || typeof window === "undefined") return;
+  if (installed || typeof window === "undefined" || isBotClient()) return;
   installed = true;
 
   window.addEventListener("error", (event) => {

@@ -10,6 +10,12 @@ Tam liste: `/app/frontend/public/Sertex-Feature-Listesi.pdf` (üretici script: `
 
 ## ✅ Tamamlanan Fazlar
 
+### Hata Radarı Gürültü Düzeltmesi — WebGL/Bot (2026-06 · fork) ✅
+Radar, Meta/Facebook site tarayıcı botunun (`meta-webindexer`) giriş sayfasında ürettiği "Error creating WebGL context" hatasını yakaladı (gerçek kullanıcı değil, gürültü). İki yönlü kalıcı düzeltme:
+- `HolographicSphere.jsx`: `<Canvas>` öncesi WebGL desteği kontrol edilir; yoksa hafif CSS parıltı yedeğine düşülür → hata tamamen önlenir (bot + eski tarayıcılar). WebGL varken küre eskisi gibi çalışır (screenshot ile doğrulandı).
+- `clientLogger.js`: bot/crawler user-agent'larında (`bot|crawl|spider|facebookexternalhit|webindexer|headless|...`) logger hiç kurulmaz → radar temiz kalır.
+- NOT: Kod düzeltmesi; production'da (sertex-ai.com) yalnızca **yeniden Deploy** sonrası etkin olur. Mevcut yakalanmış bot kaydı radardan "Çöz/Temizle" ile kaldırılabilir.
+
 ### Marka: SERTEX Amblemi — Ana İkon & Amblem (2026-06 · fork) ✅
 Kullanıcı yeni SERTEX altıgen "S" devre amblemini yükledi (`sertex-logo.jpeg` banner); uygulamanın ana ikonu ve amblemi yapıldı.
 - Amblem banner'dan kare olarak kırpıldı (wordmark hariç, x≈470 boşluğuna kadar), siyah zeminli 1024 ikon + şeffaf `emblem-mark.png` (siyah→alfa) üretildi.

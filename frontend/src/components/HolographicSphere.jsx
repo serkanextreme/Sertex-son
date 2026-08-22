@@ -227,6 +227,42 @@ const InnerCore = ({ state }) => {
 };
 
 const HolographicSphere = ({ state = "idle", onClick }) => {
+  // Bot / WebGL desteği olmayan tarayıcılar Canvas oluştururken
+  // "Error creating WebGL context" fırlatır. Önce destek kontrolü yapıp
+  // yoksa hafif bir CSS parıltı yedeğine düşerek hatayı tamamen önle.
+  const webglOk = useMemo(() => {
+    try {
+      const c = document.createElement("canvas");
+      return !!(
+        window.WebGLRenderingContext &&
+        (c.getContext("webgl") || c.getContext("experimental-webgl"))
+      );
+    } catch {
+      return false;
+    }
+  }, []);
+
+  if (!webglOk) {
+    return (
+      <div
+        className="w-full h-full cursor-pointer flex items-center justify-center"
+        onClick={onClick}
+        data-testid="holographic-sphere-fallback"
+      >
+        <div
+          style={{
+            width: "58%",
+            aspectRatio: "1 / 1",
+            borderRadius: "50%",
+            background:
+              "radial-gradient(circle, rgba(0,240,255,0.28), rgba(0,102,255,0.08) 60%, transparent 72%)",
+            boxShadow: "0 0 60px rgba(0,240,255,0.35)",
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className="w-full h-full cursor-pointer"
