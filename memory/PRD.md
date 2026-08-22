@@ -10,6 +10,14 @@ Tam liste: `/app/frontend/public/Sertex-Feature-Listesi.pdf` (üretici script: `
 
 ## ✅ Tamamlanan Fazlar
 
+### Performans — "Otomatik" Seviye Algılama (2026-06 · fork) ✅
+Kullanıcı isteği: cihaz gücünü sezip ilk açılışta uygun seviyeyi otomatik uygulayan "Otomatik" seçeneği ekle.
+- **settings.js**: `detectDeviceTier()` — WebGL renderer (SwiftShader/yazılım → low), CPU çekirdek (`hardwareConcurrency`), RAM (`deviceMemory`), mobil tespiti ile puanlayıp `high|normal|low` döner (bir kez cache). `resolveQuality(q)` — `"auto"` → algılanan seviye. Varsayılan `DEFAULT_QUALITY` artık **"auto"** (ilk açılışta otomatik). `data-quality` = efektif seviye, `data-quality-mode` = ham seçim.
+- **HolographicSphere.jsx**: `resolveQuality(quality)` ile efektif seviyeye göre render (auto dahil).
+- **PerformancePanel.jsx**: en üstte **"Otomatik (Önerilen)"** kartı (`perf-quality-auto`) + "Bu cihaz için algılanan: <seviye>" göstergesi; altında elle seçim (Kaliteli/Normal/Düşük).
+- **Test**: Playwright — varsayılan `mode=auto`, önizleme ortamında `effective=low` doğru tespit edildi ve panelde "algılanan: Düşük" gösterildi; elle kartlar mevcut. Lint temiz.
+- NOT: Güçlü cihazda auto → Kaliteli (görsel değişmez), zayıfta Normal/Düşük. Canlı için Deploy gerekir.
+
 ### Performans Ayarı — 3 Görsellik Seviyesi (2026-06 · fork) ✅
 Kullanıcı isteği: web ekran kartını çok yoruyor; Ayarlar'a "Performans" bölümü + 3 seviye (Kaliteli/Normal/Düşük), kişi kendi cihazına göre seçsin; mevcut hal varsayılan kalsın; düşükte glass biraz azalsın.
 - **settings.js**: `quality` (localStorage, cihaza özel; "high"|"normal"|"low", varsayılan "high") + `setQuality()`; seçim `<html data-quality>` attribute'una yazılır.

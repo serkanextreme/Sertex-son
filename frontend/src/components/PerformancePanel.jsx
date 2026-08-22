@@ -1,12 +1,15 @@
 import React from "react";
-import { Sparkles, Gauge, BatteryLow, Check } from "lucide-react";
+import { Sparkles, Gauge, BatteryLow, Check, Cpu } from "lucide-react";
 import { toast } from "sonner";
-import { useSettings, setQuality } from "../lib/settings";
+import { useSettings, setQuality, detectDeviceTier } from "../lib/settings";
 
 /**
  * Performans / Görsellik seviyesi — kullanıcı kendi cihazına göre seçer.
- * Seçim cihaza özeldir (localStorage) ve anında uygulanır. "Kaliteli" = mevcut hal.
+ * Seçim cihaza özeldir (localStorage) ve anında uygulanır.
+ * "Otomatik" = cihaz gücünü sezip uygun seviyeyi kendisi uygular (varsayılan).
  */
+
+const TIER_LABEL = { high: "Kaliteli", normal: "Normal", low: "Düşük" };
 
 const OPTIONS = [
   {
@@ -43,14 +46,17 @@ const OPTIONS = [
 
 const PerformancePanel = () => {
   const { quality } = useSettings();
-  const active = quality || "high";
+  const active = quality || "auto";
+  const detected = detectDeviceTier();
 
   const pick = (k) => {
     if (k === active) return;
     setQuality(k);
-    const label = OPTIONS.find((o) => o.key === k)?.label || k;
+    const label = k === "auto" ? "Otomatik" : OPTIONS.find((o) => o.key === k)?.label || k;
     toast.success(`Performans: ${label}`);
   };
+
+  const autoOn = active === "auto";
 
   return (
     <div className="space-y-3" data-testid="performance-panel">
@@ -63,6 +69,39 @@ const PerformancePanel = () => {
           Bu ayar yalnızca bu cihaz için geçerlidir ve anında uygulanır.
         </div>
       </div>
+
+      {/* Otomatik (Önerilen) — cihaz gücünü sezer */}
+      <button
+        data-testid="perf-quality-auto"
+        onClick={() => pick("auto")}
+        className={`w-full text-left glass-panel corner-bracket p-4 border transition-colors ${
+          autoOn ? "border-sertex-cyan bg-white/[0.04]" : "border-sertex-cyan/15 hover:border-sertex-cyan/40"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <Cpu className={`h-6 w-6 shrink-0 ${autoOn ? "text-sertex-cyan" : "text-sertex-text"}`} />
+          <div className="flex-1 min-w-0">
+            <div className={`display-text tracking-wide ${autoOn ? "text-sertex-cyan" : "text-sertex-text"}`}>
+              Otomatik <span className="text-[10px] font-mono opacity-70">(Önerilen)</span>
+            </div>
+            <div className="text-[11px] font-mono text-sertex-textMuted normal-case mt-1 leading-relaxed">
+              Cihazınızın gücünü algılar ve en uygun seviyeyi kendisi seçer.
+            </div>
+            <div className="text-[10px] font-mono text-sertex-cyan/80 normal-case mt-1">
+              ◈ Bu cihaz için algılanan: <b>{TIER_LABEL[detected] || detected}</b>
+            </div>
+          </div>
+          <div
+            className={`h-5 w-5 shrink-0 rounded-full border-2 flex items-center justify-center ${
+              autoOn ? "border-sertex-cyan bg-sertex-cyan" : "border-sertex-cyan/30"
+            }`}
+          >
+            {autoOn && <Check className="h-3 w-3 text-sertex-bg" strokeWidth={3} />}
+          </div>
+        </div>
+      </button>
+
+      <div className="hud-text text-sertex-textMuted/70 px-1">— veya elle seç —</div>
 
       {OPTIONS.map((o) => {
         const on = active === o.key;

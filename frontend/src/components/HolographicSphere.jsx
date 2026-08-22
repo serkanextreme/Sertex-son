@@ -1,7 +1,7 @@
 import React, { useRef, useMemo, useEffect } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { useSettings } from "../lib/settings";
+import { useSettings, resolveQuality } from "../lib/settings";
 
 // Görsellik / performans seviyeleri — Ayarlar → Performans'tan seçilir.
 // high = mevcut hal; normal = 30fps + azaltılmış; low = 3B kapalı (CSS parıltı).
@@ -252,6 +252,7 @@ const InnerCore = ({ state, nodeCount, connCount }) => {
 
 const HolographicSphere = ({ state = "idle", onClick }) => {
   const { quality } = useSettings();
+  const effQuality = resolveQuality(quality);
 
   const webglOk = useMemo(() => {
     try {
@@ -266,7 +267,7 @@ const HolographicSphere = ({ state = "idle", onClick }) => {
   }, []);
 
   // Düşük seviye VEYA WebGL yok → hafif CSS parıltı (WebGL render yok, GPU ~0).
-  if (!webglOk || quality === "low") {
+  if (!webglOk || effQuality === "low") {
     return (
       <div
         className="w-full h-full cursor-pointer flex items-center justify-center"
@@ -287,7 +288,7 @@ const HolographicSphere = ({ state = "idle", onClick }) => {
     );
   }
 
-  const preset = QUALITY_PRESETS[quality] || QUALITY_PRESETS.high;
+  const preset = QUALITY_PRESETS[effQuality] || QUALITY_PRESETS.high;
 
   return (
     <div
