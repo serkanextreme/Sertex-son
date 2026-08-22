@@ -15,6 +15,16 @@ export const SETTINGS = {
   navLicenses: 'settings-nav-licenses',
   navPermissions: 'settings-nav-permissions',
   navSuperAdmins: 'settings-nav-super-admins',
+  navClientLogs: 'settings-nav-client-logs',
+};
+
+// Frontend Hata Radarı ekranı (yalnızca süper yönetici).
+export const CLIENTLOGS = {
+  screen: 'client-logs-screen',
+  list: 'client-logs-list',
+  clear: 'client-logs-clear',
+  empty: 'client-logs-empty',
+  refresh: 'client-logs-refresh',
 };
 
 // Süper Yönetici paneli (yalnızca süper yönetici).

@@ -309,3 +309,20 @@ export type AppNotification = {
   read_at?: string | null;
   payload?: Record<string, unknown> | null;
 };
+
+// Frontend Hata Radarı — istemci (web/mobil) hata kaydı.
+export type ClientLog = {
+  id: string;
+  level: string;
+  message: string;
+  stack?: string | null;
+  source?: string | null;
+  lineno?: number | null;
+  colno?: number | null;
+  page_url?: string | null;
+  user_agent?: string | null;
+  user_id?: string | null;
+  username?: string | null;
+  ts_client?: string | null;
+  created_at: string;
+};

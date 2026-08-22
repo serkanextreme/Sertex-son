@@ -19,6 +19,7 @@ const ADMIN_LINKS: { key: string; label: string; icon: keyof typeof import("@exp
   { key: "permissions", label: "Yetkiler (Müdür Görünürlüğü)", icon: "eye-outline", route: "/settings/permissions", testID: SETTINGS.navPermissions },
   { key: "licenses", label: "Lisanslar", icon: "key-outline", route: "/settings/licenses", testID: SETTINGS.navLicenses, superOnly: true },
   { key: "super", label: "Süper Yönetici", icon: "shield-checkmark-outline", route: "/settings/super-admins", testID: SETTINGS.navSuperAdmins, superOnly: true },
+  { key: "clientlogs", label: "Hata Radarı", icon: "pulse-outline", route: "/settings/client-logs", testID: SETTINGS.navClientLogs, superOnly: true },
 ];
 
 const SettingRow = ({ label, value, onChange, testID }: { label: string; value: boolean; onChange: (v: boolean) => void; testID: string }) => (

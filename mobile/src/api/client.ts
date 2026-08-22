@@ -6,6 +6,7 @@ import { Platform } from "react-native";
 
 import { storage } from "@/src/utils/storage";
 import { AUTH_TOKEN_KEY } from "@/src/auth/storage-keys";
+import { captureError } from "@/src/lib/clientLogger";
 import {
   AdminUser,
   ActiveAnnouncement,
@@ -13,6 +14,7 @@ import {
   AppNotification,
   BulkNudgeResult,
   Category,
+  ClientLog,
   Company,
   CompanyLite,
   DigestSettings,
@@ -86,6 +88,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         : typeof data === "string" && data
           ? data
           : `HTTP ${res.status}`;
+    // Frontend Hata Radarı — sunucu (5xx) hatalarını sessizce kaydet.
+    if (res.status >= 500) {
+      captureError(`API ${res.status}: ${method} ${path} — ${detail}`, {
+        source: `api:${path}`,
+      });
+    }
     throw new ApiError(res.status, detail);
   }
 
@@ -306,6 +314,14 @@ export const api = {
     request<{ task_id: string; count: number; rows: LockAuditRow[] }>(
       `/tasks/${tid}/lock-audit`,
     ),
+
+  // Frontend Hata Radarı — istemci hata kayıtları (yalnızca süper yönetici).
+  clientLogs: (limit = 100) =>
+    request<{ logs: ClientLog[]; total: number; last_24h: number }>(
+      `/admin/client-logs?limit=${limit}`,
+    ),
+  clearClientLogs: () =>
+    request<{ deleted: number }>("/admin/client-logs", { method: "DELETE" }),
 };
 
 // Full absolute URL for an attachment download (for expo-image / expo-file-system).
