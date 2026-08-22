@@ -406,6 +406,8 @@ export const teamApi = {
 export const clientLogsApi = {
   list: (limit = 100) => api.get(`/admin/client-logs?limit=${limit}`).then((r) => r.data),
   clear: () => api.delete("/admin/client-logs").then((r) => r.data),
+  getNotifySettings: () => api.get("/admin/client-logs/notify-settings").then((r) => r.data),
+  setNotifySettings: (body) => api.put("/admin/client-logs/notify-settings", body).then((r) => r.data),
 };
 
 // Team Faz 2 — in-app notifications (overdue task fan-out).

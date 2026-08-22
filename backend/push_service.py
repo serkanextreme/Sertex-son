@@ -73,6 +73,7 @@ def notification_push_text(row: Dict[str, Any]) -> Tuple[str, str, str]:
         "tasks_orphaned": "Yarım kalan işler",
         "super_admin_expiring": "Süper yönetici süresi doluyor",
         "super_admin_expired": "Süper yönetici süresi doldu",
+        "client_error": "Yeni ön yüz (frontend) hatası",
     }
     title = title_map.get(t, "SERTEX bildirimi")
     body = row.get("task_title") or ""
@@ -88,5 +89,10 @@ def notification_push_text(row: Dict[str, Any]) -> Tuple[str, str, str]:
         p = row.get("payload") or {}
         who = p.get("username") or row.get("owner_username") or ""
         body = f"{who} artık süper yönetici değil — eski rolüne döndü"
+    elif t == "client_error":
+        p = row.get("payload") or {}
+        cnt = p.get("count") or 1
+        m = (p.get("message") or "")[:80]
+        body = f"{cnt} yeni hata · {m}" if m else f"{cnt} yeni ön yüz hatası"
     url = f"/?task={row['task_id']}" if row.get("task_id") else "/"
     return title, body, url

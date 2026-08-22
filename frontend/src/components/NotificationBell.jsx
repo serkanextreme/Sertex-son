@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Bell, AlertTriangle, Check, CheckCheck, X, Clock, Link2, Link2Off, Building2, Volume2, VolumeX, Settings as SettingsIcon, KeyRound, PackageX, Share2, Trash2, CheckSquare, Square, BellRing, Moon, ShieldCheck, ShieldAlert } from "lucide-react";
+import { Bell, AlertTriangle, Check, CheckCheck, X, Clock, Link2, Link2Off, Building2, Volume2, VolumeX, Settings as SettingsIcon, KeyRound, PackageX, Share2, Trash2, CheckSquare, Square, BellRing, Moon, ShieldCheck, ShieldAlert, Bug } from "lucide-react";
 import { notificationsApi, companyPermissionsApi } from "../lib/api";
 import { toast } from "sonner";
 import {
@@ -181,6 +181,11 @@ const NotificationBell = () => {
     }
     await markOne(n);
     setOpen(false);
+    // Hata Radarı bildirimi — doğrudan Ayarlar → Hata Radarı sekmesini aç.
+    if (n.type === "client_error") {
+      window.dispatchEvent(new CustomEvent("sertex:open-settings-tab", { detail: { tab: "errorradar" } }));
+      return;
+    }
     // Faz 10 — orphaned-tasks notification: jump straight to the "Yarım Kalan"
     // sidebar tab so the manager can reclaim/reassign the tasks.
     if (n.type === "tasks_orphaned") {
@@ -566,12 +571,14 @@ const NotificationBell = () => {
             const isOverdueDaily = n.type === "overdue_daily";
             const isSuperExpiring = n.type === "super_admin_expiring";
             const isSuperExpired = n.type === "super_admin_expired";
+            const isClientError = n.type === "client_error";
             const daysUntil = n.days_until_due != null ? n.days_until_due : n.payload?.days_until_due;
 
             // Choose icon + colour class per notification family.
             let Icon = AlertTriangle;
             let iconCls = "text-sertex-danger";
             if (isDueSoon) { Icon = Clock; iconCls = "text-orange-300"; }
+            else if (isClientError) { Icon = Bug; iconCls = "text-rose-400"; }
             else if (isSuperExpiring) { Icon = ShieldAlert; iconCls = "text-amber-300"; }
             else if (isSuperExpired) { Icon = ShieldCheck; iconCls = "text-purple-300"; }
             else if (isPermReq) { Icon = Link2; iconCls = "text-teal-300"; }
@@ -626,9 +633,12 @@ const NotificationBell = () => {
                       {isDueSoon && (n.is_for_manager
                         ? `${n.owner_username} · ⏱ ${daysUntil === 0 ? "bugün son gün" : `${daysUntil} gün kaldı`}`
                         : `⏱ ${daysUntil === 0 ? "Bugün son gün" : `${daysUntil} gün kaldı`}`)}
-                      {!isPerm && !isDueSoon && !isUnlockOffer && !isOrphan && !isShared && !isNudge && !isOverdueDaily && !isSuperExpiring && !isSuperExpired && (n.is_for_manager
+                      {!isPerm && !isDueSoon && !isUnlockOffer && !isOrphan && !isShared && !isNudge && !isOverdueDaily && !isSuperExpiring && !isSuperExpired && !isClientError && (n.is_for_manager
                         ? `${n.owner_username} kullanıcısının görevi geciktirmesi`
                         : "Görevin gecikti")}
+                      {isClientError && (
+                        <>🐞 <b>{n.payload?.count || 1}</b> yeni ön yüz hatası{n.payload?.message ? `: ${String(n.payload.message).slice(0, 60)}` : ""} · tıkla ▶</>
+                      )}
                       {isSuperExpiring && (n.is_for_manager
                         ? <>🛡️ <b>{n.payload?.username || n.owner_username}</b> için süper yönetici süresi <b>{n.payload?.minutes_left ?? "az"} dk</b> içinde doluyor</>
                         : <>🛡️ Süper yönetici yetkin <b>{n.payload?.minutes_left ?? "az"} dk</b> içinde sona eriyor</>)}
@@ -666,6 +676,7 @@ const NotificationBell = () => {
                       data-testid={`notification-unread-dot-${n.id}`}
                       className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${
                         isDueSoon ? "bg-orange-400" :
+                        isClientError ? "bg-rose-400" :
                         isSuperExpiring ? "bg-amber-300" :
                         isSuperExpired ? "bg-purple-300" :
                         isPermReq ? "bg-teal-300" :

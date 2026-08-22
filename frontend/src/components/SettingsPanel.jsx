@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Palette, RotateCcw, LayoutTemplate, User, LogOut, Lock, KeyRound, Users, Bell, Play, Upload, Trash2, Volume2, Briefcase, Building2, Tag, Clock, Activity, Megaphone, MessageSquare, Archive, ShieldCheck } from "lucide-react";
+import { X, Palette, RotateCcw, LayoutTemplate, User, LogOut, Lock, KeyRound, Users, Bell, Play, Upload, Trash2, Volume2, Briefcase, Building2, Tag, Clock, Activity, Megaphone, MessageSquare, Archive, ShieldCheck, AlertTriangle } from "lucide-react";
 import { useSettings, setColor, resetColors, DEFAULT_COLORS } from "../lib/settings";
 import { useAuth } from "../lib/auth";
 import { isAdminLike, isSuperAdmin, isManager, roleLabel } from "../lib/roles";
@@ -13,6 +13,7 @@ import CompaniesManagement from "./CompaniesManagement";
 import ManagerVisibilityManagement from "./ManagerVisibilityManagement";
 import TaskCategoriesManagement from "./TaskCategoriesManagement";
 import MonitoringDashboard from "./MonitoringDashboard";
+import ClientErrorRadar from "./ClientErrorRadar";
 // Faz 9 CP6 — Global Announcement System.
 import AnnouncementManager from "./AnnouncementManager";
 import ChatPromptEditor from "./ChatPromptEditor";
@@ -81,6 +82,7 @@ const SETTINGS_TABS = [
   { key: "workspace", label: "Mod", icon: Briefcase, color: "cyan" },
   { key: "reminders", label: "Uyarılar", icon: Clock, color: "orange" },
   { key: "monitoring", label: "İstatistik", icon: Activity, color: "emerald", show: (u) => isSuperAdmin(u) },
+  { key: "errorradar", label: "Hata Radarı", icon: AlertTriangle, color: "red", show: (u) => isSuperAdmin(u) },
   { key: "users", label: "Kullanıcılar", icon: Users, color: "yellow", show: (u) => isAdminLike(u) },
   { key: "licenses", label: "Lisanslar", icon: KeyRound, color: "yellow", show: (u) => isSuperAdmin(u) },
   { key: "companies", label: "Şirketler", icon: Building2, color: "yellow", show: (u) => isAdminLike(u) },
@@ -99,6 +101,7 @@ const TAB_ACTIVE_CLS = {
   emerald: "border-emerald-400 text-emerald-300 neon-glow bg-emerald-500/10",
   yellow: "border-yellow-400 text-yellow-300 neon-glow bg-yellow-500/10",
   purple: "border-purple-400 text-purple-300 neon-glow bg-purple-500/10",
+  red: "border-rose-500 text-rose-300 neon-glow bg-rose-500/10",
 };
 
 const SettingsPanel = ({ open, onClose, initialTab }) => {
@@ -400,6 +403,7 @@ const SettingsPanel = ({ open, onClose, initialTab }) => {
 
               {tab === "users" && isAdminLike(user) && <UserManagement onClose={onClose} />}
               {tab === "monitoring" && isSuperAdmin(user) && <MonitoringDashboard />}
+              {tab === "errorradar" && isSuperAdmin(user) && <ClientErrorRadar />}
               {tab === "licenses" && isSuperAdmin(user) && <LicenseManagement />}
               {tab === "companies" && isAdminLike(user) && <CompaniesManagement />}
               {tab === "visibility" && isAdminLike(user) && <ManagerVisibilityManagement />}

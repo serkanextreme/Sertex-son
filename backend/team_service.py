@@ -35,6 +35,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -73,6 +74,12 @@ NOTIF_TYPE_TASK_NUDGE = "task_nudge"          # manager pokes an employee about 
 NOTIF_TYPE_SUPER_EXPIRING = "super_admin_expiring"
 NOTIF_TYPE_SUPER_EXPIRED = "super_admin_expired"
 SUPER_EXPIRY_WARN_MINUTES = int(os.environ.get("SERTEX_SUPER_EXPIRY_WARN_MIN", "60"))
+# Frontend Hata Radarı — yeni istemci (tarayıcı/mobil) hatası düşünce
+# süper yöneticilere anlık bildirim. Spam'i önlemek için AYARLANABİLİR cooldown
+# (dk): aynı pencerede biriken hatalar tek bildirimde toplanır. Değer
+# system_settings.key='global' → client_error_notify_cooldown_min içinde tutulur.
+NOTIF_TYPE_CLIENT_ERROR = "client_error"
+CLIENT_ERROR_NOTIFY_DEFAULT_COOLDOWN_MIN = 15
 # System-wide fallback (must match server.SYSTEM_DEFAULT_REMINDER_DAYS).
 SYSTEM_DEFAULT_REMINDER_DAYS = 3
 _ALLOWED_THRESHOLD_DAYS = {1, 2, 3, 5, 7, 14}
@@ -159,6 +166,81 @@ async def _insert_notification(db, row: Notification) -> bool:
             return False
         logger.exception("notification insert failed: %s", e)
         return False
+
+
+# --------------------------------------------------------------------------
+# Frontend Hata Radarı — süper yöneticilere anlık "yeni hata" bildirimi
+# --------------------------------------------------------------------------
+# Config cache (60 sn) + son bildirim zamanı (in-memory cooldown guard). PUT ile
+# ayar değişince `invalidate_ce_cfg_cache()` çağrılıp anında yenilenir.
+_ce_cfg_cache: Dict[str, Any] = {"ts": 0.0, "cooldown_min": CLIENT_ERROR_NOTIFY_DEFAULT_COOLDOWN_MIN, "enabled": True}
+_last_client_error_notify_ts: float = 0.0
+
+
+def invalidate_ce_cfg_cache() -> None:
+    _ce_cfg_cache["ts"] = 0.0
+
+
+async def _get_ce_cfg(db):
+    now = time.time()
+    if now - _ce_cfg_cache["ts"] < 60:
+        return _ce_cfg_cache["cooldown_min"], _ce_cfg_cache["enabled"]
+    doc = await db.system_settings.find_one(
+        {"key": "global"},
+        {"_id": 0, "client_error_notify_cooldown_min": 1, "client_error_notify_enabled": 1},
+    ) or {}
+    cd = doc.get("client_error_notify_cooldown_min")
+    cd = int(cd) if isinstance(cd, (int, float)) and cd else CLIENT_ERROR_NOTIFY_DEFAULT_COOLDOWN_MIN
+    en = doc.get("client_error_notify_enabled")
+    en = True if en is None else bool(en)
+    _ce_cfg_cache.update({"ts": now, "cooldown_min": cd, "enabled": en})
+    return cd, en
+
+
+async def notify_super_admins_client_error(db, log_doc: dict) -> int:
+    """Yeni bir istemci hatası kaydedilince süper yöneticileri (Kurucu + aktif
+    super_admin) çan + web push ile uyarır. Ayarlanabilir cooldown içinde en
+    fazla bir toplu bildirim üretir (o penceredeki hata sayısını da taşır).
+    Best-effort; asla hata fırlatmaz."""
+    global _last_client_error_notify_ts
+    cooldown_min, enabled = await _get_ce_cfg(db)
+    if not enabled:
+        return 0
+    now_mono = time.time()
+    if now_mono - _last_client_error_notify_ts < cooldown_min * 60:
+        return 0
+    # Slotu await'lerden ÖNCE al → eşzamanlı hata seli çoklu bildirim üretmesin.
+    _last_client_error_notify_ts = now_mono
+
+    recip_docs = await db.users.find(
+        {"$or": [{"is_owner": True}, {"role": "super_admin"}]},
+        {"_id": 0, "id": 1},
+    ).to_list(length=500)
+    ids = [r["id"] for r in recip_docs if r.get("id")]
+    if not ids:
+        return 0
+
+    window_start = (datetime.now(timezone.utc) - timedelta(minutes=cooldown_min)).isoformat()
+    try:
+        recent_count = await db.client_logs.count_documents({"created_at": {"$gte": window_start}})
+    except Exception:
+        recent_count = 1
+    payload = {
+        "message": (log_doc.get("message") or "")[:200],
+        "source": log_doc.get("source"),
+        "user_agent": log_doc.get("user_agent"),
+        "level": log_doc.get("level"),
+        "count": max(1, int(recent_count or 1)),
+        "log_username": log_doc.get("username"),
+    }
+    inserted = 0
+    for uid in ids:
+        if await _insert_notification(db, Notification(
+            user_id=uid, type=NOTIF_TYPE_CLIENT_ERROR,
+            owner_username=log_doc.get("username"), payload=payload,
+        )):
+            inserted += 1
+    return inserted
 
 
 # --------------------------------------------------------------------------

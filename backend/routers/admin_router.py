@@ -125,6 +125,12 @@ class ClientLogRequest(BaseModel):
     ts_client: Optional[str] = None
 
 
+class ClientErrorNotifyUpdate(BaseModel):
+    # Süper yönetici — yeni frontend hatası bildirimlerinin cooldown'u (dk) + aç/kapa.
+    cooldown_min: int = Field(default=15, ge=1, le=1440)
+    enabled: bool = True
+
+
 class AdminCapsUpdate(BaseModel):
     # Süper yönetici → bir Yönetici'ye tanınan özel fonksiyonlar.
     extra_company_ids: Optional[list] = None
@@ -785,6 +791,12 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
         except Exception as exc:
             logger.warning("client_log insert hatası: %s", exc)
             return {"ok": False}
+        # Hata Bildirimi — süper yöneticilere anlık uyarı (best-effort, cooldown'lu).
+        try:
+            from team_service import notify_super_admins_client_error
+            await notify_super_admins_client_error(db, doc)
+        except Exception as exc:
+            logger.debug("client error notify skipped: %s", exc)
         return {"ok": True}
 
     @router.get("/admin/client-logs")
@@ -804,6 +816,38 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
         require_super_admin(user)
         res = await db.client_logs.delete_many({})
         return {"deleted": int(getattr(res, "deleted_count", 0) or 0)}
+
+    @router.get("/admin/client-logs/notify-settings")
+    async def get_client_log_notify_settings(user: dict = Depends(current_user_dep)):
+        require_super_admin(user)
+        doc = await db.system_settings.find_one({"key": "global"}, {"_id": 0}) or {}
+        cd = doc.get("client_error_notify_cooldown_min")
+        en = doc.get("client_error_notify_enabled")
+        return {
+            "cooldown_min": int(cd) if isinstance(cd, (int, float)) and cd else 15,
+            "enabled": True if en is None else bool(en),
+        }
+
+    @router.put("/admin/client-logs/notify-settings")
+    async def set_client_log_notify_settings(req: ClientErrorNotifyUpdate, user: dict = Depends(current_user_dep)):
+        require_super_admin(user)
+        await db.system_settings.update_one(
+            {"key": "global"},
+            {"$set": {
+                "key": "global",
+                "client_error_notify_cooldown_min": int(req.cooldown_min),
+                "client_error_notify_enabled": bool(req.enabled),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_by": user["id"],
+            }},
+            upsert=True,
+        )
+        try:
+            from team_service import invalidate_ce_cfg_cache
+            invalidate_ce_cfg_cache()
+        except Exception:
+            pass
+        return {"cooldown_min": int(req.cooldown_min), "enabled": bool(req.enabled)}
 
     # ------------------------------------------------------------------
     # Süper Yönetici / Kurucu — rol yönetimi
