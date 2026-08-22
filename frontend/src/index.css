@@ -393,3 +393,23 @@ body[data-native="ios"] .icon-btn {
         padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
     }
 }
+
+
+/* Performans — "Düşük Görüntü" modunda ağır GPU efektlerini sadeleştir:
+   cam bulanıklığını (backdrop-blur) kapat ve neon parıltı gölgelerini hafiflet. */
+[data-quality="low"] .glass-panel,
+[data-quality="low"] .glass {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(5, 9, 20, 0.92) !important;
+}
+[data-quality="low"] .neon-glow {
+    text-shadow: none !important;
+}
+[data-quality="low"] .animate-scanline {
+    animation: none !important;
+    opacity: 0 !important;
+}
+[data-quality="low"] .radial-glow {
+    opacity: 0.15 !important;
+}

@@ -1,15 +1,39 @@
-import React, { useRef, useMemo } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import React, { useRef, useMemo, useEffect } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useSettings } from "../lib/settings";
 
+// Görsellik / performans seviyeleri — Ayarlar → Performans'tan seçilir.
+// high = mevcut hal; normal = 30fps + azaltılmış; low = 3B kapalı (CSS parıltı).
+const QUALITY_PRESETS = {
+  high: { nodes: 60, conns: 40, dpr: [1, 2], frameloop: "always", fps: 0 },
+  normal: { nodes: 36, conns: 24, dpr: [1, 1.5], frameloop: "demand", fps: 30 },
+};
+
+// frameloop="demand" iken hedef FPS'te render tetikler → GPU tasarrufu.
+const FpsCap = ({ fps }) => {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    let raf;
+    let last = 0;
+    const interval = 1000 / fps;
+    const loop = (t) => {
+      raf = requestAnimationFrame(loop);
+      if (t - last >= interval) {
+        last = t;
+        invalidate();
+      }
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [fps, invalidate]);
+  return null;
+};
+
 // state: 'idle' | 'listening' | 'thinking' | 'speaking' | 'error'
 
-const NODE_COUNT = 60;
-const CONNECTION_COUNT = 40;
-
 // Distribute points on sphere surface using Fibonacci lattice
-const generateNodes = () => {
+const generateNodes = (NODE_COUNT) => {
   const nodes = [];
   const radius = 1.9;
   const phi = Math.PI * (Math.sqrt(5) - 1); // golden angle
@@ -25,7 +49,7 @@ const generateNodes = () => {
 };
 
 // Pick pairs of nearby nodes for connections
-const generateConnections = (nodes) => {
+const generateConnections = (nodes, CONNECTION_COUNT) => {
   const conns = [];
   const used = new Set();
   for (let i = 0; i < CONNECTION_COUNT; i++) {
@@ -55,13 +79,13 @@ const generateConnections = (nodes) => {
   return conns;
 };
 
-const NodesAndConnections = ({ state, color }) => {
+const NodesAndConnections = ({ state, color, nodeCount, connCount }) => {
   const groupRef = useRef();
   const nodesRef = useRef([]);
   const linesRef = useRef([]);
 
-  const nodes = useMemo(() => generateNodes(), []);
-  const connections = useMemo(() => generateConnections(nodes), [nodes]);
+  const nodes = useMemo(() => generateNodes(nodeCount), [nodeCount]);
+  const connections = useMemo(() => generateConnections(nodes, connCount), [nodes, connCount]);
 
   useFrame((clockState, delta) => {
     if (!groupRef.current) return;
@@ -136,7 +160,7 @@ const NodesAndConnections = ({ state, color }) => {
   );
 };
 
-const InnerCore = ({ state }) => {
+const InnerCore = ({ state, nodeCount, connCount }) => {
   const meshRef = useRef();
   const glowRef = useRef();
   const coreRef = useRef();
@@ -221,15 +245,14 @@ const InnerCore = ({ state }) => {
         />
       </mesh>
       {/* Neural nodes + connections orbiting around */}
-      <NodesAndConnections state={state} color={color} />
+      <NodesAndConnections state={state} color={color} nodeCount={nodeCount} connCount={connCount} />
     </group>
   );
 };
 
 const HolographicSphere = ({ state = "idle", onClick }) => {
-  // Bot / WebGL desteği olmayan tarayıcılar Canvas oluştururken
-  // "Error creating WebGL context" fırlatır. Önce destek kontrolü yapıp
-  // yoksa hafif bir CSS parıltı yedeğine düşerek hatayı tamamen önle.
+  const { quality } = useSettings();
+
   const webglOk = useMemo(() => {
     try {
       const c = document.createElement("canvas");
@@ -242,7 +265,8 @@ const HolographicSphere = ({ state = "idle", onClick }) => {
     }
   }, []);
 
-  if (!webglOk) {
+  // Düşük seviye VEYA WebGL yok → hafif CSS parıltı (WebGL render yok, GPU ~0).
+  if (!webglOk || quality === "low") {
     return (
       <div
         className="w-full h-full cursor-pointer flex items-center justify-center"
@@ -263,6 +287,8 @@ const HolographicSphere = ({ state = "idle", onClick }) => {
     );
   }
 
+  const preset = QUALITY_PRESETS[quality] || QUALITY_PRESETS.high;
+
   return (
     <div
       className="w-full h-full cursor-pointer"
@@ -271,14 +297,17 @@ const HolographicSphere = ({ state = "idle", onClick }) => {
     >
       <Canvas
         camera={{ position: [0, 0, 5], fov: 55 }}
-        gl={{ antialias: true, alpha: true }}
+        dpr={preset.dpr}
+        frameloop={preset.frameloop}
+        gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
         style={{ background: "transparent" }}
       >
+        {preset.fps ? <FpsCap fps={preset.fps} /> : null}
         <ambientLight intensity={0.6} />
         <pointLight position={[3, 3, 3]} intensity={2} color="#00F0FF" />
         <pointLight position={[-3, -2, -3]} intensity={1.2} color="#0066FF" />
         <pointLight position={[0, 0, 2]} intensity={1.5} color="#66E5FF" />
-        <InnerCore state={state} />
+        <InnerCore state={state} nodeCount={preset.nodes} connCount={preset.conns} />
       </Canvas>
     </div>
   );

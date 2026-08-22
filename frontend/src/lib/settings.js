@@ -10,21 +10,34 @@ export const DEFAULT_COLORS = {
   thinking: "#3399FF",
 };
 
+// Görsellik / performans seviyesi (cihaza özel, localStorage). high = mevcut hal.
+export const DEFAULT_QUALITY = "high"; // "high" | "normal" | "low"
+
+const applyQualityAttr = (q) => {
+  try {
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-quality", q || DEFAULT_QUALITY);
+    }
+  } catch (e) { /* yut */ }
+};
+
 const loadSettings = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { colors: DEFAULT_COLORS };
+    if (!raw) return { colors: DEFAULT_COLORS, quality: DEFAULT_QUALITY };
     const parsed = JSON.parse(raw);
     return {
       colors: { ...DEFAULT_COLORS, ...(parsed.colors || {}) },
+      quality: parsed.quality || DEFAULT_QUALITY,
     };
   } catch (e) {
-    return { colors: DEFAULT_COLORS };
+    return { colors: DEFAULT_COLORS, quality: DEFAULT_QUALITY };
   }
 };
 
 let listeners = [];
 let current = loadSettings();
+applyQualityAttr(current.quality);
 
 const notify = () => listeners.forEach((l) => l(current));
 
@@ -56,5 +69,15 @@ export const resetColors = () => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
   } catch (e) { console.warn("[settings.js] hata bastırıldı:", e); }
+  notify();
+};
+
+export const setQuality = (q) => {
+  const val = q === "normal" || q === "low" ? q : "high";
+  current = { ...current, quality: val };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+  } catch (e) { console.warn("[settings.js] hata bastırıldı:", e); }
+  applyQualityAttr(val);
   notify();
 };

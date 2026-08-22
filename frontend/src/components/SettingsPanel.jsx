@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Palette, RotateCcw, LayoutTemplate, User, LogOut, Lock, KeyRound, Users, Bell, Play, Upload, Trash2, Volume2, Briefcase, Building2, Tag, Clock, Activity, Megaphone, MessageSquare, Archive, ShieldCheck, AlertTriangle } from "lucide-react";
+import { X, Palette, RotateCcw, LayoutTemplate, User, LogOut, Lock, KeyRound, Users, Bell, Play, Upload, Trash2, Volume2, Briefcase, Building2, Tag, Clock, Activity, Megaphone, MessageSquare, Archive, ShieldCheck, AlertTriangle, Gauge } from "lucide-react";
 import { useSettings, setColor, resetColors, DEFAULT_COLORS } from "../lib/settings";
 import { useAuth } from "../lib/auth";
 import { isAdminLike, isSuperAdmin, isManager, roleLabel } from "../lib/roles";
@@ -14,6 +14,7 @@ import ManagerVisibilityManagement from "./ManagerVisibilityManagement";
 import TaskCategoriesManagement from "./TaskCategoriesManagement";
 import MonitoringDashboard from "./MonitoringDashboard";
 import ClientErrorRadar from "./ClientErrorRadar";
+import PerformancePanel from "./PerformancePanel";
 // Faz 9 CP6 — Global Announcement System.
 import AnnouncementManager from "./AnnouncementManager";
 import ChatPromptEditor from "./ChatPromptEditor";
@@ -79,6 +80,7 @@ const SETTINGS_TABS = [
   { key: "presets", label: "Temalar", color: "cyan" },
   { key: "alarm", label: "Alarm", icon: Bell, color: "cyan" },
   { key: "account", label: "Hesap", color: "cyan" },
+  { key: "performance", label: "Performans", icon: Gauge, color: "emerald" },
   { key: "workspace", label: "Mod", icon: Briefcase, color: "cyan" },
   { key: "reminders", label: "Uyarılar", icon: Clock, color: "orange" },
   { key: "monitoring", label: "İstatistik", icon: Activity, color: "emerald", show: (u) => isSuperAdmin(u) },
@@ -404,6 +406,7 @@ const SettingsPanel = ({ open, onClose, initialTab }) => {
               {tab === "users" && isAdminLike(user) && <UserManagement onClose={onClose} />}
               {tab === "monitoring" && isSuperAdmin(user) && <MonitoringDashboard />}
               {tab === "errorradar" && isSuperAdmin(user) && <ClientErrorRadar />}
+              {tab === "performance" && <PerformancePanel />}
               {tab === "licenses" && isSuperAdmin(user) && <LicenseManagement />}
               {tab === "companies" && isAdminLike(user) && <CompaniesManagement />}
               {tab === "visibility" && isAdminLike(user) && <ManagerVisibilityManagement />}

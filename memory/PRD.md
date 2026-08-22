@@ -10,6 +10,15 @@ Tam liste: `/app/frontend/public/Sertex-Feature-Listesi.pdf` (üretici script: `
 
 ## ✅ Tamamlanan Fazlar
 
+### Performans Ayarı — 3 Görsellik Seviyesi (2026-06 · fork) ✅
+Kullanıcı isteği: web ekran kartını çok yoruyor; Ayarlar'a "Performans" bölümü + 3 seviye (Kaliteli/Normal/Düşük), kişi kendi cihazına göre seçsin; mevcut hal varsayılan kalsın; düşükte glass biraz azalsın.
+- **settings.js**: `quality` (localStorage, cihaza özel; "high"|"normal"|"low", varsayılan "high") + `setQuality()`; seçim `<html data-quality>` attribute'una yazılır.
+- **HolographicSphere.jsx**: seviyeye göre — high: 60fps, dpr[1,2], 60/40 düğüm (mevcut hal); normal: `frameloop="demand"` + `FpsCap 30fps`, dpr[1,1.5], 36/24 düğüm; low: 3B küre kapalı, hafif CSS parıltı (WebGL render yok). WebGL yoksa da otomatik fallback (bot/eski cihaz).
+- **PerformancePanel.jsx** (yeni) + `SettingsPanel` yeni "Performans" sekmesi (herkese açık): 3 kart (açıklama + önerilen cihaz), seçim anında uygulanır + kaydedilir.
+- **index.css**: `[data-quality="low"]` → glass backdrop-blur kapalı, neon-glow/scanline/radial-glow sadeleştirilir.
+- **Test**: Playwright — 3 seviye render, düşükte `data-quality=low` + glass sadeleşme + toast, normalde küre render + HUD "FPS: 29" (30fps cap DOĞRULANDI). Lint temiz. Varsayılan high'a döndürüldü.
+- NOT: Ayar cihaza özeldir (localStorage); canlı için Deploy gerekir.
+
 ### Hata Radarı Gürültü Düzeltmesi — WebGL/Bot (2026-06 · fork) ✅
 Radar, Meta/Facebook site tarayıcı botunun (`meta-webindexer`) giriş sayfasında ürettiği "Error creating WebGL context" hatasını yakaladı (gerçek kullanıcı değil, gürültü). İki yönlü kalıcı düzeltme:
 - `HolographicSphere.jsx`: `<Canvas>` öncesi WebGL desteği kontrol edilir; yoksa hafif CSS parıltı yedeğine düşülür → hata tamamen önlenir (bot + eski tarayıcılar). WebGL varken küre eskisi gibi çalışır (screenshot ile doğrulandı).
