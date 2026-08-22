@@ -10,6 +10,13 @@ Tam liste: `/app/frontend/public/Sertex-Feature-Listesi.pdf` (üretici script: `
 
 ## ✅ Tamamlanan Fazlar
 
+### Marka: SERTEX Amblemi — Ana İkon & Amblem (2026-06 · fork) ✅
+Kullanıcı yeni SERTEX altıgen "S" devre amblemini yükledi (`sertex-logo.jpeg` banner); uygulamanın ana ikonu ve amblemi yapıldı.
+- Amblem banner'dan kare olarak kırpıldı (wordmark hariç, x≈470 boşluğuna kadar), siyah zeminli 1024 ikon + şeffaf `emblem-mark.png` (siyah→alfa) üretildi.
+- **Web** (`frontend/public`): `favicon.png`, `favicon.ico`, `apple-touch-icon.png`, `logo192.png`, `logo512.png` amblemle değiştirildi; `LoginScreen.jsx` giriş kartına ve `index.html` açılış (boot) ekranına şeffaf amblem eklendi (`login-logo`).
+- **Mobil** (`mobile/assets/images`): `icon.png` (1024), `adaptive-icon.png`, `favicon.png` amblemle; `splash-image.png` tam SERTEX banner'ı (kırpılmış); `HudHeader.tsx`'teki cyan orb şeffaf amblemle değiştirildi → login + tüm ana sekmelerde (`brand-emblem`) görünür.
+- **Test**: Web login + mobil header canlı screenshot ile doğrulandı. NOT: tarayıcı favicon'u sert cache'lenir (hard refresh gerekebilir); mobil app icon/splash yalnızca gerçek iOS/Android build'de (Publish) tam yansır. Canlı için Deploy gerekir.
+
 ### Hata Radarı — Çözümleme + Seviye Filtresi & Gruplama (2026-06 · fork) ✅
 Kullanıcı isteği: (1) bir hatayı "çözüldü" işaretleyip aktif listeden gizle (yalnızca aktif sorunlara odaklan); (2) seviyeye göre süz + en sık tekrar edenleri üstte grupla.
 - **Backend** (`routers/admin_router.py`): client_logs'a `resolved`/`resolved_at`/`resolved_by`. GET `/admin/client-logs` artık `status` (active[varsayılan]/resolved/all) + `level` (virgüllü) filtrelerini ve `active` sayacını döner — varsayılan aktif olduğu için çözülmüşler otomatik gizli (mobil ekran da bundan yararlanır). Yeni uçlar: `POST /admin/client-logs/{id}/resolve` (tekli), `POST /admin/client-logs/resolve-bulk {message}` (aynı mesajlı grubu toplu çöz/geri al).

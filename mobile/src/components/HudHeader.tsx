@@ -2,6 +2,7 @@
 // holographic sphere. A small glowing cyan orb keeps the brand feel without
 // any per-frame animation cost on device.
 
+import { Image } from "expo-image";
 import { StyleSheet, Text, View } from "react-native";
 
 import { colors, monoFont, spacing } from "@/src/theme/colors";
@@ -17,7 +18,12 @@ export const HudHeader = ({ subtitle, right }: Props) => {
       <View style={styles.left}>
         <View style={styles.orbWrap}>
           <View style={styles.orbGlow} />
-          <View style={styles.orb} />
+          <Image
+            source={require("../../assets/images/emblem-mark.png")}
+            style={styles.emblem}
+            contentFit="contain"
+            testID="brand-emblem"
+          />
         </View>
         <View>
           <Text style={styles.brand}>SERTEX</Text>
@@ -39,26 +45,22 @@ const styles = StyleSheet.create({
   },
   left: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   orbWrap: {
-    width: 34,
-    height: 34,
+    width: 40,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
   },
   orbGlow: {
     position: "absolute",
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: colors.glow,
-    opacity: 0.55,
+    opacity: 0.35,
   },
-  orb: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.primary,
-    borderWidth: 2,
-    borderColor: "rgba(226, 241, 255, 0.6)",
+  emblem: {
+    width: 40,
+    height: 40,
   },
   brand: {
     color: colors.textPrimary,

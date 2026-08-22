@@ -89,6 +89,12 @@ const LoginScreen = () => {
       >
         <div className="glass-panel corner-bracket p-6 relative">
           <div className="text-center mb-6">
+            <img
+              src="/emblem-mark.png"
+              alt="SERTEX"
+              data-testid="login-logo"
+              className="mx-auto mb-3 h-24 w-24 object-contain drop-shadow-[0_0_20px_rgba(0,240,255,0.55)]"
+            />
             <div className="display-text text-sertex-cyan neon-glow text-3xl tracking-[0.25em] font-bold">
               S.E.R.T.E.X
             </div>
