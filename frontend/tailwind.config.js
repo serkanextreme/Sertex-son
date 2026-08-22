@@ -22,7 +22,7 @@ module.exports = {
           bg: '#02040A',
           surface: '#050914',
           panel: 'rgba(5, 9, 20, 0.55)',
-          cyan: '#00F0FF',
+          cyan: 'rgb(var(--sx-accent-rgb, 0 240 255) / <alpha-value>)',
           blue: '#0066FF',
           warning: '#FFB800',
           danger: '#FF003C',

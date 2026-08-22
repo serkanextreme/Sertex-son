@@ -6,6 +6,8 @@ import App from "@/App";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { initNativeShell } from "@/lib/nativeShell";
 import { initClientLogger } from "@/lib/clientLogger";
+// Görünüm tercihlerini (vurgu rengi + yazı boyutu + arayüz) açılışta uygula.
+import "@/lib/appearance";
 
 // Faz 9 CP4.19 — kicks off Capacitor plugins (splash-hide, status bar)
 // when running inside the Android/iOS shell. Silent no-op on the web.

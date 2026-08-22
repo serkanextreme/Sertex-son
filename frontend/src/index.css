@@ -51,6 +51,9 @@ option {
         --input: 220 40% 10%;
         --ring: 187 100% 50%;
         --radius: 0.375rem;
+        /* Vurgu rengi (RGB üçlüsü) — Ayarlar → Temalar → ARAYÜZ ile değişir.
+           Tailwind `sertex-cyan` ve aşağıdaki literal'ler bunu okur. */
+        --sx-accent-rgb: 0 240 255;
     }
     * {
         @apply border-border;
@@ -59,7 +62,7 @@ option {
         @apply bg-sertex-bg text-sertex-text;
     }
     ::selection {
-        background: rgba(0, 240, 255, 0.3);
+        background: rgb(var(--sx-accent-rgb) / 0.3);
         color: #E2F1FF;
     }
 }
@@ -69,8 +72,8 @@ option {
         background: rgba(5, 9, 20, 0.6);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
-        border: 1px solid rgba(0, 240, 255, 0.2);
-        box-shadow: 0 0 24px rgba(0, 240, 255, 0.05), inset 0 0 24px rgba(0, 102, 255, 0.08);
+        border: 1px solid rgb(var(--sx-accent-rgb) / 0.2);
+        box-shadow: 0 0 24px rgb(var(--sx-accent-rgb) / 0.05), inset 0 0 24px rgba(0, 102, 255, 0.08);
     }
     .hud-text {
         font-family: 'JetBrains Mono', monospace;
@@ -84,7 +87,7 @@ option {
         letter-spacing: 0.05em;
     }
     .neon-glow {
-        text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+        text-shadow: 0 0 8px rgb(var(--sx-accent-rgb) / 0.6);
     }
     .corner-bracket::before,
     .corner-bracket::after {
@@ -92,7 +95,7 @@ option {
         position: absolute;
         width: 14px;
         height: 14px;
-        border-color: #00F0FF;
+        border-color: rgb(var(--sx-accent-rgb));
         border-style: solid;
     }
     .corner-bracket::before {
@@ -107,7 +110,7 @@ option {
     }
     .grid-bg {
         background-image:
-            radial-gradient(circle, rgba(0, 240, 255, 0.12) 1px, transparent 1.5px);
+            radial-gradient(circle, rgb(var(--sx-accent-rgb) / 0.12) 1px, transparent 1.5px);
         background-size: 24px 24px;
     }
     .radial-glow {
@@ -120,11 +123,11 @@ option {
         background: transparent;
     }
     .scrollbar-sertex::-webkit-scrollbar-thumb {
-        background: rgba(0, 240, 255, 0.3);
+        background: rgb(var(--sx-accent-rgb) / 0.3);
         border-radius: 2px;
     }
     .scrollbar-sertex::-webkit-scrollbar-thumb:hover {
-        background: rgba(0, 240, 255, 0.5);
+        background: rgb(var(--sx-accent-rgb) / 0.5);
     }
 
     /* Resizable task card: custom neon resize handle */
@@ -143,7 +146,7 @@ option {
         height: 12px;
         pointer-events: none;
         background:
-            linear-gradient(135deg, transparent 0 55%, rgba(0, 240, 255, 0.85) 55% 65%, transparent 65% 75%, rgba(0, 240, 255, 0.85) 75% 85%, transparent 85%);
+            linear-gradient(135deg, transparent 0 55%, rgb(var(--sx-accent-rgb) / 0.85) 55% 65%, transparent 65% 75%, rgb(var(--sx-accent-rgb) / 0.85) 75% 85%, transparent 85%);
         border-bottom-right-radius: 4px;
         opacity: 0.55;
         transition: opacity 0.15s ease;
@@ -157,7 +160,7 @@ option {
     }
     .task-resizable:hover::after, .subtask-resizable:hover::after {
         opacity: 1;
-        filter: drop-shadow(0 0 3px rgba(0, 240, 255, 0.9));
+        filter: drop-shadow(0 0 3px rgb(var(--sx-accent-rgb) / 0.9));
     }
     /* Slim scrollbar inside resizable card */
     .task-resizable::-webkit-scrollbar, .subtask-resizable::-webkit-scrollbar {
@@ -165,7 +168,7 @@ option {
         height: 4px;
     }
     .task-resizable::-webkit-scrollbar-thumb, .subtask-resizable::-webkit-scrollbar-thumb {
-        background: rgba(0, 240, 255, 0.25);
+        background: rgb(var(--sx-accent-rgb) / 0.25);
         border-radius: 2px;
     }
 }
@@ -413,3 +416,13 @@ body[data-native="ios"] .icon-btn {
 [data-quality="low"] .radial-glow {
     opacity: 0.15 !important;
 }
+
+/* ============================================================================
+   Yazı boyutu — Ayarlar → Temalar → ARAYÜZ → YAZI BOYUTU.
+   Kök (html) font-size ölçeklenir; rem tabanlı tüm metin orantılı büyür/küçülür.
+   Varsayılan "m" = 16px (tarayıcı varsayılanı) → hiçbir şey değişmez.
+   ============================================================================ */
+html[data-font-scale="s"]  { font-size: 15px; }
+html[data-font-scale="m"]  { font-size: 16px; }
+html[data-font-scale="l"]  { font-size: 18px; }
+html[data-font-scale="xl"] { font-size: 20px; }

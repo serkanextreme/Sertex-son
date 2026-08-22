@@ -14,6 +14,12 @@ import AnnouncementBanner from "./AnnouncementBanner";
 // Faz 9 CP8 — Mobile-first responsive.
 import MobileBottomNav from "./MobileBottomNav";
 import { useIsMobile } from "../lib/useResponsive";
+import KolayInterface from "./KolayInterface";
+import ProfesyonelInterface from "./ProfesyonelInterface";
+import TeknikInterface from "./TeknikInterface";
+import AydinlikInterface from "./AydinlikInterface";
+import PanoInterface from "./PanoInterface";
+import { useAppearance } from "../lib/appearance";
 import { chatApi, ttsApi, memoryApi } from "../lib/api";
 import { t } from "../lib/i18n";
 import { useAuth } from "../lib/auth";
@@ -59,12 +65,27 @@ const SertexMain = () => {
   // dispatch a CustomEvent to the sidebar to switch its inner tab and
   // ensure the drawer is open so the section is actually visible.
   const isMobile = useIsMobile();
+  // Görünüm modu (Ayarlar → Temalar → ARAYÜZ). "kolay" → sade görev panosu.
+  const { interface: appInterface } = useAppearance();
+  const kolayMode = appInterface === "kolay";
+  const profMode = appInterface === "profesyonel";
+  const teknikMode = appInterface === "teknik";
+  const aydinlikMode = appInterface === "aydinlik";
+  const panoMode = appInterface === "pano";
+  // Sade modlar = Detaylı dışındaki tüm arayüzler (küre/HUD/sohbet gizli,
+  // sidebar kapalı, alternatif arayüz görünür).
+  const simpleMode = !!appInterface && appInterface !== "detayli";
   const [activeMobileSection, setActiveMobileSection] = useState("history");
   useEffect(() => {
     // Sidebar defaults `open=true` for desktop; on first mobile mount
     // we want it CLOSED (bottom-nav opens it on tap).
     if (isMobile) setSidebarOpen(false);
   }, [isMobile]);
+  // Sade arayüzler (Kolay/Profesyonel) sade kalsın — moda girince NEURAL LINK
+  // panelini kapat (kullanıcı bir kutucuğa tıklayınca ilgili panel açılır).
+  useEffect(() => {
+    if (simpleMode) setSidebarOpen(false);
+  }, [simpleMode]);
   const openMobileSection = (section) => {
     setActiveMobileSection(section);
     setSidebarOpen(true);
@@ -514,8 +535,9 @@ const SertexMain = () => {
       />
 
       {/* HUDs — hidden on mobile (< 1024px) to reclaim screen real estate.
-          Bottom-nav + drawer sidebar replace them on small viewports. */}
-      {!isMobile && (
+          Bottom-nav + drawer sidebar replace them on small viewports.
+          Also hidden in the KOLAY interface (clutter-free task board). */}
+      {!isMobile && !simpleMode && (
         <>
           <TopLeftHUD
             lang={lang}
@@ -559,7 +581,8 @@ const SertexMain = () => {
       )}
 
       {/* Central Sphere — on mobile shrink & fade so it's a background
-          effect rather than blocking chat/nav. */}
+          effect rather than blocking chat/nav. Hidden in KOLAY interface. */}
+      {!simpleMode && (
       <div
         className="absolute inset-0 flex items-center justify-center pointer-events-none z-0"
         style={{
@@ -593,10 +616,11 @@ const SertexMain = () => {
           />
         </div>
       </div>
+      )}
 
-      {/* Title above sphere — hidden on mobile (bottom-nav already labels the app) */}
+      {/* Title above sphere — hidden on mobile / KOLAY interface */}
       <div
-        className={`absolute top-[5vh] left-1/2 -translate-x-1/2 z-10 text-center pointer-events-none ${isMobile ? "hidden" : ""}`}
+        className={`absolute top-[5vh] left-1/2 -translate-x-1/2 z-10 text-center pointer-events-none ${(isMobile || simpleMode) ? "hidden" : ""}`}
         style={{ paddingRight: sidebarOpen && !isMobile ? 180 : 0, transition: "padding-right 300ms" }}
       >
         {messages.length === 0 && (
@@ -611,8 +635,58 @@ const SertexMain = () => {
         )}
       </div>
 
-      {/* Chat + Input at bottom — on mobile sits on top of the bottom-nav
-          (48px + safe-area inset) so the input never gets hidden. */}
+      {/* KOLAY arayüzü — sade görev panosu (Detaylı görünümün yerine geçer). */}
+      {kolayMode && (
+        <KolayInterface
+          onOpenSection={openMobileSection}
+          onOpenSettings={() => setSettingsOpen(true)}
+          sidebarOpen={sidebarOpen}
+          isMobile={isMobile}
+        />
+      )}
+
+      {/* PROFESYONEL arayüzü — kurumsal SaaS panosu. */}
+      {profMode && (
+        <ProfesyonelInterface
+          onOpenSection={openMobileSection}
+          onOpenSettings={() => setSettingsOpen(true)}
+          sidebarOpen={sidebarOpen}
+          isMobile={isMobile}
+        />
+      )}
+
+      {/* TEKNİK arayüzü — konsol/terminal tablo görünümü. */}
+      {teknikMode && (
+        <TeknikInterface
+          onOpenSection={openMobileSection}
+          onOpenSettings={() => setSettingsOpen(true)}
+          sidebarOpen={sidebarOpen}
+          isMobile={isMobile}
+        />
+      )}
+
+      {/* AYDINLIK arayüzü — açık tema ferah liste. */}
+      {aydinlikMode && (
+        <AydinlikInterface
+          onOpenSection={openMobileSection}
+          onOpenSettings={() => setSettingsOpen(true)}
+          sidebarOpen={sidebarOpen}
+          isMobile={isMobile}
+        />
+      )}
+
+      {/* PANO arayüzü — Kanban sütunları. */}
+      {panoMode && (
+        <PanoInterface
+          onOpenSection={openMobileSection}
+          onOpenSettings={() => setSettingsOpen(true)}
+          sidebarOpen={sidebarOpen}
+          isMobile={isMobile}
+        />
+      )}
+
+      {/* Chat + Input at bottom — hidden in KOLAY interface. */}
+      {!simpleMode && (
       <div
         className={`absolute left-0 right-0 z-20 px-4 ${isMobile ? "bottom-14" : "bottom-6"}`}
         style={{
@@ -643,6 +717,7 @@ const SertexMain = () => {
           />
         </div>
       </div>
+      )}
 
       {/* Sidebar */}
       <Sidebar

@@ -15,6 +15,7 @@ import TaskCategoriesManagement from "./TaskCategoriesManagement";
 import MonitoringDashboard from "./MonitoringDashboard";
 import ClientErrorRadar from "./ClientErrorRadar";
 import PerformancePanel from "./PerformancePanel";
+import AppearancePanel from "./AppearancePanel";
 // Faz 9 CP6 — Global Announcement System.
 import AnnouncementManager from "./AnnouncementManager";
 import ChatPromptEditor from "./ChatPromptEditor";
@@ -410,6 +411,11 @@ const SettingsPanel = ({ open, onClose, initialTab }) => {
                         </div>
                       </button>
                     ))}
+                  </div>
+
+                  {/* Görünüm: Arayüz düzeni + vurgu rengi + yazı boyutu */}
+                  <div className="mt-5 pt-4 border-t border-sertex-cyan/15">
+                    <AppearancePanel />
                   </div>
                 </>
               )}
