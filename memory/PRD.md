@@ -799,7 +799,15 @@ Kullanıcı onayıyla iki P2 backlog özelliği regresyonsuz (tamamı additive) 
 
 ## 🔴 P0 — Sıradaki İş
 
-### Faz 7 — Gmail/Outlook Entegrasyonu (SIRADAKİ HEDEF · ~2-3 saat)
+### 🎨 Temaları Tam İşlevsel Hale Getirme (Kullanıcı isteği · 2026-06 · SIRADAKİ · "hiçbir şeyi BOZMADAN") 🚧 BEKLİYOR
+Kullanıcı geri bildirimi: dün eklenen 6 tema (arayüz) görsel olarak güzel ama **kabuk** halinde — içlerindeki pencereler/paneller gerçekte çalışmıyor. Yapılacaklar (SIRAYLA, tema tema, TÜM temalarda geçerli, mevcut Detaylı akışı BOZULMADAN):
+1. **Boş pencere / Detaylı'ya sıçrama sorunu**: Bir temada (Kolay/Profesyonel/Teknik/Aydınlık/Pano) göreve/panele tıklayınca şu an ya boş görünüyor ya da kullanıcıyı Neural Link (Detaylı) görünümüne geri fırlatıyor (`openMobileSection` → `sertex:sidebar-tab` → Detaylı sidebar açılıyor). Bunun yerine **tema kendi içinde** görev detayı/pencere açmalı.
+2. **Neural Link fonksiyonlarının temaya uyarlanması**: Detaylı'daki tüm görev yönetimi fonksiyonları (görev detayı, düzenle, alt görevler, arşiv, paylaşım, kilit/OTP, dosya ekleme, bağlama/gruplar, devret, iş koluna taşı, hatırlatıcı vb.) her temanın **kendi görsel diliyle** o tema içinde de çalışmalı — Detaylı'ya yönlendirmeden.
+3. **Paylaşılan bileşenlerin re-skin'i**: Tema değişince ortak paneller/pencereler (sidebar panelleri, görev detay modalları, ayarlar vb.) hâlâ eski Detaylı HUD görünümünde kalıyor; bunlar da seçilen temaya uymalı (örn. Aydınlık = açık tema → paneller açık tema olmalı).
+- **KRİTİK kısıt**: Detaylı (varsayılan) görünüm ve mevcut tüm akışlar HİÇBİR ŞEKİLDE bozulmayacak. Sıralı ilerlenecek; her tema için önce plan → kullanıcı onayı → uygulama → test.
+- **İlk adım (plan)**: hangi temadan başlanacağı + hangi fonksiyonların 1. öncelik olduğu kullanıcıyla netleştirilecek.
+
+
 - Sertex e-postaları okuyabilecek, cevaplayabilecek
 - **Faz 4**: Cloud Server + Otomatik Yedekleme (versiyonlu şifreli MongoDB + dosya yedekleri)
 - **Faz 5**: License Sistemi (CD-Key generator, hardware fingerprint, admin panel)
