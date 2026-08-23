@@ -809,6 +809,7 @@ Kullanıcı geri bildirimi: dün eklenen 6 tema (arayüz) görsel olarak güzel 
 - **KARARLAR (kullanıcı onayı 2026-06)**: Sıra = **önce KOLAY**, sonra diğerleri sırayla. Aşama sırası = a (Aşama 1 temel → 2 → 3, PRD'deki gibi). Görev detayı = **sağdan içeri açılan çekmece (drawer)**, Kolay'ın sade/aydınlık dilinde. Kullanıcı "YAP" diyene kadar KOD YAZILMAYACAK (henüz "bekle" dedi).
 - **Sıraya alınan kullanıcı notları (henüz UYGULANMAYACAK — kullanıcı hâlâ anlatıyor)**:
   - KOLAY ana sayfa sol menüsündeki **"DETAYLI" düğmesini kaldır** (`kolay-switch-detayli`) — tıklayınca eski temaya döndürüyor, istenmiyor. (Detaylı'ya geçiş Ayarlar → Temalar'dan yapılabilir.)
+  - KOLAY ana sayfada "Bugünkü Görevler" bölümünde, **arama çubuğunun altına iş kolu seçici** ekle — Neural Link'teki (Detaylı) iş kolu filtre mekanizmasının aynısı; Kolay'da da görevler iş koluna göre süzülebilsin.
 
 
 - Sertex e-postaları okuyabilecek, cevaplayabilecek
