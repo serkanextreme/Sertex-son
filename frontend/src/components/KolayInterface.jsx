@@ -34,12 +34,25 @@ import {
   Anchor,
   ChevronsDownUp,
   ChevronsUpDown,
+  CircleDot,
+  CheckCircle2,
+  ChevronRight,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { tasksApi, taskCategoriesApi, taskLockApi } from "../lib/api";
+import { tasksApi, taskCategoriesApi, taskLockApi, notesApi, teamApi, reminderConfigApi, taskAttachmentsApi } from "../lib/api";
+import FilePanel from "./FilePanel";
+import TeamPanel from "./TeamPanel";
 import { useAuth } from "../lib/auth";
 import { confirmDialog } from "../lib/confirm";
 import { flattenTree } from "../lib/categoryTree";
+import { REMINDER_DAY_CHOICES } from "../lib/taskHelpers";
+import { defaultRecurringValue, resolveRecurringReminder } from "../lib/reminderUtils";
+import { MultiAssigneeSelect } from "./tasks/MultiAssigneeSelect";
+import { CompanyCombobox } from "./tasks/CompanyCombobox";
+import { RecurringReminderFields } from "./tasks/RecurringReminderFields";
+import { PendingAttachments } from "./tasks/PendingAttachments";
+import CategorySelect from "./tasks/CategorySelect";
 import { ContextMenu } from "./TaskContextMenu";
 import { EditTaskModal } from "./tasks/EditTaskModal";
 import { ShareTaskModal } from "./tasks/ShareTaskModal";
@@ -214,24 +227,79 @@ const KolaySortableCard = ({ task, number, catName, onComplete, onMenu, collapse
 
 // Kolay içi görev ekleme formu (Neural Link'e ATMADAN).
 const KolayAddModal = ({ cats, onClose, onCreated }) => {
+  const { isTeamView, user } = useAuth();
   const [title, setTitle] = useState("");
-  const [desc, setDesc] = useState("");
-  const [catId, setCatId] = useState("");
-  const [due, setDue] = useState("");
+  const [description, setDescription] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [assigneeName, setAssigneeName] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [companyAutoFilled, setCompanyAutoFilled] = useState(false);
+  const [assigneeUserIds, setAssigneeUserIds] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [newCategoryId, setNewCategoryId] = useState("");
+  const [newReminderDays, setNewReminderDays] = useState(null);
+  const [newReminderDisabled, setNewReminderDisabled] = useState(false);
+  const [newReminder, setNewReminder] = useState(defaultRecurringValue());
+  const [reminderConfig, setReminderConfig] = useState(null);
+  const [pendingFiles, setPendingFiles] = useState([]);
   const [saving, setSaving] = useState(false);
-  const flat = useMemo(() => flattenTree(cats), [cats]);
+
+  useEffect(() => {
+    if (isTeamView) teamApi.members().then(setTeamMembers).catch(() => setTeamMembers([]));
+    reminderConfigApi.get().then(setReminderConfig).catch(() => setReminderConfig(null));
+  }, [isTeamView]);
 
   const submit = async () => {
     if (!title.trim()) { toast.error("Başlık gerekli"); return; }
+    if (startDate && dueDate && new Date(startDate) > new Date(dueDate)) {
+      toast.error("Başlangıç tarihi bitiş tarihinden sonra olamaz");
+      return;
+    }
     setSaving(true);
     try {
-      await tasksApi.create(
+      // Görev Paylaşımı — Detaylı ile aynı yönlendirme (kendim / tekil devir / çok kişili).
+      const ids = assigneeUserIds;
+      const others = ids.filter((x) => x !== user?.id);
+      const includesSelf = user?.id ? ids.includes(user.id) : false;
+      const extras = {
+        assignee_name: assigneeName.trim() || null,
+        company_name: companyName.trim() || null,
+      };
+      if (ids.length === 0 || (ids.length === 1 && includesSelf)) {
+        // kişisel görev
+      } else if (others.length === 1 && !includesSelf) {
+        extras.assignee_user_id = others[0];
+      } else {
+        extras.assignee_user_ids = ids;
+      }
+      if (newCategoryId) extras.category_id = newCategoryId;
+      if (startDate) extras.start_date = new Date(startDate).toISOString();
+      if (newReminderDisabled) extras.reminder_disabled = true;
+      else if (newReminderDays != null) extras.reminder_days = newReminderDays;
+      const rr = resolveRecurringReminder(newReminder);
+      if (rr.error) { toast.error(rr.error); setSaving(false); return; }
+      if (rr.reminder_at) {
+        extras.reminder_interval_min = rr.reminder_interval_min;
+        extras.reminder_repeat_total = rr.reminder_repeat_total;
+        extras.reminder_repeat_left = rr.reminder_repeat_left;
+      }
+      const created = await tasksApi.create(
         title.trim(),
-        desc.trim(),
-        due ? new Date(due).toISOString() : null,
-        null,
-        catId ? { category_id: catId } : {},
+        description.trim(),
+        dueDate ? new Date(dueDate).toISOString() : null,
+        rr.reminder_at || null,
+        extras,
       );
+      // Bekleyen dosyaları yeni göreve yükle (görev zaten oluştu).
+      if (created?.id && pendingFiles.length) {
+        let okCount = 0;
+        for (const f of pendingFiles) {
+          try { await taskAttachmentsApi.upload(created.id, f); okCount += 1; }
+          catch { toast.error(`Dosya yüklenemedi: ${f.name}`); }
+        }
+        if (okCount) toast.success(`${okCount} dosya göreve eklendi`);
+      }
       toast.success("Görev eklendi");
       onCreated();
       onClose();
@@ -242,12 +310,18 @@ const KolayAddModal = ({ cats, onClose, onCreated }) => {
     }
   };
 
+  const defaultReminderLabel = reminderConfig?.effective
+    ? `⏱ Uyarı: Varsayılan (${reminderConfig.effective} gün)`
+    : "⏱ Uyarı: Varsayılan";
+
+  const inputCls = "w-full px-3 py-2.5 rounded-lg bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-sm placeholder:text-sertex-textMuted focus:border-sertex-cyan outline-none";
+
   return createPortal(
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose} data-testid="kolay-add-overlay">
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="glass-panel border border-sertex-cyan/40 rounded-xl p-5 w-full max-w-md"
+        className="glass-panel border border-sertex-cyan/40 rounded-xl p-5 w-full max-w-md max-h-[90vh] overflow-y-auto scrollbar-sertex"
         onClick={(e) => e.stopPropagation()}
         data-testid="kolay-add-modal"
       >
@@ -256,55 +330,99 @@ const KolayAddModal = ({ cats, onClose, onCreated }) => {
           <button onClick={onClose} data-testid="kolay-add-close" className="text-sertex-textMuted hover:text-sertex-cyan"><X className="h-5 w-5" /></button>
         </div>
         <div className="space-y-3">
-          <div>
-            <div className="hud-text text-sertex-textMuted mb-1">BAŞLIK</div>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
-              autoFocus
-              data-testid="kolay-add-title"
-              placeholder="Görev başlığı..."
-              className="w-full px-3 py-2.5 rounded-lg bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-sm focus:border-sertex-cyan outline-none"
-            />
-          </div>
-          <div>
-            <div className="hud-text text-sertex-textMuted mb-1">AÇIKLAMA</div>
-            <textarea
-              value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-              data-testid="kolay-add-desc"
-              rows={2}
-              placeholder="Opsiyonel açıklama..."
-              className="w-full px-3 py-2.5 rounded-lg bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-sm focus:border-sertex-cyan outline-none resize-none"
-            />
-          </div>
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <div className="hud-text text-sertex-textMuted mb-1">İŞ KOLU</div>
-              <select
-                value={catId}
-                onChange={(e) => setCatId(e.target.value)}
-                data-testid="kolay-add-cat"
-                className="w-full px-3 py-2.5 rounded-lg bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-sm focus:border-sertex-cyan outline-none"
-              >
-                <option value="">— İş kolu yok —</option>
-                {flat.map((c) => (
-                  <option key={c.id} value={c.id}>{"\u00A0".repeat((c.__depth || 0) * 2)}{c.name}</option>
-                ))}
-              </select>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            autoFocus
+            data-testid="kolay-add-title"
+            placeholder="Görev başlığı"
+            className={inputCls}
+          />
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            data-testid="kolay-add-desc"
+            rows={2}
+            placeholder="Açıklama (opsiyonel)"
+            className={`${inputCls} resize-none`}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <div className="hud-text text-sertex-textMuted mb-1">BAŞLANGIÇ</div>
+              <input type="datetime-local" value={startDate} onChange={(e) => setStartDate(e.target.value)} data-testid="kolay-add-start" className={inputCls} />
             </div>
-            <div className="flex-1">
-              <div className="hud-text text-sertex-textMuted mb-1">SON TARİH</div>
-              <input
-                type="datetime-local"
-                value={due}
-                onChange={(e) => setDue(e.target.value)}
-                data-testid="kolay-add-due"
-                className="w-full px-3 py-2.5 rounded-lg bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-sm focus:border-sertex-cyan outline-none"
+            <div>
+              <div className="hud-text text-sertex-textMuted mb-1">BİTİŞ</div>
+              <input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} data-testid="kolay-add-due" className={inputCls} />
+            </div>
+          </div>
+          {isTeamView && (
+            <div className="space-y-2">
+              {teamMembers.length > 0 ? (
+                <MultiAssigneeSelect
+                  members={teamMembers}
+                  selfUser={user ? { id: user.id, username: user.username } : null}
+                  selectedIds={assigneeUserIds}
+                  companyFilter={companyName}
+                  onChange={(newIds) => {
+                    setAssigneeUserIds(newIds);
+                    const others = newIds.filter((x) => x !== user?.id);
+                    if (companyAutoFilled || !companyName.trim()) {
+                      if (others.length === 1) {
+                        setCompanyName(teamMembers.find((m) => m.id === others[0])?.company_name || "");
+                        setCompanyAutoFilled(true);
+                      } else if (newIds.length === 0) {
+                        setCompanyName("");
+                        setCompanyAutoFilled(true);
+                      }
+                    }
+                  }}
+                />
+              ) : (
+                <input
+                  type="text"
+                  value={assigneeName}
+                  onChange={(e) => setAssigneeName(e.target.value)}
+                  placeholder="Görev sahibi (opsiyonel)"
+                  data-testid="kolay-add-assignee"
+                  className={inputCls}
+                />
+              )}
+              <CompanyCombobox
+                value={companyName}
+                onChange={setCompanyName}
+                onManualEdit={(isManual) => setCompanyAutoFilled(!isManual)}
+                options={teamMembers.map((m) => m.company_name).filter(Boolean)}
+                placeholder="Şirket (opsiyonel)"
+                testId="kolay-add-company"
               />
             </div>
-          </div>
+          )}
+          <CategorySelect
+            categories={cats}
+            value={newCategoryId}
+            onChange={setNewCategoryId}
+            testId="kolay-add-category"
+          />
+          <select
+            value={newReminderDisabled ? "__off__" : (newReminderDays == null ? "" : String(newReminderDays))}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === "__off__") { setNewReminderDisabled(true); setNewReminderDays(null); }
+              else if (v === "") { setNewReminderDisabled(false); setNewReminderDays(null); }
+              else { setNewReminderDisabled(false); setNewReminderDays(parseInt(v, 10)); }
+            }}
+            data-testid="kolay-add-reminder-days"
+            className={inputCls}
+          >
+            <option value="">{defaultReminderLabel}</option>
+            {REMINDER_DAY_CHOICES.map((d) => (
+              <option key={d} value={d}>{`⏱ Uyarı: ${d} gün önce`}</option>
+            ))}
+            <option value="__off__">🚫 Bu görev için hatırlatıcı kapalı</option>
+          </select>
+          <RecurringReminderFields value={newReminder} onChange={setNewReminder} testPrefix="kolay-add-reminder" />
+          <PendingAttachments files={pendingFiles} onChange={setPendingFiles} />
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} data-testid="kolay-add-cancel" className="px-4 py-2 rounded-lg border border-sertex-textMuted/30 text-sertex-textMuted hover:text-sertex-text font-mono text-sm">İPTAL</button>
@@ -318,7 +436,70 @@ const KolayAddModal = ({ cats, onClose, onCreated }) => {
   );
 };
 
-const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }) => {
+// Kolay içi Notlar paneli — Detaylı'ya ATMADAN (notesApi ile).
+const KolayNotes = () => {
+  const [notes, setNotes] = useState([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(true);
+  const load = () => {
+    setLoading(true);
+    notesApi.list().then((n) => setNotes(Array.isArray(n) ? n : [])).catch(() => {}).finally(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, []);
+  const add = async () => {
+    const c = input.trim();
+    if (!c) return;
+    try { await notesApi.create(c); setInput(""); toast.success("Not eklendi"); load(); }
+    catch { toast.error("Not eklenemedi"); }
+  };
+  const del = async (id) => {
+    try { await notesApi.delete(id); load(); toast.success("Not silindi"); }
+    catch { toast.error("Silinemedi"); }
+  };
+  return (
+    <div data-testid="kolay-notes">
+      <div className="flex gap-2 mb-4">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") add(); }}
+          placeholder="Yeni not..."
+          data-testid="kolay-note-input"
+          className="flex-1 px-3 py-2.5 rounded-lg bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-sm placeholder:text-sertex-textMuted focus:border-sertex-cyan outline-none"
+        />
+        <button type="button" onClick={add} data-testid="kolay-note-add" className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-sertex-cyan/15 border border-sertex-cyan text-sertex-cyan hover:bg-sertex-cyan/25 font-mono text-sm neon-glow">
+          <Plus className="h-4 w-4" /> Ekle
+        </button>
+      </div>
+      {loading ? (
+        <div className="hud-text text-sertex-textMuted py-10 text-center">YÜKLENİYOR...</div>
+      ) : notes.length === 0 ? (
+        <div className="glass-panel corner-bracket rounded-xl p-8 text-center" data-testid="kolay-notes-empty">
+          <div className="text-sertex-text mb-1">Henüz not yok</div>
+          <div className="hud-text text-sertex-textMuted normal-case">Yukarıdan ilk notunu ekle.</div>
+        </div>
+      ) : (
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))" }}>
+          {notes.map((n) => (
+            <div key={n.id} data-testid={`kolay-note-${n.id}`} className="glass-panel rounded-xl p-4 border border-sertex-cyan/20 flex flex-col gap-2">
+              <div className="text-sertex-text text-sm whitespace-pre-wrap break-words flex-1">{n.content}</div>
+              <div className="flex items-center justify-between">
+                <span className="hud-text text-sertex-textMuted normal-case">
+                  {n.created_at ? new Date(n.created_at).toLocaleDateString("tr-TR", { day: "numeric", month: "short" }) : ""}
+                </span>
+                <button type="button" onClick={() => del(n.id)} data-testid={`kolay-note-del-${n.id}`} aria-label="Notu sil" className="text-sertex-textMuted hover:text-rose-400 transition-colors">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
   const { user, teamFeaturesVisible } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [cats, setCats] = useState([]);
@@ -392,6 +573,28 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
 
   const canReorder = !q.trim() && !catFilter;
   const closeMenu = () => setCtxMenu(null);
+
+  // Ana Sayfa özet istatistikleri + yaklaşan son tarihler.
+  const stats = useMemo(() => {
+    const live = tasks.filter((t) => !t.archived && !t.deleted);
+    const now = Date.now();
+    const open = live.filter((t) => t.status !== "done");
+    const overdue = open.filter((t) => t.due_date && new Date(t.due_date).getTime() < now).length;
+    const soon = open.filter((t) => {
+      if (!t.due_date) return false;
+      const d = new Date(t.due_date).getTime();
+      return d >= now && d - now < 2 * 86400000;
+    }).length;
+    return { total: live.length, done: live.length - open.length, active: open.length, overdue, soon };
+  }, [tasks]);
+  const upcoming = useMemo(
+    () =>
+      tasks
+        .filter((t) => !t.archived && !t.deleted && t.status !== "done" && t.due_date)
+        .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+        .slice(0, 6),
+    [tasks],
+  );
 
   // ---- Aksiyonlar (tasksApi + reload) — TasksPanel ile aynı davranış ----
   const completeTask = async (t) => {
@@ -550,9 +753,9 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
   const MENU = [
     { key: "home", label: "Ana Sayfa", icon: Home, onClick: () => setActiveKey("home") },
     { key: "tasks", label: "Görevler", icon: ListTodo, onClick: () => setActiveKey("tasks") },
-    ...(teamFeaturesVisible ? [{ key: "team", label: "Ekip", icon: Users, onClick: () => { setActiveKey("team"); onOpenSection?.("team"); } }] : []),
-    { key: "notes", label: "Notlar", icon: StickyNote, onClick: () => { setActiveKey("notes"); onOpenSection?.("notes"); } },
-    { key: "files", label: "Dosyalar", icon: FolderOpen, onClick: () => { setActiveKey("files"); onOpenSection?.("files"); } },
+    ...(teamFeaturesVisible ? [{ key: "team", label: "Ekip", icon: Users, onClick: () => setActiveKey("team") }] : []),
+    { key: "notes", label: "Notlar", icon: StickyNote, onClick: () => setActiveKey("notes") },
+    { key: "files", label: "Dosyalar", icon: FolderOpen, onClick: () => setActiveKey("files") },
     { key: "settings", label: "Ayarlar", icon: SettingsIcon, onClick: () => onOpenSettings?.() },
   ];
 
@@ -601,90 +804,193 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
           <div className="mb-5">
             <div className="hud-text text-sertex-textMuted">{today}</div>
             <h1 className="display-text text-2xl lg:text-3xl text-sertex-cyan neon-glow mt-1">
-              {greeting}, {user?.username || "Kullanıcı"}!
+              {activeKey === "home"
+                ? `${greeting}, ${user?.username || "Kullanıcı"}!`
+                : activeKey === "tasks"
+                ? "Görevler"
+                : activeKey === "notes"
+                ? "Notlar"
+                : activeKey === "files"
+                ? "Dosyalar"
+                : activeKey === "team"
+                ? "Ekip"
+                : ""}
             </h1>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 mb-3">
-            <div className="relative flex-1">
-              <Search className="h-4 w-4 text-sertex-textMuted absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Görevlerde ara..."
-                data-testid="kolay-search"
-                className="w-full pl-10 pr-3 py-3 rounded-xl bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-sm placeholder:text-sertex-textMuted focus:border-sertex-cyan outline-none"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowAdd(true)}
-              data-testid="kolay-add-task"
-              className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-sertex-cyan/15 border border-sertex-cyan text-sertex-cyan hover:bg-sertex-cyan/25 transition-colors font-mono text-sm neon-glow"
-            >
-              <Plus className="h-4 w-4" /> Yeni Görev Ekle
-            </button>
-          </div>
+          {/* ANA SAYFA — özet gösterge (görev ızgarası GÖREVLER sekmesinde) */}
+          {activeKey === "home" && (
+            <div data-testid="kolay-home">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6" data-testid="kolay-home-stats">
+                {[
+                  { key: "active", label: "Aktif", value: stats.active, icon: CircleDot, color: "rgb(var(--sx-accent-rgb))" },
+                  { key: "overdue", label: "Süresi Geçti", value: stats.overdue, icon: AlertTriangle, color: "#f43f5e" },
+                  { key: "soon", label: "Yaklaşan", value: stats.soon, icon: Clock, color: "#f59e0b" },
+                  { key: "done", label: "Tamamlanan", value: stats.done, icon: CheckCircle2, color: "#10b981" },
+                ].map((s) => {
+                  const Icon = s.icon;
+                  return (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => setActiveKey("tasks")}
+                      data-testid={`kolay-stat-${s.key}`}
+                      className="glass-panel rounded-xl p-4 border border-sertex-cyan/20 text-left hover:border-sertex-cyan/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Icon className="h-4 w-4" style={{ color: s.color }} />
+                        <span className="hud-text text-sertex-textMuted normal-case">{s.label}</span>
+                      </div>
+                      <div className="text-3xl font-mono font-bold" style={{ color: s.color }}>{s.value}</div>
+                    </button>
+                  );
+                })}
+              </div>
 
-          {flatCats.length > 0 && (
-            <div className="flex items-center gap-2 mb-6 overflow-x-auto scrollbar-sertex pb-1" data-testid="kolay-cat-filter">
-              {[{ id: "", name: "Tümü" }, ...flatCats, { id: "__none__", name: "Kolsuz" }].map((c) => {
-                const sel = catFilter === c.id;
-                return (
-                  <button
-                    key={c.id || "all"}
-                    type="button"
-                    onClick={() => setCatFilter(c.id)}
-                    data-testid={`kolay-cat-chip-${c.id || "all"}`}
-                    style={{ flexShrink: 0 }}
-                    className={`px-3 py-1.5 rounded-full border text-xs font-mono transition-colors whitespace-nowrap ${
-                      sel
-                        ? "border-sertex-cyan bg-sertex-cyan/15 text-sertex-cyan"
-                        : "border-sertex-cyan/25 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/50"
-                    }`}
-                  >
-                    {c.name}
-                  </button>
-                );
-              })}
+              <div className="flex flex-col sm:flex-row gap-3 mb-6">
+                <button type="button" onClick={() => setShowAdd(true)} data-testid="kolay-home-add" className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-sertex-cyan/15 border border-sertex-cyan text-sertex-cyan hover:bg-sertex-cyan/25 transition-colors font-mono text-sm neon-glow">
+                  <Plus className="h-4 w-4" /> Yeni Görev Ekle
+                </button>
+                <button type="button" onClick={() => setActiveKey("tasks")} data-testid="kolay-home-all" className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-sertex-cyan/30 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/60 transition-colors font-mono text-sm">
+                  <ListTodo className="h-4 w-4" /> Tüm Görevler
+                </button>
+              </div>
+
+              <div className="hud-text text-sertex-cyan mb-3">YAKLAŞAN SON TARİHLER</div>
+              {loading ? (
+                <div className="hud-text text-sertex-textMuted py-10 text-center">YÜKLENİYOR...</div>
+              ) : upcoming.length === 0 ? (
+                <div className="glass-panel corner-bracket rounded-xl p-8 text-center" data-testid="kolay-home-empty">
+                  <div className="text-sertex-text mb-1">Yaklaşan son tarih yok</div>
+                  <div className="hud-text text-sertex-textMuted normal-case">Tarihli aktif görevin bulunmuyor.</div>
+                </div>
+              ) : (
+                <div className="space-y-2" data-testid="kolay-home-upcoming">
+                  {upcoming.map((t) => {
+                    const b = bucketOf(t);
+                    const bc = b.color === "accent" ? "rgb(var(--sx-accent-rgb))" : b.color;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => setActiveKey("tasks")}
+                        data-testid={`kolay-upcoming-${t.id}`}
+                        className="w-full flex items-center gap-3 glass-panel rounded-lg p-3 border border-sertex-cyan/15 hover:border-sertex-cyan/40 transition-colors text-left"
+                      >
+                        <span className="h-2 w-2 rounded-full shrink-0" style={{ background: bc, boxShadow: `0 0 6px ${bc}` }} />
+                        <span className="flex-1 min-w-0 truncate text-sertex-text text-sm">{t.title}</span>
+                        <span className="hud-text text-sertex-textMuted normal-case shrink-0">{fmtDateTime(t.due_date)}</span>
+                        <ChevronRight className="h-4 w-4 text-sertex-textMuted shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
-          <div className="hud-text text-sertex-cyan mb-3">BUGÜNKÜ GÖREVLER</div>
-
-          {loading ? (
-            <div className="hud-text text-sertex-textMuted py-10 text-center" data-testid="kolay-loading">YÜKLENİYOR...</div>
-          ) : activeTasks.length === 0 ? (
-            <div className="glass-panel corner-bracket rounded-xl p-8 text-center" data-testid="kolay-empty">
-              <div className="text-sertex-text text-lg mb-1">🎉 Aktif görevin yok</div>
-              <div className="hud-text text-sertex-textMuted normal-case mb-4">
-                {q || catFilter ? "Eşleşen görev bulunamadı." : "Yeni bir görev ekleyerek başla."}
-              </div>
-              {!q && !catFilter && (
-                <button type="button" onClick={() => setShowAdd(true)} data-testid="kolay-empty-add" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-sertex-cyan text-sertex-cyan hover:bg-sertex-cyan/10 font-mono text-sm">
-                  <Plus className="h-4 w-4" /> Görev Ekle
-                </button>
-              )}
-            </div>
-          ) : canReorder ? (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-              <SortableContext items={activeTasks.map((t) => t.id)} strategy={rectSortingStrategy}>
-                <div
-                  className="grid gap-3"
-                  style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}
-                  data-testid="kolay-task-grid"
+          {/* GÖREVLER — arama + ekle + iş kolu filtresi + ızgara */}
+          {activeKey === "tasks" && (
+            <>
+              <div className="flex flex-col sm:flex-row gap-3 mb-3">
+                <div className="relative flex-1">
+                  <Search className="h-4 w-4 text-sertex-textMuted absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder="Görevlerde ara..."
+                    data-testid="kolay-search"
+                    className="w-full pl-10 pr-3 py-3 rounded-xl bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-sm placeholder:text-sertex-textMuted focus:border-sertex-cyan outline-none"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAdd(true)}
+                  data-testid="kolay-add-task"
+                  className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-sertex-cyan/15 border border-sertex-cyan text-sertex-cyan hover:bg-sertex-cyan/25 transition-colors font-mono text-sm neon-glow"
                 >
+                  <Plus className="h-4 w-4" /> Yeni Görev Ekle
+                </button>
+              </div>
+
+              {flatCats.length > 0 && (
+                <div className="flex items-center gap-2 mb-6 overflow-x-auto scrollbar-sertex pb-1" data-testid="kolay-cat-filter">
+                  {[{ id: "", name: "Tümü" }, ...flatCats, { id: "__none__", name: "Kolsuz" }].map((c) => {
+                    const sel = catFilter === c.id;
+                    return (
+                      <button
+                        key={c.id || "all"}
+                        type="button"
+                        onClick={() => setCatFilter(c.id)}
+                        data-testid={`kolay-cat-chip-${c.id || "all"}`}
+                        style={{ flexShrink: 0 }}
+                        className={`px-3 py-1.5 rounded-full border text-xs font-mono transition-colors whitespace-nowrap ${
+                          sel
+                            ? "border-sertex-cyan bg-sertex-cyan/15 text-sertex-cyan"
+                            : "border-sertex-cyan/25 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/50"
+                        }`}
+                      >
+                        {c.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="hud-text text-sertex-cyan mb-3">BUGÜNKÜ GÖREVLER</div>
+
+              {loading ? (
+                <div className="hud-text text-sertex-textMuted py-10 text-center" data-testid="kolay-loading">YÜKLENİYOR...</div>
+              ) : activeTasks.length === 0 ? (
+                <div className="glass-panel corner-bracket rounded-xl p-8 text-center" data-testid="kolay-empty">
+                  <div className="text-sertex-text text-lg mb-1">🎉 Aktif görevin yok</div>
+                  <div className="hud-text text-sertex-textMuted normal-case mb-4">
+                    {q || catFilter ? "Eşleşen görev bulunamadı." : "Yeni bir görev ekleyerek başla."}
+                  </div>
+                  {!q && !catFilter && (
+                    <button type="button" onClick={() => setShowAdd(true)} data-testid="kolay-empty-add" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-sertex-cyan text-sertex-cyan hover:bg-sertex-cyan/10 font-mono text-sm">
+                      <Plus className="h-4 w-4" /> Görev Ekle
+                    </button>
+                  )}
+                </div>
+              ) : canReorder ? (
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+                  <SortableContext items={activeTasks.map((t) => t.id)} strategy={rectSortingStrategy}>
+                    <div
+                      className="grid gap-3"
+                      style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}
+                      data-testid="kolay-task-grid"
+                    >
+                      {activeTasks.map((t) => (
+                        <KolaySortableCard key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              ) : (
+                <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }} data-testid="kolay-task-grid">
                   {activeTasks.map((t) => (
-                    <KolaySortableCard key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} />
+                    <KolayCardBody key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} />
                   ))}
                 </div>
-              </SortableContext>
-            </DndContext>
-          ) : (
-            <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }} data-testid="kolay-task-grid">
-              {activeTasks.map((t) => (
-                <KolayCardBody key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} />
-              ))}
+              )}
+            </>
+          )}
+
+          {/* NOTLAR — Kolay içinde */}
+          {activeKey === "notes" && <KolayNotes />}
+
+          {/* DOSYALAR — mevcut FilePanel yeniden kullanıldı */}
+          {activeKey === "files" && (
+            <div className="glass-panel rounded-xl border border-sertex-cyan/20 p-4" data-testid="kolay-files">
+              <FilePanel />
+            </div>
+          )}
+
+          {/* EKİP — mevcut TeamPanel yeniden kullanıldı */}
+          {activeKey === "team" && (
+            <div className="glass-panel rounded-xl border border-sertex-cyan/20 p-4" data-testid="kolay-team">
+              <TeamPanel />
             </div>
           )}
         </div>
