@@ -818,6 +818,7 @@ Kullanıcı geri bildirimi: dün eklenen 6 tema (arayüz) görsel olarak güzel 
   - ℹ️ İleri/nadir aksiyonlar (kilit/OTP, tekrarlı hatırlatma, görev bağlama/grup, tek görev export, sıra no sabitleme, devret) SADE menüye bilinçli KONULMADI (Kolay = basit). İstenirse eklenebilir.
   - **Test**: Ana ajan Playwright (preview) — sade görünüm korundu, chip filtre + sıra no + ⋮ menü (7-8 aksiyon) + iş kolu alt-menü + gerçek EditTaskModal açılışı doğrulandı; DETAYLI yok; Detaylı görünüm etkilenmedi (yalnızca KolayInterface.jsx değişti). Lint temiz.
   - **SIRADAKİ**: Profesyonel → Teknik → Aydınlık → Pano aynı "sade kabuk + kartlara fonksiyon" yaklaşımıyla; kullanıcı "yap" deyince.
+- **🐛 AÇIK HATA — KOLAY sürükle-sırala (kullanıcı bildirdi 2026-06)**: Mevcut `framer-motion Reorder axis="y"` çok sütunlu ızgarada bozuk çalışıyor — kartlar SADECE yukarı-aşağı kayıyor (sağa-sola değil) ve sürükleyince ızgara/numaralar sapıtıyor. İSTENEN: 2 yönlü (sağ-sol + yukarı-aşağı) ızgara sürüklemesi; taşıyınca diğer kartlar otomatik kayıp sıra numaraları anında yeniden atansın, düzen kendini toparlasın. ÇÖZÜM planı: `@dnd-kit/core` + `@dnd-kit/sortable` (`rectSortingStrategy`) ile grid-aware DnD → bırakınca `tasksApi.reorder(ids)` + yeniden numaralama. (Kullanıcı "yap" deyince.)
 
 
 - Sertex e-postaları okuyabilecek, cevaplayabilecek
