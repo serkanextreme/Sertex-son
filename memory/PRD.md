@@ -814,6 +814,7 @@ Kullanıcı geri bildirimi: dün eklenen 6 tema (arayüz) görsel olarak güzel 
     - Sol tutamaçtan **basılı tutup sürükleyerek sıralama** (drag reorder — Neural Link'teki gibi)
     - Sağ üstteki **3 fonksiyon aynen çalışsın**: küçült/büyüt · dışarı taşı (detach/genişlet) · ⋮ 3 nokta
     - **⋮ 3 noktaya tıklayınca Neural Link'teki tam fonksiyon menüsü** (`TaskContextMenu`) açılsın (düzenle, arşivle, paylaş, kilit/OTP, devret, iş koluna taşı, bağla, hatırlatıcı vb.)
+  - KOLAY "Bugünkü Görevler" listesi görevleri **sıra numarasına göre** dizsin (Neural Link'teki 1,2,3… pin-aware numaralandırma; sabit ⚓ numaralar dahil).
 
 
 - Sertex e-postaları okuyabilecek, cevaplayabilecek
