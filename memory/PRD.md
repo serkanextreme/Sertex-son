@@ -807,14 +807,16 @@ Kullanıcı geri bildirimi: dün eklenen 6 tema (arayüz) görsel olarak güzel 
 - **KRİTİK kısıt**: Detaylı (varsayılan) görünüm ve mevcut tüm akışlar HİÇBİR ŞEKİLDE bozulmayacak. Sıralı ilerlenecek; her tema için önce plan → kullanıcı onayı → uygulama → test.
 - **İlk adım (plan)**: hangi temadan başlanacağı + hangi fonksiyonların 1. öncelik olduğu kullanıcıyla netleştirilecek.
 - **KARARLAR (kullanıcı onayı 2026-06)**: Sıra = **önce KOLAY**, sonra diğerleri sırayla. Aşama sırası = a (Aşama 1 temel → 2 → 3, PRD'deki gibi). Görev detayı = **sağdan içeri açılan çekmece (drawer)**, Kolay'ın sade/aydınlık dilinde. Kullanıcı "YAP" diyene kadar KOD YAZILMAYACAK (henüz "bekle" dedi).
-- **Sıraya alınan kullanıcı notları (henüz UYGULANMAYACAK — kullanıcı hâlâ anlatıyor)**:
-  - KOLAY ana sayfa sol menüsündeki **"DETAYLI" düğmesini kaldır** (`kolay-switch-detayli`) — tıklayınca eski temaya döndürüyor, istenmiyor. (Detaylı'ya geçiş Ayarlar → Temalar'dan yapılabilir.)
-  - KOLAY ana sayfada "Bugünkü Görevler" bölümünde, **arama çubuğunun altına iş kolu seçici** ekle — Neural Link'teki (Detaylı) iş kolu filtre mekanizmasının aynısı; Kolay'da da görevler iş koluna göre süzülebilsin.
-  - KOLAY "Bugünkü Görevler" kartları **birebir Neural Link görev kartı gibi** olsun (mevcut `TaskCard`'ı Kolay içinde kullan / aynı görünüm): durum rozeti, numara + ⚓ pin, başlık, onay kutusu, ⏱ BITIŞ tarihi, 🏢 iş kolu, sağ üstte 3 düğme. Ek olarak:
-    - Sol tutamaçtan **basılı tutup sürükleyerek sıralama** (drag reorder — Neural Link'teki gibi)
-    - Sağ üstteki **3 fonksiyon aynen çalışsın**: küçült/büyüt · dışarı taşı (detach/genişlet) · ⋮ 3 nokta
-    - **⋮ 3 noktaya tıklayınca Neural Link'teki tam fonksiyon menüsü** (`TaskContextMenu`) açılsın (düzenle, arşivle, paylaş, kilit/OTP, devret, iş koluna taşı, bağla, hatırlatıcı vb.)
-  - KOLAY "Bugünkü Görevler" listesi görevleri **sıra numarasına göre** dizsin (Neural Link'teki 1,2,3… pin-aware numaralandırma; sabit ⚓ numaralar dahil).
+- **Sıraya alınan kullanıcı notları — KOLAY (2026-06)**: ✅ UYGULANDI (aşağıdaki yöntemle):
+  - Yöntem: `KolayInterface.jsx` yeniden yazıldı → Kolay kabuğu (slim sol menü + karşılama) + içine **gerçek `TasksPanel` bileşeni GÖMÜLDÜ** (`kolay-tasks-panel`). Böylece tek hamlede TÜM istekler birebir Neural Link deneyimiyle geldi, Detaylı hiç değişmeden (TasksPanel paylaşılan; Kolay'a 2. örnek mount edilir).
+  - ✅ KOLAY sol menüsündeki "DETAYLI" düğmesi (`kolay-switch-detayli`) kaldırıldı (+ kullanılmayan importlar). Detaylı'ya geçiş Ayarlar → Temalar'dan.
+  - ✅ İş kolu seçici (Neural Link filtre ağacı: TÜMÜ/kollar/KOLSUZ) geldi.
+  - ✅ Kartlar birebir Neural Link `TaskCard`: sol tutamaçtan sürükle-sırala, sağ üst 3 düğme (küçült/genişlet-detach/⋮), ⋮ → tam `TaskContextMenu` (düzenle/arşivle/paylaş/devret/iş koluna taşı/bağla/hatırlat/sıra sabitle/iptal/sil).
+  - ✅ Sıra numarası (pin-aware, ⚓ dahil) — TasksPanel'den.
+  - ℹ️ Görev detayı: Neural Link davranışıyla (kart inline genişletme + "DIŞARI TAŞI" yüzen pencere + ⋮ menü). Kullanıcının önceki "sağdan drawer" isteği, "birebir Neural Link gibi olsun" (ekran görüntülü) son direktifiyle bu şekilde karşılandı; ayrı drawer isterse eklenebilir.
+  - ℹ️ Notlar/Dosyalar/Ekip menü öğeleri şimdilik mevcut panellere yönlendirir (Aşama 3'te Kolay'a alınacak). "Görevler" artık Ana Sayfa ile aynı (sıçrama yok).
+  - **Test**: Ana ajan görsel doğrulama (Playwright, preview) — Kolay'da gömülü panel render, iş kolu filtresi + stat kartları + kartlar (3 düğme) + ⋮ menü TÜM fonksiyonlarla açıldı, DETAYLI düğmesi yok. Lint temiz. Detaylı görünüm etkilenmedi.
+  - **SIRADAKİ**: Kalan temalar (Profesyonel → Teknik → Aydınlık → Pano) aynı yaklaşımla sırayla; kullanıcı "yap" deyince.
 
 
 - Sertex e-postaları okuyabilecek, cevaplayabilecek
