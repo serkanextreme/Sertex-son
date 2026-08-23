@@ -807,16 +807,17 @@ Kullanıcı geri bildirimi: dün eklenen 6 tema (arayüz) görsel olarak güzel 
 - **KRİTİK kısıt**: Detaylı (varsayılan) görünüm ve mevcut tüm akışlar HİÇBİR ŞEKİLDE bozulmayacak. Sıralı ilerlenecek; her tema için önce plan → kullanıcı onayı → uygulama → test.
 - **İlk adım (plan)**: hangi temadan başlanacağı + hangi fonksiyonların 1. öncelik olduğu kullanıcıyla netleştirilecek.
 - **KARARLAR (kullanıcı onayı 2026-06)**: Sıra = **önce KOLAY**, sonra diğerleri sırayla. Aşama sırası = a (Aşama 1 temel → 2 → 3, PRD'deki gibi). Görev detayı = **sağdan içeri açılan çekmece (drawer)**, Kolay'ın sade/aydınlık dilinde. Kullanıcı "YAP" diyene kadar KOD YAZILMAYACAK (henüz "bekle" dedi).
-- **Sıraya alınan kullanıcı notları — KOLAY (2026-06)**: ✅ UYGULANDI (aşağıdaki yöntemle):
-  - Yöntem: `KolayInterface.jsx` yeniden yazıldı → Kolay kabuğu (slim sol menü + karşılama) + içine **gerçek `TasksPanel` bileşeni GÖMÜLDÜ** (`kolay-tasks-panel`). Böylece tek hamlede TÜM istekler birebir Neural Link deneyimiyle geldi, Detaylı hiç değişmeden (TasksPanel paylaşılan; Kolay'a 2. örnek mount edilir).
-  - ✅ KOLAY sol menüsündeki "DETAYLI" düğmesi (`kolay-switch-detayli`) kaldırıldı (+ kullanılmayan importlar). Detaylı'ya geçiş Ayarlar → Temalar'dan.
-  - ✅ İş kolu seçici (Neural Link filtre ağacı: TÜMÜ/kollar/KOLSUZ) geldi.
-  - ✅ Kartlar birebir Neural Link `TaskCard`: sol tutamaçtan sürükle-sırala, sağ üst 3 düğme (küçült/genişlet-detach/⋮), ⋮ → tam `TaskContextMenu` (düzenle/arşivle/paylaş/devret/iş koluna taşı/bağla/hatırlat/sıra sabitle/iptal/sil).
-  - ✅ Sıra numarası (pin-aware, ⚓ dahil) — TasksPanel'den.
-  - ℹ️ Görev detayı: Neural Link davranışıyla (kart inline genişletme + "DIŞARI TAŞI" yüzen pencere + ⋮ menü). Kullanıcının önceki "sağdan drawer" isteği, "birebir Neural Link gibi olsun" (ekran görüntülü) son direktifiyle bu şekilde karşılandı; ayrı drawer isterse eklenebilir.
-  - ℹ️ Notlar/Dosyalar/Ekip menü öğeleri şimdilik mevcut panellere yönlendirir (Aşama 3'te Kolay'a alınacak). "Görevler" artık Ana Sayfa ile aynı (sıçrama yok).
-  - **Test**: Ana ajan görsel doğrulama (Playwright, preview) — Kolay'da gömülü panel render, iş kolu filtresi + stat kartları + kartlar (3 düğme) + ⋮ menü TÜM fonksiyonlarla açıldı, DETAYLI düğmesi yok. Lint temiz. Detaylı görünüm etkilenmedi.
-  - **SIRADAKİ**: Kalan temalar (Profesyonel → Teknik → Aydınlık → Pano) aynı yaklaşımla sırayla; kullanıcı "yap" deyince.
+- **Sıraya alınan kullanıcı notları — KOLAY (2026-06)**: ✅ UYGULANDI (SADE görünüm korunarak — v2 yaklaşımı):
+  - ⚠️ Önce hatalı yaklaşım denendi (tüm `TasksPanel` Kolay'a gömüldü) → kullanıcı "büyütülmüş Neural Link, ana görünümü bozdun" dedi → git `e42524e`'den sade Kolay geri yüklendi.
+  - ✅ DOĞRU yaklaşım: sade kart ızgarası KORUNDU, panel chrome'u (stat/tab/export) GETİRİLMEDİ; kartların ÜSTÜNE fonksiyonlar eklendi (`KolayInterface.jsx` yeniden yazıldı).
+  - ✅ "DETAYLI" düğmesi kaldırıldı (Ayarlar → Temalar'dan geçilir).
+  - ✅ Arama çubuğu ALTINA iş kolu seçici chip'leri (Tümü / kollar / Kolsuz) — `kolay-cat-filter`.
+  - ✅ Her kartta ⋮ menü (`kolay-task-menu`, portal): Düzenle · Tamamlandı · Beklemeye al · Aktif yap · İş Koluna Taşı (alt-menü) · Özellik Tanımla (Paylaş) · Arşivle · Sil. Düzenle→gerçek `EditTaskModal`, Paylaş→gerçek `ShareTaskModal` yeniden kullanıldı. Aksiyonlar `tasksApi` (setStatus/setArchived/update/delete) ile.
+  - ✅ Sıra numarası rozeti (1,2,3…) + sürükle-sırala (⠿ tutamaç, `framer-motion Reorder` + `tasksApi.reorder`; sadece filtre/arama yokken aktif).
+  - ⚠️ ÖNEMLİ HATA/DERS: menü ilk sürümde `AnimatePresence` + `createPortal` sarmalayıcısı yüzünden HİÇ açılmıyordu → AnimatePresence kaldırılıp portal doğrudan koşullu render edilince düzeldi.
+  - ℹ️ İleri/nadir aksiyonlar (kilit/OTP, tekrarlı hatırlatma, görev bağlama/grup, tek görev export, sıra no sabitleme, devret) SADE menüye bilinçli KONULMADI (Kolay = basit). İstenirse eklenebilir.
+  - **Test**: Ana ajan Playwright (preview) — sade görünüm korundu, chip filtre + sıra no + ⋮ menü (7-8 aksiyon) + iş kolu alt-menü + gerçek EditTaskModal açılışı doğrulandı; DETAYLI yok; Detaylı görünüm etkilenmedi (yalnızca KolayInterface.jsx değişti). Lint temiz.
+  - **SIRADAKİ**: Profesyonel → Teknik → Aydınlık → Pano aynı "sade kabuk + kartlara fonksiyon" yaklaşımıyla; kullanıcı "yap" deyince.
 
 
 - Sertex e-postaları okuyabilecek, cevaplayabilecek
