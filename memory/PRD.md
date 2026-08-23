@@ -16,6 +16,7 @@ Kullanıcı isteği (görselli): Kolay Ana Sayfa görev kartları referans görs
 - Mevcut doğrulanmış handler'lar (completeTask, openMenu→tam ContextMenu, dnd-kit sıralama) aynen korundu; yeni backend/endpoint yok. Detaylı (Neural Link) arayüzüne DOKUNULMADI.
 - **Test**: Ana ajan görsel doğrulama (Playwright) — zengin grid render (uyarı ikonu + kırmızı çerçeve + ⚓ + 🕐 + 📄), küçült toggle kartı kompaktladı, ⋮ tam 16-öğeli menü açıldı. Lint temiz.
 - **Bekleyen (backlog, kullanıcı "bekle not al" dedi)**: Kolay yan menü Notlar/Dosyalar/Ekip hâlâ Detaylı'ya yönlendiriyor — Kolay içinde açılması istendi ama şimdilik ertelendi.
+- **Bekleyen (backlog, YAPMA — sadece not)**: Detaylı (Neural Link) açılınca görevler üst üste biniyor/taşıyor → görevler ekrana otomatik sığdırılsın (auto-fit / taşma düzeltmesi). Kullanıcı açık şekilde "bekle yapma" dedi.
 - **Yayın**: preview'de; canlıya (sertex-ai.com) için Deploy gerekir.
 
 
