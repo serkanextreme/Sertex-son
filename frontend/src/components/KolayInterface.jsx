@@ -1,6 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { motion, Reorder, useDragControls } from "framer-motion";
+import { motion } from "framer-motion";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  rectSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   Home,
   ListTodo,
@@ -13,22 +27,22 @@ import {
   Check,
   MoreVertical,
   GripVertical,
-  Pause,
-  Play,
-  Edit3,
-  Tag,
-  Archive,
-  Trash2,
-  Share2,
-  ChevronRight,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { tasksApi, taskCategoriesApi } from "../lib/api";
+import { tasksApi, taskCategoriesApi, taskLockApi } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { confirmDialog } from "../lib/confirm";
 import { flattenTree } from "../lib/categoryTree";
+import { ContextMenu } from "./TaskContextMenu";
 import { EditTaskModal } from "./tasks/EditTaskModal";
 import { ShareTaskModal } from "./tasks/ShareTaskModal";
+import { ReassignModal } from "./tasks/ReassignModal";
+import { LockConfigModal } from "./tasks/LockConfigModal";
+import { UnlockOtpModal } from "./tasks/UnlockOtpModal";
+import { OtpDisplayModal } from "./tasks/OtpDisplayModal";
+import { LinkTasksModal } from "./tasks/LinkTasksModal";
+import { printTasks, exportTasksExcel, exportTasksWord } from "../lib/taskExport";
 
 // Son tarih + duruma göre basit durum rozeti (Sertex'te ayrı "öncelik" alanı yok).
 const bucketOf = (t) => {
@@ -50,16 +64,8 @@ const fmtDate = (iso) => {
   }
 };
 
-/**
- * KOLAY arayüzü — SADE görünüm korunur (slim menü + arama + "Bugünkü Görevler"
- * kart ızgarası). Kartların üstüne, panel chrome'u GETİRMEDEN, Neural Link
- * fonksiyonları eklendi: her kartta ⋮ menü (Düzenle/Tamamla/Beklet/Aktif/İş
- * koluna taşı/Paylaş/Arşivle/Sil), sürükle-sırala (⠿ tutamaç) + sıra numarası,
- * arama altında iş kolu seçici. Detaylı görünüm hiç değişmez.
- */
-
-// Sade kart gövdesi (görsel) — sürüklenebilir/statik iki sarmalayıcı da bunu kullanır.
-const KolayCardBody = ({ task, index, catName, onComplete, onMenu, dragControls }) => {
+// Sade kart gövdesi — sürüklenebilir/statik iki durumda da kullanılır.
+const KolayCardBody = ({ task, number, catName, onComplete, onMenu, dragHandleProps }) => {
   const b = bucketOf(task);
   const badgeColor = b.color === "accent" ? "rgb(var(--sx-accent-rgb))" : b.color;
   const due = fmtDate(task.due_date);
@@ -68,19 +74,18 @@ const KolayCardBody = ({ task, index, catName, onComplete, onMenu, dragControls 
       className="glass-panel rounded-xl p-4 border border-sertex-cyan/25 flex flex-col h-full relative group"
       data-testid={`kolay-card-${task.id}`}
     >
-      {dragControls && (
+      {dragHandleProps && (
         <button
           type="button"
-          onPointerDown={(e) => { e.preventDefault(); dragControls.start(e); }}
+          {...dragHandleProps}
           data-testid={`kolay-drag-${task.id}`}
           title="Sürükleyip sırala"
           aria-label="Sürükleyip sırala"
-          className="absolute top-2 left-2 opacity-30 hover:opacity-100 text-sertex-cyan/70 hover:text-sertex-cyan cursor-grab active:cursor-grabbing transition-opacity"
+          className="absolute top-2 left-2 opacity-30 hover:opacity-100 text-sertex-cyan/70 hover:text-sertex-cyan cursor-grab active:cursor-grabbing transition-opacity touch-none"
         >
           <GripVertical className="h-4 w-4" />
         </button>
       )}
-      {/* ⋮ menü */}
       <button
         type="button"
         onClick={(e) => {
@@ -97,7 +102,7 @@ const KolayCardBody = ({ task, index, catName, onComplete, onMenu, dragControls 
 
       <div className="text-sertex-text font-semibold leading-snug mb-1 line-clamp-2 pr-8 pl-5">
         <span className="text-sertex-cyan tabular-nums font-mono mr-1" data-testid={`kolay-num-${task.id}`}>
-          {index + 1}.
+          {number}.
         </span>
         {task.title}
       </div>
@@ -125,26 +130,132 @@ const KolayCardBody = ({ task, index, catName, onComplete, onMenu, dragControls 
   );
 };
 
-// Sürüklenebilir sarmalayıcı — Reorder.Item + kendi drag controls'u.
-const KolayReorderItem = ({ task, index, catName, onComplete, onMenu }) => {
-  const controls = useDragControls();
+// dnd-kit sürüklenebilir sarmalayıcı (2 yönlü ızgara sıralaması).
+const KolaySortableCard = ({ task, number, catName, onComplete, onMenu }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 20 : undefined,
+  };
   return (
-    <Reorder.Item
-      value={task}
-      dragListener={false}
-      dragControls={controls}
-      as="div"
-      layout
-    >
+    <div ref={setNodeRef} style={style} {...attributes}>
       <KolayCardBody
         task={task}
-        index={index}
+        number={number}
         catName={catName}
         onComplete={onComplete}
         onMenu={onMenu}
-        dragControls={controls}
+        dragHandleProps={listeners}
       />
-    </Reorder.Item>
+    </div>
+  );
+};
+
+// Kolay içi görev ekleme formu (Neural Link'e ATMADAN).
+const KolayAddModal = ({ cats, onClose, onCreated }) => {
+  const [title, setTitle] = useState("");
+  const [desc, setDesc] = useState("");
+  const [catId, setCatId] = useState("");
+  const [due, setDue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const flat = useMemo(() => flattenTree(cats), [cats]);
+
+  const submit = async () => {
+    if (!title.trim()) { toast.error("Başlık gerekli"); return; }
+    setSaving(true);
+    try {
+      await tasksApi.create(
+        title.trim(),
+        desc.trim(),
+        due ? new Date(due).toISOString() : null,
+        null,
+        catId ? { category_id: catId } : {},
+      );
+      toast.success("Görev eklendi");
+      onCreated();
+      onClose();
+    } catch {
+      toast.error("Görev eklenemedi");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose} data-testid="kolay-add-overlay">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="glass-panel border border-sertex-cyan/40 rounded-xl p-5 w-full max-w-md"
+        onClick={(e) => e.stopPropagation()}
+        data-testid="kolay-add-modal"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <div className="display-text text-sertex-cyan neon-glow flex items-center gap-2"><Plus className="h-4 w-4" /> YENİ GÖREV</div>
+          <button onClick={onClose} data-testid="kolay-add-close" className="text-sertex-textMuted hover:text-sertex-cyan"><X className="h-5 w-5" /></button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <div className="hud-text text-sertex-textMuted mb-1">BAŞLIK</div>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+              autoFocus
+              data-testid="kolay-add-title"
+              placeholder="Görev başlığı..."
+              className="w-full px-3 py-2.5 rounded-lg bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-sm focus:border-sertex-cyan outline-none"
+            />
+          </div>
+          <div>
+            <div className="hud-text text-sertex-textMuted mb-1">AÇIKLAMA</div>
+            <textarea
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              data-testid="kolay-add-desc"
+              rows={2}
+              placeholder="Opsiyonel açıklama..."
+              className="w-full px-3 py-2.5 rounded-lg bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-sm focus:border-sertex-cyan outline-none resize-none"
+            />
+          </div>
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <div className="hud-text text-sertex-textMuted mb-1">İŞ KOLU</div>
+              <select
+                value={catId}
+                onChange={(e) => setCatId(e.target.value)}
+                data-testid="kolay-add-cat"
+                className="w-full px-3 py-2.5 rounded-lg bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-sm focus:border-sertex-cyan outline-none"
+              >
+                <option value="">— İş kolu yok —</option>
+                {flat.map((c) => (
+                  <option key={c.id} value={c.id}>{"\u00A0".repeat((c.__depth || 0) * 2)}{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex-1">
+              <div className="hud-text text-sertex-textMuted mb-1">SON TARİH</div>
+              <input
+                type="datetime-local"
+                value={due}
+                onChange={(e) => setDue(e.target.value)}
+                data-testid="kolay-add-due"
+                className="w-full px-3 py-2.5 rounded-lg bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-sm focus:border-sertex-cyan outline-none"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose} data-testid="kolay-add-cancel" className="px-4 py-2 rounded-lg border border-sertex-textMuted/30 text-sertex-textMuted hover:text-sertex-text font-mono text-sm">İPTAL</button>
+          <button onClick={submit} disabled={saving} data-testid="kolay-add-submit" className="px-4 py-2 rounded-lg bg-sertex-cyan/15 border border-sertex-cyan text-sertex-cyan hover:bg-sertex-cyan/25 font-mono text-sm neon-glow disabled:opacity-50">
+            {saving ? "EKLENİYOR..." : "EKLE"}
+          </button>
+        </div>
+      </motion.div>
+    </div>,
+    document.body,
   );
 };
 
@@ -152,24 +263,35 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
   const { user, teamFeaturesVisible } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [cats, setCats] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
-  const [catFilter, setCatFilter] = useState(""); // "" = tümü · "__none__" = kolsuz · id
-  const [menu, setMenu] = useState(null); // { task, x, y }
-  const [catSub, setCatSub] = useState(false);
+  const [catFilter, setCatFilter] = useState("");
+  const [activeKey, setActiveKey] = useState("home");
+  const [showAdd, setShowAdd] = useState(false);
+  // ⋮ menü + modallar
+  const [ctxMenu, setCtxMenu] = useState(null); // { task, x, y }
   const [editing, setEditing] = useState(null);
   const [sharing, setSharing] = useState(null);
-  const reorderTimer = useRef(null);
+  const [reassigning, setReassigning] = useState(null);
+  const [lockConfig, setLockConfig] = useState(null);
+  const [unlockOtp, setUnlockOtp] = useState(null);
+  const [otpDisplay, setOtpDisplay] = useState(null);
+  const [linkModal, setLinkModal] = useState(null); // { mode, taskId?, groupId? }
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
   const load = () => {
     setLoading(true);
     Promise.all([
       tasksApi.list(false, "mine").catch(() => []),
       taskCategoriesApi.list("my_tasks").catch(() => []),
+      tasksApi.listGroups().catch(() => []),
     ])
-      .then(([ts, cs]) => {
+      .then(([ts, cs, gs]) => {
         setTasks(Array.isArray(ts) ? ts : []);
         setCats(Array.isArray(cs) ? cs : []);
+        setGroups(Array.isArray(gs) ? gs : []);
       })
       .finally(() => setLoading(false));
   };
@@ -179,6 +301,7 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
 
   const flatCats = useMemo(() => flattenTree(cats), [cats]);
   const catName = (id) => flatCats.find((c) => c.id === id)?.name || null;
+  const groupById = useMemo(() => Object.fromEntries((groups || []).map((g) => [g.id, g])), [groups]);
 
   const activeTasks = useMemo(() => {
     let base = tasks.filter((t) => t.status !== "done" && !t.archived && !t.deleted);
@@ -195,97 +318,159 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
     });
   }, [tasks, flatCats, q, catFilter]);
 
+  const numberOf = useMemo(() => {
+    const m = {};
+    activeTasks.forEach((t, i) => { m[t.id] = i + 1; });
+    return m;
+  }, [activeTasks]);
+
   const canReorder = !q.trim() && !catFilter;
+  const closeMenu = () => setCtxMenu(null);
 
-  const closeMenu = () => { setMenu(null); setCatSub(false); };
-
-  // ---- Aksiyonlar (tasksApi + reload) ----
+  // ---- Aksiyonlar (tasksApi + reload) — TasksPanel ile aynı davranış ----
   const completeTask = async (t) => {
     try {
       await tasksApi.setStatus(t.id, "done");
       setTasks((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: "done" } : x)));
       toast.success("Görev tamamlandı");
-    } catch {
-      toast.error("Tamamlanamadı");
-    }
+    } catch { toast.error("Tamamlanamadı"); }
   };
-  const doStatus = async (t, status, label) => {
-    closeMenu();
-    try {
-      await tasksApi.setStatus(t.id, status);
-      toast.success(label);
-      load();
-    } catch {
-      toast.error("Güncellenemedi");
-    }
+  const setStatus = async (id, status) => {
+    try { await tasksApi.setStatus(id, status); load(); } catch { toast.error("Güncellenemedi"); }
   };
-  const doArchive = async (t) => {
-    closeMenu();
-    try {
-      await tasksApi.setArchived(t.id, true);
-      toast.success("Arşivlendi");
-      load();
-    } catch {
-      toast.error("Arşivlenemedi");
-    }
+  const setArchived = async (id, archived) => {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+    toast.success(archived ? "Görev arşivlendi" : "Arşivden çıkarıldı");
+    try { await tasksApi.setArchived(id, archived); } catch { toast.error("İşlem başarısız — geri alınıyor"); load(); }
   };
-  const doDelete = async (t) => {
-    closeMenu();
-    const ok = await confirmDialog({
-      title: "GÖREVİ SİL",
-      message: `"${t.title}" silinsin mi?\nGörev çöp kutusuna taşınır.`,
-      confirmText: "SİL",
-      cancelText: "VAZGEÇ",
-      danger: true,
-    });
+  const removeTask = async (id, title) => {
+    const ok = await confirmDialog({ title: "GÖREVİ SİL", message: `"${title}" çöp kutusuna taşınsın mı?`, confirmText: "SİL", cancelText: "VAZGEÇ", danger: true });
     if (!ok) return;
-    try {
-      await tasksApi.delete(t.id);
-      toast.success("Silindi");
-      load();
-    } catch {
-      toast.error("Silinemedi");
-    }
+    try { await tasksApi.delete(id); load(); toast.success("Çöp kutusuna taşındı"); }
+    catch (e) { toast.error(e?.response?.status === 423 ? (e.response.data?.detail || "Görev kilitli") : "Silinemedi"); }
   };
-  const doCategory = async (t, catId) => {
-    closeMenu();
+  const cancelTask = async (id, title) => {
+    const ok = await confirmDialog({ title: "GÖREVİ İPTAL ET", message: `"${title}" iptal edilsin mi?\nArşivin İPTAL grubuna taşınır.`, confirmText: "İPTAL ET", cancelText: "VAZGEÇ", danger: true });
+    if (!ok) return;
+    try { await tasksApi.cancel(id); load(); toast.success("Görev iptal edildi"); }
+    catch (e) { toast.error(e?.response?.status === 423 ? (e.response.data?.detail || "Görev kilitli") : "İptal başarısız"); }
+  };
+  const setTaskCategory = async (id, categoryId) => {
     try {
-      await tasksApi.update(t.id, { category_id: catId });
-      toast.success(catId ? "İş koluna taşındı" : "İş kolundan çıkarıldı");
-      load();
-    } catch {
-      toast.error("Taşınamadı");
+      await tasksApi.update(id, { category_id: categoryId || "" });
+      const name = categoryId ? (catName(categoryId) || "İş Kolu") : "Kolsuz";
+      toast.success(`Görev → ${name}`); load();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Değiştirilemedi"); }
+  };
+  const setTaskReminderDays = async (id, days) => {
+    try { await tasksApi.update(id, { reminder_days: days == null ? 0 : days, reminder_disabled: false }); toast.success(days == null ? "Uyarı: varsayılan" : `Uyarı: ${days} gün önce`); load(); }
+    catch { toast.error("Değiştirilemedi"); }
+  };
+  const setTaskReminderDisabled = async (id, disabled) => {
+    try { await tasksApi.update(id, { reminder_disabled: !!disabled }); toast.success(disabled ? "Hatırlatıcı kapatıldı" : "Hatırlatıcı aktif"); load(); }
+    catch { toast.error("Değiştirilemedi"); }
+  };
+  const setTaskDigestMuted = async (id, muted) => {
+    try { await tasksApi.update(id, { digest_muted: !!muted }); toast.success(muted ? "Sabah özetinden çıkarıldı" : "Sabah özetine eklendi"); load(); }
+    catch { toast.error("Değiştirilemedi"); }
+  };
+  const setTaskPin = async (taskId, pinned, number) => {
+    if (pinned && number != null) {
+      const dup = tasks.find((t) => t.id !== taskId && t.status !== "done" && t.number_pinned && t.pinned_number === number);
+      if (dup) { toast.error(`${number} numarası zaten "${dup.title}" görevine sabit`); return; }
     }
+    try { await tasksApi.update(taskId, { number_pinned: pinned, pinned_number: pinned ? number : null }); toast.success(pinned ? `Sıra numarası sabitlendi: ${number}` : "Sabit kaldırıldı"); load(); }
+    catch (e) { toast.error(e?.response?.data?.detail || "İşlem başarısız"); }
+  };
+  const setReminder = async (id, iso, opts = {}) => {
+    try { await tasksApi.setReminder(id, iso, opts); load(); toast.success("Hatırlatma kuruldu"); }
+    catch { toast.error("Hatırlatma kurulamadı"); }
+  };
+  const clearReminder = async (id) => {
+    try { await tasksApi.setReminder(id, null); load(); toast.success("Hatırlatma iptal edildi"); }
+    catch { toast.error("İptal edilemedi"); }
+  };
+  const reassignTask = async (id, newOwnerId) => { await tasksApi.reassign(id, newOwnerId); load(); };
+  const transferTaskToCompany = async (id, companyId) => { await tasksApi.transferToCompany(id, companyId); load(); };
+  const demoteToSubtask = async (id) => {
+    try { await tasksApi.demoteToSubtask(id); toast.success("Alt göreve dönüştürüldü"); } catch (e) { toast.error(e?.response?.data?.detail || "Dönüştürülemedi"); }
+    load();
+  };
+  const removeFromGroup = async (gid, tid) => {
+    try { await tasksApi.removeGroupMember(gid, tid); toast.success("Görev gruptan çıkarıldı"); load(); } catch { toast.error("Çıkarılamadı"); }
   };
   const saveEdit = async (patch) => {
-    try {
-      await tasksApi.update(editing.id, patch);
-      load();
-      toast.success("Kaydedildi");
-    } catch {
-      toast.error("Kaydedilemedi");
+    try { await tasksApi.update(editing.id, patch); load(); toast.success("Kaydedildi"); } catch { toast.error("Kaydedilemedi"); }
+  };
+  const issueOtp = async (task) => {
+    try { const res = await taskLockApi.issueOtp(task.id); setOtpDisplay({ task, ...res }); }
+    catch (e) { toast.error(e?.response?.data?.detail || "OTP üretilemedi"); }
+  };
+
+  // ContextMenu onAction — TaskCard.handleAction ile birebir.
+  const handleAction = (task, action, extra) => {
+    if (action === "delete") removeTask(task.id, task.title);
+    else if (action === "edit") setEditing(task);
+    else if (action === "share") setSharing(task);
+    else if (action === "archive") setArchived(task.id, true);
+    else if (action === "unarchive") setArchived(task.id, false);
+    else if (action === "cancel-task") cancelTask(task.id, task.title);
+    else if (action === "reset-size") { /* Kolay kartları sabit boyut — noop */ }
+    else if (action === "reminder-cancel") clearReminder(task.id);
+    else if (action === "link-tasks") setLinkModal({ mode: "create", taskId: task.id });
+    else if (action === "group-edit") { if (task.group_id) setLinkModal({ mode: "edit", groupId: task.group_id }); }
+    else if (action === "group-remove") { if (task.group_id) removeFromGroup(task.group_id, task.id); }
+    else if (action === "demote-to-subtask") demoteToSubtask(task.id);
+    else if (action === "digest-mute-toggle") setTaskDigestMuted(task.id, !task.digest_muted);
+    else if (action.startsWith("export-")) {
+      const catMap = Object.fromEntries((cats || []).map((c) => [c.id, c.name]));
+      (async () => {
+        try {
+          if (action === "export-print") printTasks(task, catMap);
+          else if (action === "export-excel") exportTasksExcel(task, catMap);
+          else if (action === "export-word") await exportTasksWord(task, catMap);
+        } catch (e) {
+          toast.error(e?.message === "popup-blocked" ? "Açılır pencere engellendi" : "Dışa aktarılamadı");
+        }
+      })();
+    } else if (action.startsWith("reminder-")) {
+      const repeat = Math.max(1, extra?.repeat || 1);
+      const opts = repeat > 1 ? { intervalMin: extra.intervalMin, repeatLeft: repeat, repeatTotal: repeat } : {};
+      if (action === "reminder-custom") setReminder(task.id, extra.iso, opts);
+      else setReminder(task.id, new Date(Date.now() + extra.offset).toISOString(), opts);
+    } else {
+      setStatus(task.id, action); // done / paused / pending / overdue
     }
   };
 
-  const handleReorder = (next) => {
+  const onDragEnd = (e) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const oldIndex = activeTasks.findIndex((t) => t.id === active.id);
+    const newIndex = activeTasks.findIndex((t) => t.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const next = arrayMove(activeTasks, oldIndex, newIndex);
     setTasks((prev) => {
       const activeIds = new Set(next.map((t) => t.id));
       const rest = prev.filter((t) => !activeIds.has(t.id));
       return [...next, ...rest];
     });
-    if (reorderTimer.current) clearTimeout(reorderTimer.current);
-    reorderTimer.current = setTimeout(() => {
-      tasksApi.reorder(next.map((t) => t.id)).catch(() => {});
-    }, 600);
+    tasksApi.reorder(next.map((t) => t.id)).catch(() => {});
   };
 
   const openMenu = (task, rect) => {
-    setCatSub(false);
-    // Menü genişliği ~220 — butonun soluna/altına yerleştir, ekran dışına taşma.
-    const x = Math.min(rect.right, window.innerWidth - 8) - 220;
-    const y = Math.min(rect.bottom + 4, window.innerHeight - 360);
-    setMenu({ task, x: Math.max(8, x), y: Math.max(8, y) });
+    setCtxMenu({ task, x: rect.left - 200, y: rect.bottom + 4 });
   };
+
+  const linkCandidates = useMemo(() => {
+    if (!linkModal) return { candidates: [], preselected: [], group: null };
+    const ungrouped = tasks.filter((t) => !t.group_id && !t.archived && !t.deleted);
+    if (linkModal.mode === "edit" && linkModal.groupId) {
+      const members = tasks.filter((t) => t.group_id === linkModal.groupId);
+      return { candidates: [...members, ...ungrouped], preselected: members.map((t) => t.id), group: groupById[linkModal.groupId] || null };
+    }
+    return { candidates: ungrouped, preselected: linkModal.taskId ? [linkModal.taskId] : [], group: null };
+  }, [linkModal, tasks, groupById]);
 
   const greeting = (() => {
     const h = new Date().getHours();
@@ -297,26 +482,15 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
   const today = new Date().toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
 
   const MENU = [
-    { key: "home", label: "Ana Sayfa", icon: Home, onClick: null },
-    { key: "tasks", label: "Görevler", icon: ListTodo, onClick: null },
-    ...(teamFeaturesVisible ? [{ key: "team", label: "Ekip", icon: Users, onClick: () => onOpenSection?.("team") }] : []),
-    { key: "notes", label: "Notlar", icon: StickyNote, onClick: () => onOpenSection?.("notes") },
-    { key: "files", label: "Dosyalar", icon: FolderOpen, onClick: () => onOpenSection?.("files") },
+    { key: "home", label: "Ana Sayfa", icon: Home, onClick: () => setActiveKey("home") },
+    { key: "tasks", label: "Görevler", icon: ListTodo, onClick: () => setActiveKey("tasks") },
+    ...(teamFeaturesVisible ? [{ key: "team", label: "Ekip", icon: Users, onClick: () => { setActiveKey("team"); onOpenSection?.("team"); } }] : []),
+    { key: "notes", label: "Notlar", icon: StickyNote, onClick: () => { setActiveKey("notes"); onOpenSection?.("notes"); } },
+    { key: "files", label: "Dosyalar", icon: FolderOpen, onClick: () => { setActiveKey("files"); onOpenSection?.("files"); } },
     { key: "settings", label: "Ayarlar", icon: SettingsIcon, onClick: () => onOpenSettings?.() },
   ];
 
-  const menuTask = menu?.task;
-
-  const renderCard = (t, i) => (
-    <KolayCardBody
-      key={t.id}
-      task={t}
-      index={i}
-      catName={catName}
-      onComplete={completeTask}
-      onMenu={openMenu}
-    />
-  );
+  const ctxTask = ctxMenu?.task;
 
   return (
     <div
@@ -329,19 +503,19 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
       }}
     >
       <div className="flex min-h-full">
-        {/* Slim sol menü — DETAYLI düğmesi kaldırıldı (Ayarlar → Temalar'dan geçilir). */}
+        {/* Slim sol menü */}
         <div className="w-[132px] shrink-0 border-r border-sertex-cyan/15 p-3 flex flex-col gap-1.5 sticky top-0 self-start" data-testid="kolay-menu">
           <div className="display-text text-sertex-cyan neon-glow tracking-[0.15em] text-xs mb-2 px-1">
             GÖREV<br />MERKEZİ
           </div>
           {MENU.map((m) => {
             const Icon = m.icon;
-            const active = m.key === "home" || m.key === "tasks";
+            const active = m.key === activeKey;
             return (
               <button
                 key={m.key}
                 type="button"
-                onClick={m.onClick || undefined}
+                onClick={m.onClick}
                 data-testid={`kolay-menu-${m.key}`}
                 className={`w-full flex flex-col items-center gap-1 py-3 rounded-lg border transition-colors ${
                   active
@@ -356,9 +530,8 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
           })}
         </div>
 
-        {/* İçerik */}
-        <div className="flex-1 min-w-0 p-5 lg:p-8 max-w-[1100px]">
-          {/* Karşılama */}
+        {/* İçerik — tam genişlik (max-w yok); sidebar açılınca right:360 ile daralır. */}
+        <div className="flex-1 min-w-0 p-5 lg:p-8">
           <div className="mb-5">
             <div className="hud-text text-sertex-textMuted">{today}</div>
             <h1 className="display-text text-2xl lg:text-3xl text-sertex-cyan neon-glow mt-1">
@@ -366,7 +539,6 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
             </h1>
           </div>
 
-          {/* Arama + Yeni Görev */}
           <div className="flex flex-col sm:flex-row gap-3 mb-3">
             <div className="relative flex-1">
               <Search className="h-4 w-4 text-sertex-textMuted absolute left-3 top-1/2 -translate-y-1/2" />
@@ -380,7 +552,7 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
             </div>
             <button
               type="button"
-              onClick={() => onOpenSection?.("tasks")}
+              onClick={() => setShowAdd(true)}
               data-testid="kolay-add-task"
               className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-sertex-cyan/15 border border-sertex-cyan text-sertex-cyan hover:bg-sertex-cyan/25 transition-colors font-mono text-sm neon-glow"
             >
@@ -388,12 +560,8 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
             </button>
           </div>
 
-          {/* İş kolu seçici — arama çubuğunun altında (Neural Link'teki gibi). */}
           {flatCats.length > 0 && (
-            <div
-              className="flex items-center gap-2 mb-6 overflow-x-auto scrollbar-sertex pb-1"
-              data-testid="kolay-cat-filter"
-            >
+            <div className="flex items-center gap-2 mb-6 overflow-x-auto scrollbar-sertex pb-1" data-testid="kolay-cat-filter">
               {[{ id: "", name: "Tümü" }, ...flatCats, { id: "__none__", name: "Kolsuz" }].map((c) => {
                 const sel = catFilter === c.id;
                 return (
@@ -419,9 +587,7 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
           <div className="hud-text text-sertex-cyan mb-3">BUGÜNKÜ GÖREVLER</div>
 
           {loading ? (
-            <div className="hud-text text-sertex-textMuted py-10 text-center" data-testid="kolay-loading">
-              YÜKLENİYOR...
-            </div>
+            <div className="hud-text text-sertex-textMuted py-10 text-center" data-testid="kolay-loading">YÜKLENİYOR...</div>
           ) : activeTasks.length === 0 ? (
             <div className="glass-panel corner-bracket rounded-xl p-8 text-center" data-testid="kolay-empty">
               <div className="text-sertex-text text-lg mb-1">🎉 Aktif görevin yok</div>
@@ -429,154 +595,88 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
                 {q || catFilter ? "Eşleşen görev bulunamadı." : "Yeni bir görev ekleyerek başla."}
               </div>
               {!q && !catFilter && (
-                <button
-                  type="button"
-                  onClick={() => onOpenSection?.("tasks")}
-                  data-testid="kolay-empty-add"
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-sertex-cyan text-sertex-cyan hover:bg-sertex-cyan/10 font-mono text-sm"
-                >
+                <button type="button" onClick={() => setShowAdd(true)} data-testid="kolay-empty-add" className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-sertex-cyan text-sertex-cyan hover:bg-sertex-cyan/10 font-mono text-sm">
                   <Plus className="h-4 w-4" /> Görev Ekle
                 </button>
               )}
             </div>
           ) : canReorder ? (
-            <Reorder.Group
-              axis="y"
-              values={activeTasks}
-              onReorder={handleReorder}
-              as="div"
-              className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3"
-              data-testid="kolay-task-grid"
-            >
-              {activeTasks.map((t, i) => (
-                <KolayReorderItem
-                  key={t.id}
-                  task={t}
-                  index={i}
-                  catName={catName}
-                  onComplete={completeTask}
-                  onMenu={openMenu}
-                />
-              ))}
-            </Reorder.Group>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+              <SortableContext items={activeTasks.map((t) => t.id)} strategy={rectSortingStrategy}>
+                <div
+                  className="grid gap-3"
+                  style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}
+                  data-testid="kolay-task-grid"
+                >
+                  {activeTasks.map((t) => (
+                    <KolaySortableCard key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3" data-testid="kolay-task-grid">
-              {activeTasks.map((t, i) => renderCard(t, i))}
+            <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }} data-testid="kolay-task-grid">
+              {activeTasks.map((t) => (
+                <KolayCardBody key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} />
+              ))}
             </div>
           )}
         </div>
       </div>
 
-      {/* ⋮ MENÜ (portal) */}
-      {menu && menuTask && createPortal(
-          <div
-            className="fixed inset-0 z-[100]"
-            onClick={closeMenu}
-            onContextMenu={(e) => { e.preventDefault(); closeMenu(); }}
-            data-testid="kolay-menu-overlay"
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.12 }}
-              className="fixed glass-panel border border-sertex-cyan/40 rounded-lg py-1 shadow-lg min-w-[220px]"
-              style={{ left: menu.x, top: menu.y, maxHeight: "calc(100vh - 16px)", overflowY: "auto" }}
-              onClick={(e) => e.stopPropagation()}
-              data-testid="kolay-task-menu"
-            >
-              {!catSub ? (
-                <>
-                  <MenuBtn icon={Edit3} label="Düzenle" onClick={() => { setEditing(menuTask); closeMenu(); }} testid="kolay-ctx-edit" />
-                  {menuTask.status !== "done" && (
-                    <MenuBtn icon={Check} label="Tamamlandı" color="text-emerald-300 hover:bg-emerald-500/15" onClick={() => doStatus(menuTask, "done", "Görev tamamlandı")} testid="kolay-ctx-done" />
-                  )}
-                  {menuTask.status !== "paused" && (
-                    <MenuBtn icon={Pause} label="Beklemeye al" color="text-yellow-300 hover:bg-yellow-500/15" onClick={() => doStatus(menuTask, "paused", "Beklemeye alındı")} testid="kolay-ctx-paused" />
-                  )}
-                  {menuTask.status !== "pending" && (
-                    <MenuBtn icon={Play} label="Aktif yap" onClick={() => doStatus(menuTask, "pending", "Aktif yapıldı")} testid="kolay-ctx-pending" />
-                  )}
-                  {flatCats.length > 0 && (
-                    <MenuBtn icon={Tag} label="İş Koluna Taşı" hasSub onClick={() => setCatSub(true)} testid="kolay-ctx-category" />
-                  )}
-                  <MenuBtn icon={Share2} label="Özellik Tanımla (Paylaş)" onClick={() => { setSharing(menuTask); closeMenu(); }} testid="kolay-ctx-share" />
-                  <MenuBtn icon={Archive} label="Arşivle" onClick={() => doArchive(menuTask)} testid="kolay-ctx-archive" />
-                  <MenuBtn icon={Trash2} label="Sil" color="text-rose-300 hover:bg-rose-500/15" onClick={() => doDelete(menuTask)} testid="kolay-ctx-delete" />
-                </>
-              ) : (
-                <div data-testid="kolay-ctx-category-sub">
-                  <div className="hud-text text-sertex-cyan px-3 py-1.5 border-b border-sertex-cyan/20 flex items-center gap-1">
-                    <Tag className="h-3 w-3" /> İŞ KOLU SEÇ
-                  </div>
-                  <MenuBtn
-                    icon={Tag}
-                    label="Kolsuz"
-                    active={!menuTask.category_id}
-                    onClick={() => doCategory(menuTask, null)}
-                    testid="kolay-ctx-cat-none"
-                  />
-                  {flatCats.map((c) => (
-                    <MenuBtn
-                      key={c.id}
-                      icon={Tag}
-                      label={c.name}
-                      active={menuTask.category_id === c.id}
-                      onClick={() => doCategory(menuTask, c.id)}
-                      testid={`kolay-ctx-cat-${c.id}`}
-                    />
-                  ))}
-                  <button
-                    onClick={() => setCatSub(false)}
-                    className="w-full text-left px-3 py-1.5 hud-text text-sertex-textMuted hover:text-sertex-cyan border-t border-sertex-cyan/15"
-                  >
-                    ← Geri
-                  </button>
-                </div>
-              )}
-            </motion.div>
-          </div>,
-          document.body,
-        )}
-
-      {/* Düzenle / Paylaş modalları — Neural Link ile aynı bileşenler. */}
-      {editing && (
-        <EditTaskModal
-          task={editing}
-          onClose={() => setEditing(null)}
-          onSave={saveEdit}
+      {/* TAM Neural Link ⋮ menüsü (gerçek ContextMenu bileşeni) */}
+      {ctxMenu && ctxTask && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          task={ctxTask}
+          onAction={(action, extra) => handleAction(ctxTask, action, extra)}
+          onClose={closeMenu}
           isTeamView={false}
+          onReassign={() => setReassigning(ctxTask)}
           categories={cats}
-          teamMembers={[]}
+          onSetCategory={(catId) => setTaskCategory(ctxTask.id, catId)}
+          onSetReminderDays={(d) => setTaskReminderDays(ctxTask.id, d)}
+          onSetReminderDisabled={(v) => setTaskReminderDisabled(ctxTask.id, v)}
           currentUser={user}
+          onOpenLockConfig={() => setLockConfig(ctxTask)}
+          onOpenUnlockOtp={() => setUnlockOtp(ctxTask)}
+          onIssueOtp={() => issueOtp(ctxTask)}
+          displayNumber={numberOf[ctxTask.id]}
+          onPinNumber={(n) => setTaskPin(ctxTask.id, true, n)}
+          onUnpinNumber={() => setTaskPin(ctxTask.id, false)}
+          archiveGroup={null}
+          isAdmin={false}
         />
       )}
+
+      {/* Modallar — Neural Link ile aynı bileşenler */}
+      {editing && (
+        <EditTaskModal task={editing} onClose={() => setEditing(null)} onSave={saveEdit} isTeamView={false} categories={cats} teamMembers={[]} currentUser={user} />
+      )}
       {sharing && (
-        <ShareTaskModal
-          task={sharing}
-          onClose={() => setSharing(null)}
-          onSaved={() => { setSharing(null); load(); }}
-        />
+        <ShareTaskModal task={sharing} onClose={() => setSharing(null)} onSaved={() => { setSharing(null); load(); }} />
+      )}
+      {reassigning && (
+        <ReassignModal task={reassigning} onClose={() => setReassigning(null)} onSave={(uid) => reassignTask(reassigning.id, uid)} onTransferCompany={(cid) => transferTaskToCompany(reassigning.id, cid)} />
+      )}
+      {lockConfig && (
+        <LockConfigModal task={lockConfig} onClose={() => setLockConfig(null)} onSaved={() => { setLockConfig(null); load(); }} />
+      )}
+      {unlockOtp && (
+        <UnlockOtpModal task={unlockOtp} onClose={() => setUnlockOtp(null)} onVerified={() => { setUnlockOtp(null); load(); }} />
+      )}
+      {otpDisplay && (
+        <OtpDisplayModal task={otpDisplay.task} code={otpDisplay.code} expiresAt={otpDisplay.expires_at} ttlMinutes={otpDisplay.ttl_minutes} onClose={() => setOtpDisplay(null)} />
+      )}
+      {linkModal && (
+        <LinkTasksModal candidateTasks={linkCandidates.candidates} preselectedIds={linkCandidates.preselected} group={linkCandidates.group} onClose={() => setLinkModal(null)} onSaved={() => { setLinkModal(null); load(); }} />
+      )}
+      {showAdd && (
+        <KolayAddModal cats={cats} onClose={() => setShowAdd(false)} onCreated={load} />
       )}
     </div>
   );
 };
-
-// Küçük menü butonu yardımcı bileşeni.
-const MenuBtn = ({ icon: Icon, label, onClick, color, hasSub, active, testid }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    data-testid={testid}
-    className={`w-full text-left px-3 py-1.5 hud-text flex items-center gap-2 transition-colors ${
-      color || "text-sertex-cyan hover:bg-sertex-cyan/10"
-    } ${active ? "bg-sertex-cyan/10" : ""}`}
-  >
-    <Icon className="h-3.5 w-3.5 shrink-0" />
-    <span className="flex-1">{label}</span>
-    {active && <Check className="h-3 w-3" />}
-    {hasSub && <ChevronRight className="h-3 w-3 opacity-60" />}
-  </button>
-);
 
 export default KolayInterface;

@@ -823,6 +823,14 @@ Kullanıcı geri bildirimi: dün eklenen 6 tema (arayüz) görsel olarak güzel 
 - **🐛 KOLAY sol menü aktif durumu (kullanıcı bildirdi 2026-06)**: Şu an "Ana Sayfa" ve "Görevler" İKİSİ BİRDEN sürekli yanık/aktif (`active = home || tasks`), tıklayınca sönmüyor. İSTENEN: aynı anda tek öğe aktif olsun, tıklamayla aktif/pasif doğru değişsin. ÇÖZÜM: `activeKey` state'i tut; highlight yalnızca aktif öğede. (Kullanıcı "yap" deyince.)
 - **🐛 KOLAY "Yeni Görev Ekle" Neural Link'e atıyor (kullanıcı bildirdi 2026-06)**: Buton şu an `onOpenSection("tasks")` ile Neural Link sidebar'ını açıyor. İSTENEN: Neural Link'e ATMADAN, Kolay'ın kendi içinde bir görev ekleme kartı/formu (başlık + açıklama + iş kolu + son tarih) açılsın → `tasksApi.create` → listeye eklensin. (Kullanıcı "yap" deyince.) NOT: aynı sıçrama `kolay-empty-add` boş-durum butonunda da var.
 - **🐛 KOLAY genişlik/reflow (kullanıcı bildirdi 2026-06)**: İçerik `max-w-[1100px]` ile sınırlı → sağda büyük boş alan kalıyor. İSTENEN: Neural Link (sidebar) GİZLİYKEN Kolay otomatik sağa uzayıp tüm genişliği kullansın; sidebar AÇILINCA (right:360) kalan alana sığacak şekilde daralıp ızgara yeniden dizilsin (taşma yok). ÇÖZÜM: `max-w-[1100px]` kaldır/esnet; grid sütunları alana göre otomatik (örn. `auto-fill/minmax` veya container'a bağlı). (Kullanıcı "yap" deyince.)
+- **✅ KOLAY 5 madde ÇÖZÜLDÜ (2026-06, "yap" onayıyla)** — `KolayInterface.jsx` yeniden yazıldı, sade görünüm korundu, Detaylı bozulmadı (yalnızca KolayInterface.jsx + dnd-kit paketleri):
+  1. ✅ Sürükle-sırala 2 YÖNLÜ (sağ-sol+yukarı-aşağı) — `@dnd-kit/core`+`@dnd-kit/sortable` (`rectSortingStrategy`) + `tasksApi.reorder`; bırakınca sıra numaraları anında yeniden atanıyor. (Test: kart 1→3 taşındı, numaralar güncellendi.)
+  2. ✅ ⋮ menü = TAM Neural Link `ContextMenu` (16 madde: Tamamlandı/Beklet/Aktif/Tarihi geçmiş/Düzenle/Sıra No Sabitle/Paylaş/İş Koluna Taşı/Boyutu Sıfırla/Dışa Aktar/Hatırlat/Yaklaşan Uyarısı/Sabah Özetinden Çıkar/Arşivle/Görevleri Bağla/İptal/Sil; Devret+Kilit kişisel scope'ta gizli — Neural Link ile aynı parite). Tüm handler'lar `tasksApi` + gerçek modallar (Edit/Share/Reassign/LockConfig/UnlockOtp/OtpDisplay/LinkTasks) bağlandı.
+  3. ✅ Sol menü aktif durumu — `activeKey` state; tek öğe aktif (artık ikisi birden yanmıyor).
+  4. ✅ "Yeni Görev Ekle" — Neural Link'e ATMIYOR; Kolay içi `KolayAddModal` (başlık+açıklama+iş kolu+son tarih → `tasksApi.create`).
+  5. ✅ Tam genişlik/reflow — `max-w` kaldırıldı; grid `repeat(auto-fill, minmax(300px,1fr))` alanı doldurur, sidebar açılınca daralıp yeniden dizilir.
+  - **Test**: Ana ajan Playwright (preview) — 5 madde + Detaylı sağlamlığı doğrulandı. Lint temiz. NOT: dnd-kit sürükleme Expo Go/mobil değil, WEB Kolay içindir.
+  - **SIRADAKİ (kullanıcı "yap" deyince)**: Profesyonel → Teknik → Aydınlık → Pano aynı yaklaşımla.
 
 
 - Sertex e-postaları okuyabilecek, cevaplayabilecek
