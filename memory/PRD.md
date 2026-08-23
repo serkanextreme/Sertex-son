@@ -10,6 +10,15 @@ Tam liste: `/app/frontend/public/Sertex-Feature-Listesi.pdf` (üretici script: `
 
 ## ✅ Tamamlanan Fazlar
 
+### Kolay Arayüzü — Ana Sayfa Zengin Görev Kartı (referans görsele göre) (2026-06 · fork) ✅
+Kullanıcı isteği (görselli): Kolay Ana Sayfa görev kartları referans görseldeki zengin görünüme çevrilsin (Detaylı'ya dokunmadan, sade grid korunarak). Kullanıcı seçimi: (a) tam zengin görünüm.
+- **Uygulama** (`KolayInterface.jsx` — `KolayCardBody` yeniden yazıldı): kart üst şeridi sol = sürükle tutamacı (GripVertical) + **tamamla kutucuğu** (`kolay-check-{id}`, tıkla→`completeTask`); sağ = **küçült/büyüt toggle** (`kolay-collapse-{id}`, ChevronsDownUp/UpDown) + **⋮ menü** (`kolay-menu-btn-{id}`). Durum etiketi süresi geçtiyse **AlertTriangle uyarı ikonu** + kırmızı kart çerçevesi, değilse renkli nokta. Başlıkta sıra no + sabitse **⚓ Anchor** (`kolay-pin-{id}`). Detay: **🕐 Clock** + "BİTİŞ: GG.AA.YYYY SS:DD" (`fmtDateTime`), **📄 FileText** + şirket/kişi etiketi (`company_name`/`assignee_name`) · iş kolu. Küçültünce açıklama/tarih/etiket gizlenir, sadece durum+başlık kalır (`collapsedIds` Set, oturum içi).
+- Mevcut doğrulanmış handler'lar (completeTask, openMenu→tam ContextMenu, dnd-kit sıralama) aynen korundu; yeni backend/endpoint yok. Detaylı (Neural Link) arayüzüne DOKUNULMADI.
+- **Test**: Ana ajan görsel doğrulama (Playwright) — zengin grid render (uyarı ikonu + kırmızı çerçeve + ⚓ + 🕐 + 📄), küçült toggle kartı kompaktladı, ⋮ tam 16-öğeli menü açıldı. Lint temiz.
+- **Bekleyen (backlog, kullanıcı "bekle not al" dedi)**: Kolay yan menü Notlar/Dosyalar/Ekip hâlâ Detaylı'ya yönlendiriyor — Kolay içinde açılması istendi ama şimdilik ertelendi.
+- **Yayın**: preview'de; canlıya (sertex-ai.com) için Deploy gerekir.
+
+
 ### Özellik — Arşiv Görünümünde "Tümünü Küçült / Büyüt" Kısayolu (2026-06 · fork) ✅
 Kullanıcı isteği: Detaylı (Neural Link) görevlerde bulunan "TÜMÜNÜ KÜÇÜLT / BÜYÜT" toplu kart küçült-büyüt kısayolu, **Arşiv**'e (Bitmiş/İptal/Silinmiş) tıklayınca orada da çıksın. "Hiçbir şeyi bozmadan."
 - **Uygulama** (`TasksPanel.jsx`, tek satır): collapse toolbar render koşulundan `!showArchived &&` kaldırıldı → toolbar artık arşivde de görünür. Mantık zaten hazırdı: arşiv `visibleTaskIds` (satır 1657 `sorted`) üzerinden çalışır, `toggleAllCollapsed`/`allVisibleCollapsed` bu id'leri kullanır, arşiv kartları da `cardPropsFor` üzerinden `collapsed` prop'unu alır (satır 1363). Yeni state/endpoint yok → sıfır regresyon riski.

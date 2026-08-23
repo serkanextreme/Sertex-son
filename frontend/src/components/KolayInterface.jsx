@@ -28,6 +28,12 @@ import {
   MoreVertical,
   GripVertical,
   X,
+  AlertTriangle,
+  Clock,
+  FileText,
+  Anchor,
+  ChevronsDownUp,
+  ChevronsUpDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { tasksApi, taskCategoriesApi, taskLockApi } from "../lib/api";
@@ -55,83 +61,134 @@ const bucketOf = (t) => {
   return { label: "Aktif", color: "accent" };
 };
 
-const fmtDate = (iso) => {
+const fmtDateTime = (iso) => {
   if (!iso) return null;
   try {
-    return new Date(iso).toLocaleDateString("tr-TR", { day: "numeric", month: "short" });
+    return new Date(iso).toLocaleString("tr-TR", {
+      day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+    });
   } catch {
     return null;
   }
 };
 
-// Sade kart gövdesi — sürüklenebilir/statik iki durumda da kullanılır.
-const KolayCardBody = ({ task, number, catName, onComplete, onMenu, dragHandleProps }) => {
+// Zengin kart gövdesi — referans görsele göre (kutucuk + uyarı ikonu + ⚓ + 🕐 + 📄 etiket + küçült/menü).
+const KolayCardBody = ({ task, number, catName, onComplete, onMenu, collapsed, onToggleCollapse, dragHandleProps }) => {
   const b = bucketOf(task);
   const badgeColor = b.color === "accent" ? "rgb(var(--sx-accent-rgb))" : b.color;
-  const due = fmtDate(task.due_date);
+  const overdue = b.label === "Süresi Geçti";
+  const dt = fmtDateTime(task.due_date);
+  const cat = catName(task.category_id);
+  const tag = task.company_name || task.assignee_name || null;
+  const pinnedNum = task.number_pinned && task.pinned_number != null ? task.pinned_number : number;
+
   return (
     <div
-      className="glass-panel rounded-xl p-4 border border-sertex-cyan/25 flex flex-col h-full relative group"
+      className="glass-panel rounded-xl p-3.5 border border-sertex-cyan/25 flex flex-col h-full relative group"
       data-testid={`kolay-card-${task.id}`}
+      style={overdue ? { borderColor: "rgba(244,63,94,0.45)" } : undefined}
     >
-      {dragHandleProps && (
-        <button
-          type="button"
-          {...dragHandleProps}
-          data-testid={`kolay-drag-${task.id}`}
-          title="Sürükleyip sırala"
-          aria-label="Sürükleyip sırala"
-          className="absolute top-2 left-2 opacity-30 hover:opacity-100 text-sertex-cyan/70 hover:text-sertex-cyan cursor-grab active:cursor-grabbing transition-opacity touch-none"
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
-      )}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          const r = e.currentTarget.getBoundingClientRect();
-          onMenu(task, r);
-        }}
-        data-testid={`kolay-menu-btn-${task.id}`}
-        aria-label="Görev menüsü"
-        className="absolute top-2 right-2 h-7 w-7 flex items-center justify-center rounded-lg border border-sertex-cyan/30 text-sertex-cyan hover:bg-sertex-cyan/15 hover:border-sertex-cyan transition-colors"
-      >
-        <MoreVertical className="h-4 w-4" />
-      </button>
+      {/* Üst şerit: sol = sürükle + tamamla kutucuğu · sağ = küçült/büyüt + ⋮ */}
+      <div className="flex items-start justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          {dragHandleProps && (
+            <button
+              type="button"
+              {...dragHandleProps}
+              data-testid={`kolay-drag-${task.id}`}
+              title="Sürükleyip sırala"
+              aria-label="Sürükleyip sırala"
+              className="opacity-30 hover:opacity-100 text-sertex-cyan/70 hover:text-sertex-cyan cursor-grab active:cursor-grabbing transition-opacity touch-none"
+            >
+              <GripVertical className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onComplete(task); }}
+            data-testid={`kolay-check-${task.id}`}
+            title="Tamamla"
+            aria-label="Görevi tamamla"
+            className="h-5 w-5 flex items-center justify-center rounded-md border-2 border-emerald-400/60 text-emerald-300 hover:bg-emerald-400/20 hover:border-emerald-400 transition-colors group/chk"
+          >
+            <Check className="h-3.5 w-3.5 opacity-0 group-hover/chk:opacity-100 transition-opacity" />
+          </button>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onToggleCollapse(task.id); }}
+            data-testid={`kolay-collapse-${task.id}`}
+            title={collapsed ? "Büyüt" : "Küçült"}
+            aria-label={collapsed ? "Büyüt" : "Küçült"}
+            className="h-7 w-7 flex items-center justify-center rounded-lg border border-sertex-cyan/30 text-sertex-cyan hover:bg-sertex-cyan/15 hover:border-sertex-cyan transition-colors"
+          >
+            {collapsed ? <ChevronsUpDown className="h-3.5 w-3.5" /> : <ChevronsDownUp className="h-3.5 w-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const r = e.currentTarget.getBoundingClientRect();
+              onMenu(task, r);
+            }}
+            data-testid={`kolay-menu-btn-${task.id}`}
+            aria-label="Görev menüsü"
+            className="h-7 w-7 flex items-center justify-center rounded-lg border border-sertex-cyan/30 text-sertex-cyan hover:bg-sertex-cyan/15 hover:border-sertex-cyan transition-colors"
+          >
+            <MoreVertical className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
 
-      <div className="text-sertex-text font-semibold leading-snug mb-1 line-clamp-2 pr-8 pl-5">
-        <span className="text-sertex-cyan tabular-nums font-mono mr-1" data-testid={`kolay-num-${task.id}`}>
-          {number}.
+      {/* Durum etiketi (süresi geçtiyse uyarı ikonu) */}
+      <div className="flex items-center gap-1.5 mb-1.5">
+        {overdue ? (
+          <AlertTriangle className="h-3.5 w-3.5" style={{ color: badgeColor }} />
+        ) : (
+          <span className="h-2 w-2 rounded-full" style={{ background: badgeColor, boxShadow: `0 0 6px ${badgeColor}` }} />
+        )}
+        <span className="text-[11px] font-mono font-semibold tracking-wide" style={{ color: badgeColor }}>{b.label}</span>
+      </div>
+
+      {/* Başlık: sıra no + ⚓ (sabitse) + başlık */}
+      <div className={`text-sertex-text font-semibold leading-snug ${collapsed ? "line-clamp-1" : "line-clamp-2"}`}>
+        <span className="text-sertex-cyan tabular-nums font-mono mr-1 inline-flex items-center" data-testid={`kolay-num-${task.id}`}>
+          {pinnedNum}.
+          {task.number_pinned && <Anchor className="h-3 w-3 ml-0.5 text-amber-300" data-testid={`kolay-pin-${task.id}`} />}
         </span>
         {task.title}
       </div>
-      {catName(task.category_id) && (
-        <div className="hud-text text-sertex-textMuted normal-case mb-2 pl-5">{catName(task.category_id)}</div>
+
+      {!collapsed && (
+        <>
+          {task.description && (
+            <div className="hud-text text-sertex-textMuted normal-case mt-1 line-clamp-2">{task.description}</div>
+          )}
+
+          <div className="mt-2.5 space-y-1">
+            <div className="flex items-center gap-1.5 text-[11px] font-mono">
+              <Clock className="h-3.5 w-3.5 text-sertex-cyan/70 shrink-0" />
+              <span className={dt ? "text-sertex-textMuted" : "text-sertex-textMuted/60"}>
+                {dt ? `BİTİŞ: ${dt}` : "Tarih yok"}
+              </span>
+            </div>
+            {(tag || cat) && (
+              <div className="flex items-center gap-1.5 text-[11px] font-mono">
+                <FileText className="h-3.5 w-3.5 text-sertex-cyan/70 shrink-0" />
+                <span className="text-sertex-textMuted truncate">{tag || cat}</span>
+                {tag && cat && <span className="text-sertex-textMuted/50 truncate">· {cat}</span>}
+              </div>
+            )}
+          </div>
+        </>
       )}
-      <div className="flex items-center gap-1.5 mb-3 pl-5">
-        <span className="h-2 w-2 rounded-full" style={{ background: badgeColor, boxShadow: `0 0 6px ${badgeColor}` }} />
-        <span className="text-[11px] font-mono" style={{ color: badgeColor }}>{b.label}</span>
-      </div>
-      <div className="mt-auto flex items-center justify-between">
-        <span className="hud-text text-sertex-textMuted normal-case">
-          {due ? `Son tarih: ${due}` : "Tarih yok"}
-        </span>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onComplete(task); }}
-          data-testid={`kolay-complete-${task.id}`}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-emerald-400/60 text-emerald-300 hover:bg-emerald-400/15 transition-colors text-xs font-mono"
-        >
-          <Check className="h-3.5 w-3.5" /> Tamamla
-        </button>
-      </div>
     </div>
   );
 };
 
 // dnd-kit sürüklenebilir sarmalayıcı (2 yönlü ızgara sıralaması).
-const KolaySortableCard = ({ task, number, catName, onComplete, onMenu }) => {
+const KolaySortableCard = ({ task, number, catName, onComplete, onMenu, collapsed, onToggleCollapse }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -147,6 +204,8 @@ const KolaySortableCard = ({ task, number, catName, onComplete, onMenu }) => {
         catName={catName}
         onComplete={onComplete}
         onMenu={onMenu}
+        collapsed={collapsed}
+        onToggleCollapse={onToggleCollapse}
         dragHandleProps={listeners}
       />
     </div>
@@ -269,6 +328,13 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
   const [catFilter, setCatFilter] = useState("");
   const [activeKey, setActiveKey] = useState("home");
   const [showAdd, setShowAdd] = useState(false);
+  const [collapsedIds, setCollapsedIds] = useState(() => new Set());
+  const toggleCollapse = (id) =>
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
   // ⋮ menü + modallar
   const [ctxMenu, setCtxMenu] = useState(null); // { task, x, y }
   const [editing, setEditing] = useState(null);
@@ -609,7 +675,7 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
                   data-testid="kolay-task-grid"
                 >
                   {activeTasks.map((t) => (
-                    <KolaySortableCard key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} />
+                    <KolaySortableCard key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} />
                   ))}
                 </div>
               </SortableContext>
@@ -617,7 +683,7 @@ const KolayInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }
           ) : (
             <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }} data-testid="kolay-task-grid">
               {activeTasks.map((t) => (
-                <KolayCardBody key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} />
+                <KolayCardBody key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} />
               ))}
             </div>
           )}
