@@ -807,6 +807,8 @@ Kullanıcı geri bildirimi: dün eklenen 6 tema (arayüz) görsel olarak güzel 
 - **KRİTİK kısıt**: Detaylı (varsayılan) görünüm ve mevcut tüm akışlar HİÇBİR ŞEKİLDE bozulmayacak. Sıralı ilerlenecek; her tema için önce plan → kullanıcı onayı → uygulama → test.
 - **İlk adım (plan)**: hangi temadan başlanacağı + hangi fonksiyonların 1. öncelik olduğu kullanıcıyla netleştirilecek.
 - **KARARLAR (kullanıcı onayı 2026-06)**: Sıra = **önce KOLAY**, sonra diğerleri sırayla. Aşama sırası = a (Aşama 1 temel → 2 → 3, PRD'deki gibi). Görev detayı = **sağdan içeri açılan çekmece (drawer)**, Kolay'ın sade/aydınlık dilinde. Kullanıcı "YAP" diyene kadar KOD YAZILMAYACAK (henüz "bekle" dedi).
+- **Sıraya alınan kullanıcı notları (henüz UYGULANMAYACAK — kullanıcı hâlâ anlatıyor)**:
+  - KOLAY ana sayfa sol menüsündeki **"DETAYLI" düğmesini kaldır** (`kolay-switch-detayli`) — tıklayınca eski temaya döndürüyor, istenmiyor. (Detaylı'ya geçiş Ayarlar → Temalar'dan yapılabilir.)
 
 
 - Sertex e-postaları okuyabilecek, cevaplayabilecek
