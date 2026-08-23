@@ -806,6 +806,7 @@ Kullanıcı geri bildirimi: dün eklenen 6 tema (arayüz) görsel olarak güzel 
 3. **Paylaşılan bileşenlerin re-skin'i**: Tema değişince ortak paneller/pencereler (sidebar panelleri, görev detay modalları, ayarlar vb.) hâlâ eski Detaylı HUD görünümünde kalıyor; bunlar da seçilen temaya uymalı (örn. Aydınlık = açık tema → paneller açık tema olmalı).
 - **KRİTİK kısıt**: Detaylı (varsayılan) görünüm ve mevcut tüm akışlar HİÇBİR ŞEKİLDE bozulmayacak. Sıralı ilerlenecek; her tema için önce plan → kullanıcı onayı → uygulama → test.
 - **İlk adım (plan)**: hangi temadan başlanacağı + hangi fonksiyonların 1. öncelik olduğu kullanıcıyla netleştirilecek.
+- **KARARLAR (kullanıcı onayı 2026-06)**: Sıra = **önce KOLAY**, sonra diğerleri sırayla. Aşama sırası = a (Aşama 1 temel → 2 → 3, PRD'deki gibi). Görev detayı = **sağdan içeri açılan çekmece (drawer)**, Kolay'ın sade/aydınlık dilinde. Kullanıcı "YAP" diyene kadar KOD YAZILMAYACAK (henüz "bekle" dedi).
 
 
 - Sertex e-postaları okuyabilecek, cevaplayabilecek
