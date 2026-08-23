@@ -810,6 +810,10 @@ Kullanıcı geri bildirimi: dün eklenen 6 tema (arayüz) görsel olarak güzel 
 - **Sıraya alınan kullanıcı notları (henüz UYGULANMAYACAK — kullanıcı hâlâ anlatıyor)**:
   - KOLAY ana sayfa sol menüsündeki **"DETAYLI" düğmesini kaldır** (`kolay-switch-detayli`) — tıklayınca eski temaya döndürüyor, istenmiyor. (Detaylı'ya geçiş Ayarlar → Temalar'dan yapılabilir.)
   - KOLAY ana sayfada "Bugünkü Görevler" bölümünde, **arama çubuğunun altına iş kolu seçici** ekle — Neural Link'teki (Detaylı) iş kolu filtre mekanizmasının aynısı; Kolay'da da görevler iş koluna göre süzülebilsin.
+  - KOLAY "Bugünkü Görevler" kartları **birebir Neural Link görev kartı gibi** olsun (mevcut `TaskCard`'ı Kolay içinde kullan / aynı görünüm): durum rozeti, numara + ⚓ pin, başlık, onay kutusu, ⏱ BITIŞ tarihi, 🏢 iş kolu, sağ üstte 3 düğme. Ek olarak:
+    - Sol tutamaçtan **basılı tutup sürükleyerek sıralama** (drag reorder — Neural Link'teki gibi)
+    - Sağ üstteki **3 fonksiyon aynen çalışsın**: küçült/büyüt · dışarı taşı (detach/genişlet) · ⋮ 3 nokta
+    - **⋮ 3 noktaya tıklayınca Neural Link'teki tam fonksiyon menüsü** (`TaskContextMenu`) açılsın (düzenle, arşivle, paylaş, kilit/OTP, devret, iş koluna taşı, bağla, hatırlatıcı vb.)
 
 
 - Sertex e-postaları okuyabilecek, cevaplayabilecek
