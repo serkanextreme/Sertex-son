@@ -2413,7 +2413,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
         />
       )}
 
-      {!showArchived && visibleTaskIds.length > 0 && (
+      {visibleTaskIds.length > 0 && (
         <div className="flex items-center justify-end gap-2" data-testid="task-collapse-toolbar">
           {hasHierCats && (
             <button

@@ -10,6 +10,13 @@ Tam liste: `/app/frontend/public/Sertex-Feature-Listesi.pdf` (üretici script: `
 
 ## ✅ Tamamlanan Fazlar
 
+### Özellik — Arşiv Görünümünde "Tümünü Küçült / Büyüt" Kısayolu (2026-06 · fork) ✅
+Kullanıcı isteği: Detaylı (Neural Link) görevlerde bulunan "TÜMÜNÜ KÜÇÜLT / BÜYÜT" toplu kart küçült-büyüt kısayolu, **Arşiv**'e (Bitmiş/İptal/Silinmiş) tıklayınca orada da çıksın. "Hiçbir şeyi bozmadan."
+- **Uygulama** (`TasksPanel.jsx`, tek satır): collapse toolbar render koşulundan `!showArchived &&` kaldırıldı → toolbar artık arşivde de görünür. Mantık zaten hazırdı: arşiv `visibleTaskIds` (satır 1657 `sorted`) üzerinden çalışır, `toggleAllCollapsed`/`allVisibleCollapsed` bu id'leri kullanır, arşiv kartları da `cardPropsFor` üzerinden `collapsed` prop'unu alır (satır 1363). Yeni state/endpoint yok → sıfır regresyon riski.
+- **Test**: Ana ajan görsel doğrulama (Playwright, preview) — Arşiv açıldı, `task-collapse-all` düğmesi göründü ("TÜMÜNÜ KÜÇÜLT"), tıklayınca "TÜMÜNÜ BÜYÜT"e döndü + arşiv kartları topluca küçüldü. Normal görünüm değişmedi.
+- **Yayın**: preview'de; canlıya (sertex-ai.com) için yeniden Deploy gerekir.
+
+
 ### Görünüm Sistemi — 6 Arayüz + Renk Fonksiyonu + Yazı Boyutu (2026-06 · fork) ✅ TAMAMLANDI
 Kullanıcı isteği: Ayarlar → Temalar içine "Arayüz" seçici (Kolay/Teknik/Detaylı/Profesyonel/Aydınlık/Pano — 6 referans görsele birebir benzer), her arayüzün rengini değiştirilebilsin (renk fonksiyonu) + yazı boyutu büyütme (mevcut sisteme de). "Hiçbir şeyi bozmadan." Web için, aşamalı. Sıra: önce KOLAY, sonra PROFESYONEL.
 - **Altyapı** (`lib/appearance.js` yeni): `accent` (hex), `fontScale` (s/m/l/xl), `interface` (6 mod) — cihaza özel localStorage, `<html>` üzerinde `--sx-accent-rgb` + `data-font-scale` + `data-interface` olarak uygulanır. `index.js`'te erken import → açılışta uygulanır. `useAppearance()` hook + pub/sub.
