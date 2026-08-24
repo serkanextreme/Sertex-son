@@ -2523,8 +2523,23 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
             if (b.key === "__none__") return -1;
             return a.name.localeCompare(b.name, "tr");
           });
+          const allCollapsed = entries.length > 0 && entries.every((g) => collapsedArchiveCats.has(g.key));
           return (
             <div className="space-y-3" data-testid="archive-grouped-list">
+              {entries.length > 1 && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setCollapsedArchiveCats(allCollapsed ? new Set() : new Set(entries.map((g) => g.key)))}
+                    data-testid="archive-cats-toggle-all"
+                    title={allCollapsed ? "Tüm iş kollarını aç" : "Tüm iş kollarını kapat"}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md border border-sertex-cyan/30 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/60 hud-text transition-colors"
+                  >
+                    {allCollapsed ? <ChevronsUpDown className="h-3.5 w-3.5" /> : <ChevronsDownUp className="h-3.5 w-3.5" />}
+                    {allCollapsed ? "HEPSİNİ AÇ" : "HEPSİNİ KAPAT"}
+                  </button>
+                </div>
+              )}
               {entries.map((g) => {
                 const isCollapsed = collapsedArchiveCats.has(g.key);
                 return (

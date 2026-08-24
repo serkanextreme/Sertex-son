@@ -10,6 +10,12 @@ Tam liste: `/app/frontend/public/Sertex-Feature-Listesi.pdf` (üretici script: `
 
 ## ✅ Tamamlanan Fazlar
 
+### Arşiv — Gruplu Görünümde "Hepsini Aç/Kapat" (Detaylı + Kolay) (2026-06 · fork) ✅
+Kullanıcı isteği ("yap"): Gruplu arşive tek tıkla tüm iş kollarını aç/kapat düğmesi.
+- **Detaylı** (`TasksPanel.jsx`): Gruplu listenin üstüne (`archive-cats-toggle-all`, yalnız 2+ grup) buton — `allCollapsed` ise tümünü aç (`setCollapsedArchiveCats(new Set())`), değilse tümünü kapat (tüm key'ler). Etiket "HEPSİNİ AÇ"/"HEPSİNİ KAPAT".
+- **Kolay** (`KolayInterface.jsx`): `KolayArchive` gruplu bölümü IIFE'ye alındı; aynı `kolay-archive-toggle-all` düğmesi (2+ grup).
+- **Test**: Ana ajan (Playwright, 3 test grubu oluşturuldu) — Kolay'da düğme göründü, tümünü kapat→3 kart gizlendi (0), tekrar→3 açıldı; etiket doğru çevriliyor. Test görevleri API ile silindi. Lint temiz.
+
 ### Arşiv — İş Koluna Göre Gruplama (Detaylı + Kolay) (2026-06 · fork) ✅
 Kullanıcı isteği (görselli, "yap" onaylı, C=her ikisi): Arşiv görünümünde biten görevleri iş koluna (kategori) göre gruplayan bir toggle. İki mod: "İŞ KOLUNA GÖRE GRUPLA" ↔ "GRUPLAMAYI KALDIR" (düz liste). Mevcut sistem bozulmadan (varsayılan KAPALI = eski davranış). **Ek (yap):** gruplu görünümde iş kolu başlıkları katlanabilir (uzun listede hızlı gezinme).
 - **Detaylı** (`TasksPanel.jsx`): `archiveByCategory` state (default false) + `collapsedArchiveCats` Set. Araç çubuğuna (yalnız `showArchived && categories.length>0`) toggle butonu (`archive-groupby-toggle`). Gruplu dal: `showArchived && archiveByCategory && !searchActive` → kategoriye göre gruplanır, her başlık tıklanabilir (`archive-cat-toggle-{key}`, ChevronDown/Right) ve katlanınca görevler gizlenir; `renderStaticMember` ile statik TaskCard. Toggle kapalıyken mevcut `Reorder.Group` yolu birebir korunur (regresyon yok).

@@ -597,35 +597,55 @@ const KolayArchive = ({ catName }) => {
           <div className="hud-text text-sertex-textMuted normal-case">Tamamladığın görevler burada listelenir.</div>
         </div>
       ) : byCat ? (
-        <div className="space-y-4" data-testid="kolay-archive-grouped">
-          {groups().map((g) => {
-            const isCollapsed = collapsed.has(g.key);
-            return (
-              <div key={g.key} data-testid={`kolay-arch-group-${g.key}`}>
-                <button
-                  type="button"
-                  onClick={() => toggleGroup(g.key)}
-                  data-testid={`kolay-arch-group-toggle-${g.key}`}
-                  title={isCollapsed ? "Aç" : "Kapat"}
-                  className="w-full flex items-center gap-2 mb-2 px-1 group/cat"
-                >
-                  {isCollapsed ? (
-                    <ChevronRight className="h-3.5 w-3.5 text-sertex-cyan/70" />
-                  ) : (
-                    <ChevronDown className="h-3.5 w-3.5 text-sertex-cyan/70" />
-                  )}
-                  <Tag className="h-3.5 w-3.5 text-sertex-cyan/70" />
-                  <span className="hud-text text-sertex-cyan group-hover/cat:text-sertex-text transition-colors">{g.name}</span>
-                  <span className="hud-text text-[10px] text-sertex-textMuted">({g.tasks.length})</span>
-                  <div className="flex-1 h-px bg-sertex-cyan/15" />
-                </button>
-                {!isCollapsed && (
-                  <div className="grid gap-3" style={gridStyle}>{g.tasks.map(card)}</div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        (() => {
+          const gl = groups();
+          const allCollapsed = gl.length > 0 && gl.every((g) => collapsed.has(g.key));
+          return (
+            <div className="space-y-4" data-testid="kolay-archive-grouped">
+              {gl.length > 1 && (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(gl.map((g) => g.key)))}
+                    data-testid="kolay-archive-toggle-all"
+                    title={allCollapsed ? "Tüm iş kollarını aç" : "Tüm iş kollarını kapat"}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-sertex-cyan/30 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/60 font-mono text-xs transition-colors"
+                  >
+                    {allCollapsed ? <ChevronsUpDown className="h-3.5 w-3.5" /> : <ChevronsDownUp className="h-3.5 w-3.5" />}
+                    {allCollapsed ? "HEPSİNİ AÇ" : "HEPSİNİ KAPAT"}
+                  </button>
+                </div>
+              )}
+              {gl.map((g) => {
+                const isCollapsed = collapsed.has(g.key);
+                return (
+                  <div key={g.key} data-testid={`kolay-arch-group-${g.key}`}>
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(g.key)}
+                      data-testid={`kolay-arch-group-toggle-${g.key}`}
+                      title={isCollapsed ? "Aç" : "Kapat"}
+                      className="w-full flex items-center gap-2 mb-2 px-1 group/cat"
+                    >
+                      {isCollapsed ? (
+                        <ChevronRight className="h-3.5 w-3.5 text-sertex-cyan/70" />
+                      ) : (
+                        <ChevronDown className="h-3.5 w-3.5 text-sertex-cyan/70" />
+                      )}
+                      <Tag className="h-3.5 w-3.5 text-sertex-cyan/70" />
+                      <span className="hud-text text-sertex-cyan group-hover/cat:text-sertex-text transition-colors">{g.name}</span>
+                      <span className="hud-text text-[10px] text-sertex-textMuted">({g.tasks.length})</span>
+                      <div className="flex-1 h-px bg-sertex-cyan/15" />
+                    </button>
+                    {!isCollapsed && (
+                      <div className="grid gap-3" style={gridStyle}>{g.tasks.map(card)}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()
       ) : (
         <div className="grid gap-3" style={gridStyle} data-testid="kolay-archive-flat">
           {items.map(card)}
