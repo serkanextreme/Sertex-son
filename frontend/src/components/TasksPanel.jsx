@@ -244,6 +244,8 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
   const [archiveSearchResults, setArchiveSearchResults] = useState([]);
   // Arşiv sıralama yönü: 'new' (yeni→eski) | 'old' | 'az'
   const [archiveSort, setArchiveSort] = useState("new");
+  // Arşivde iş koluna (kategori) göre gruplama — varsayılan kapalı (düz liste).
+  const [archiveByCategory, setArchiveByCategory] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -2415,6 +2417,21 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
 
       {visibleTaskIds.length > 0 && (
         <div className="flex items-center justify-end gap-2" data-testid="task-collapse-toolbar">
+          {showArchived && categories.length > 0 && (
+            <button
+              onClick={() => setArchiveByCategory((v) => !v)}
+              data-testid="archive-groupby-toggle"
+              title={archiveByCategory ? "İş kolu gruplamayı kaldır (düz liste)" : "Biten görevleri iş koluna göre grupla"}
+              className={`mr-auto flex items-center gap-1 px-2 py-1 rounded-md border hud-text transition-colors ${
+                archiveByCategory
+                  ? "border-sertex-cyan text-sertex-cyan bg-sertex-cyan/10"
+                  : "border-sertex-cyan/30 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/60"
+              }`}
+            >
+              <Tag className="h-3.5 w-3.5" />
+              {archiveByCategory ? "GRUPLAMAYI KALDIR" : "İŞ KOLUNA GÖRE GRUPLA"}
+            </button>
+          )}
           {hasHierCats && (
             <button
               onClick={toggleAllCatTrees}
@@ -2478,6 +2495,44 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
             )
           )}
         </div>
+      ) : showArchived && archiveByCategory && !searchActive ? (
+        (() => {
+          // Arşivi iş koluna (kategori) göre grupla — statik kartlar, düz liste yerine.
+          const buckets = new Map();
+          for (const t of sorted) {
+            const key = t.category_id || "__none__";
+            if (!buckets.has(key)) buckets.set(key, []);
+            buckets.get(key).push(t);
+          }
+          const catNameOf = (id) => categories.find((c) => c.id === id)?.name || null;
+          const entries = [...buckets.entries()].map(([key, tasks]) => ({
+            key,
+            name: key === "__none__" ? "Kolsuz" : (catNameOf(key) || "Bilinmeyen İş Kolu"),
+            tasks,
+          }));
+          entries.sort((a, b) => {
+            if (a.key === "__none__") return 1;
+            if (b.key === "__none__") return -1;
+            return a.name.localeCompare(b.name, "tr");
+          });
+          return (
+            <div className="space-y-3" data-testid="archive-grouped-list">
+              {entries.map((g) => (
+                <div key={g.key} data-testid={`archive-cat-group-${g.key}`}>
+                  <div className="flex items-center gap-2 mb-1.5 px-1">
+                    <Tag className="h-3.5 w-3.5 text-sertex-cyan/70" />
+                    <span className="hud-text text-sertex-cyan">{g.name}</span>
+                    <span className="hud-text text-[10px] text-sertex-textMuted">({g.tasks.length})</span>
+                    <div className="flex-1 h-px bg-sertex-cyan/15" />
+                  </div>
+                  <div className="space-y-2">
+                    {g.tasks.map((t) => renderStaticMember(t))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()
       ) : (showArchived || (filters.length === 0 && !categoryFilter)) && !searchActive ? (
         <Reorder.Group
           axis="y"

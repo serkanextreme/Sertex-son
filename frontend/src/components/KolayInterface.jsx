@@ -38,6 +38,9 @@ import {
   CheckCircle2,
   ChevronRight,
   Trash2,
+  Archive,
+  Tag,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { tasksApi, taskCategoriesApi, taskLockApi, notesApi, teamApi, reminderConfigApi, taskAttachmentsApi } from "../lib/api";
@@ -499,6 +502,116 @@ const KolayNotes = () => {
   );
 };
 
+// Kolay içi Arşiv — biten görevler + iş koluna göre gruplama toggle'ı.
+const KolayArchive = ({ catName }) => {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [byCat, setByCat] = useState(false);
+  const load = () => {
+    setLoading(true);
+    tasksApi
+      .list(true, "mine", "archived")
+      .then((t) => setItems(Array.isArray(t) ? t : []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+  useEffect(() => { load(); }, []);
+  const restore = async (id) => {
+    try { await tasksApi.setArchived(id, false); toast.success("Görev aktife alındı"); load(); }
+    catch { toast.error("Geri yüklenemedi"); }
+  };
+  const card = (t) => (
+    <div key={t.id} data-testid={`kolay-arch-card-${t.id}`} className="glass-panel rounded-xl p-3.5 border border-sertex-cyan/15 flex flex-col gap-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+          <span className="text-sertex-text text-sm font-semibold line-through decoration-sertex-textMuted/50 truncate">{t.title}</span>
+        </div>
+        <button
+          type="button"
+          onClick={() => restore(t.id)}
+          data-testid={`kolay-arch-restore-${t.id}`}
+          title="Aktif görevlere geri al"
+          className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md border border-sertex-cyan/30 text-sertex-cyan hover:bg-sertex-cyan/15 hover:border-sertex-cyan text-[11px] font-mono transition-colors"
+        >
+          <RotateCcw className="h-3.5 w-3.5" /> AKTİFE AL
+        </button>
+      </div>
+      <div className="flex items-center gap-3 text-[11px] font-mono text-sertex-textMuted flex-wrap">
+        <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {fmtDateTime(t.archived_at || t.updated_at) || "—"}</span>
+        {catName(t.category_id) && (
+          <span className="flex items-center gap-1"><Tag className="h-3 w-3 text-sertex-cyan/70" /> {catName(t.category_id)}</span>
+        )}
+      </div>
+    </div>
+  );
+  const groups = () => {
+    const buckets = new Map();
+    for (const t of items) {
+      const key = t.category_id || "__none__";
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(t);
+    }
+    const entries = [...buckets.entries()].map(([key, tasks]) => ({
+      key,
+      name: key === "__none__" ? "Kolsuz" : (catName(key) || "Bilinmeyen İş Kolu"),
+      tasks,
+    }));
+    entries.sort((a, b) => (a.key === "__none__" ? 1 : b.key === "__none__" ? -1 : a.name.localeCompare(b.name, "tr")));
+    return entries;
+  };
+  const gridStyle = { gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" };
+  return (
+    <div data-testid="kolay-archive">
+      <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+        <div className="hud-text text-sertex-textMuted">{items.length} biten görev</div>
+        {items.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setByCat((v) => !v)}
+            data-testid="kolay-archive-groupby"
+            title={byCat ? "İş kolu gruplamayı kaldır (düz liste)" : "Biten görevleri iş koluna göre grupla"}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border font-mono text-xs transition-colors ${
+              byCat
+                ? "border-sertex-cyan bg-sertex-cyan/15 text-sertex-cyan"
+                : "border-sertex-cyan/30 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/60"
+            }`}
+          >
+            <Tag className="h-4 w-4" /> {byCat ? "GRUPLAMAYI KALDIR" : "İŞ KOLUNA GÖRE GRUPLA"}
+          </button>
+        )}
+      </div>
+      {loading ? (
+        <div className="hud-text text-sertex-textMuted py-10 text-center">YÜKLENİYOR...</div>
+      ) : items.length === 0 ? (
+        <div className="glass-panel corner-bracket rounded-xl p-8 text-center" data-testid="kolay-archive-empty">
+          <div className="text-sertex-text mb-1">Arşiv boş</div>
+          <div className="hud-text text-sertex-textMuted normal-case">Tamamladığın görevler burada listelenir.</div>
+        </div>
+      ) : byCat ? (
+        <div className="space-y-4" data-testid="kolay-archive-grouped">
+          {groups().map((g) => (
+            <div key={g.key} data-testid={`kolay-arch-group-${g.key}`}>
+              <div className="flex items-center gap-2 mb-2 px-1">
+                <Tag className="h-3.5 w-3.5 text-sertex-cyan/70" />
+                <span className="hud-text text-sertex-cyan">{g.name}</span>
+                <span className="hud-text text-[10px] text-sertex-textMuted">({g.tasks.length})</span>
+                <div className="flex-1 h-px bg-sertex-cyan/15" />
+              </div>
+              <div className="grid gap-3" style={gridStyle}>{g.tasks.map(card)}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid gap-3" style={gridStyle} data-testid="kolay-archive-flat">
+          {items.map(card)}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
   const { user, teamFeaturesVisible } = useAuth();
   const [tasks, setTasks] = useState([]);
@@ -753,6 +866,7 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
   const MENU = [
     { key: "home", label: "Ana Sayfa", icon: Home, onClick: () => setActiveKey("home") },
     { key: "tasks", label: "Görevler", icon: ListTodo, onClick: () => setActiveKey("tasks") },
+    { key: "archive", label: "Arşiv", icon: Archive, onClick: () => setActiveKey("archive") },
     ...(teamFeaturesVisible ? [{ key: "team", label: "Ekip", icon: Users, onClick: () => setActiveKey("team") }] : []),
     { key: "notes", label: "Notlar", icon: StickyNote, onClick: () => setActiveKey("notes") },
     { key: "files", label: "Dosyalar", icon: FolderOpen, onClick: () => setActiveKey("files") },
@@ -808,6 +922,8 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
                 ? `${greeting}, ${user?.username || "Kullanıcı"}!`
                 : activeKey === "tasks"
                 ? "Görevler"
+                : activeKey === "archive"
+                ? "Arşiv"
                 : activeKey === "notes"
                 ? "Notlar"
                 : activeKey === "files"
@@ -979,6 +1095,9 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
 
           {/* NOTLAR — Kolay içinde */}
           {activeKey === "notes" && <KolayNotes />}
+
+          {/* ARŞİV — biten görevler + iş koluna göre gruplama */}
+          {activeKey === "archive" && <KolayArchive catName={catName} />}
 
           {/* DOSYALAR — mevcut FilePanel yeniden kullanıldı */}
           {activeKey === "files" && (

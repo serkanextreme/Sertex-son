@@ -10,6 +10,12 @@ Tam liste: `/app/frontend/public/Sertex-Feature-Listesi.pdf` (üretici script: `
 
 ## ✅ Tamamlanan Fazlar
 
+### Arşiv — İş Koluna Göre Gruplama (Detaylı + Kolay) (2026-06 · fork) ✅
+Kullanıcı isteği (görselli, "yap" onaylı, C=her ikisi): Arşiv görünümünde biten görevleri iş koluna (kategori) göre gruplayan bir toggle. İki mod: "İŞ KOLUNA GÖRE GRUPLA" ↔ "GRUPLAMAYI KALDIR" (düz liste). Mevcut sistem bozulmadan (varsayılan KAPALI = eski davranış).
+- **Detaylı** (`TasksPanel.jsx`): `archiveByCategory` state (default false). Arşiv araç çubuğuna (yalnız `showArchived && categories.length>0`) toggle butonu eklendi (`archive-groupby-toggle`). Yeni render dalı: `showArchived && archiveByCategory && !searchActive` → görevler kategoriye göre gruplanıp `renderStaticMember` (statik TaskCard) ile başlık + sayaç altında listelenir; Kolsuz sona. Toggle kapalıyken mevcut `Reorder.Group` yolu birebir korunur (regresyon yok).
+- **Kolay** (`KolayInterface.jsx`): Yan menüye "Arşiv" öğesi + `KolayArchive` bileşeni. `tasksApi.list(true,"mine","archived")` ile biten görevler; `İŞ KOLUNA GÖRE GRUPLA`/`GRUPLAMAYI KALDIR` toggle'ı; her kartta "AKTİFE AL" (setArchived false ile geri yükleme), tamamlanma tarihi, iş kolu etiketi.
+- **Test**: Ana ajan (Playwright) — Detaylı: toggle göründü, tıklayınca `archive-grouped-list` + KOLSUZ kategori grubu render oldu. Kolay: Arşiv sekmesi açıldı, gruplama toggle'ı çalıştı (`kolay-archive-grouped`). Lint temiz (TasksPanel'de yalnız önceden var olan 3 uyarı; benim eklemelerim temiz).
+
 ### Kolay Arayüzü — Tam "Yeni Görev" Formu (Detaylı ile parite) (2026-06 · fork) ✅
 Kullanıcı düzeltmesi (görselli): Kolay Ana Sayfa'da görev eklerken form eksikti → Detaylı'daki tam formun birebir aynısı olmalı.
 - **Uygulama** (`KolayInterface.jsx` — `KolayAddModal` yeniden yazıldı): Detaylı `addTask` mantığı ve alt bileşenleri BİREBİR yeniden kullanıldı — başlık, açıklama, BAŞLANGIÇ/BİTİŞ (datetime), `MultiAssigneeSelect` (Kendime ata/kişi ekle), `CompanyCombobox` (Şirket), `CategorySelect` (İş Kolu), uyarı gün seçimi (`REMINDER_DAY_CHOICES` + reminderConfig default etiketi), `RecurringReminderFields` (tekrarlı hatırlatıcı), `PendingAttachments` (dosya ekle, görev oluşunca yüklenir). `tasksApi.create(title, desc, due, reminder_at, extras)` sözleşmesi + `taskAttachmentsApi.upload` aynen kopyalandı; assignee routing (self/single/multi) korundu. Kişi/Şirket bloğu `isTeamView` ile gösteriliyor (Detaylı ile aynı).
@@ -27,7 +33,7 @@ Kullanıcı isteği (görselli): Kolay Ana Sayfa görev kartları referans görs
 - Mevcut doğrulanmış handler'lar (completeTask, openMenu→tam ContextMenu, dnd-kit sıralama) aynen korundu; yeni backend/endpoint yok. Detaylı (Neural Link) arayüzüne DOKUNULMADI.
 - **Test**: Ana ajan görsel doğrulama (Playwright) — zengin grid render (uyarı ikonu + kırmızı çerçeve + ⚓ + 🕐 + 📄), küçült toggle kartı kompaktladı, ⋮ tam 16-öğeli menü açıldı. Lint temiz.
 - **Bekleyen (backlog, kullanıcı "bekle not al" dedi)**: Kolay yan menü Notlar/Dosyalar/Ekip hâlâ Detaylı'ya yönlendiriyor — Kolay içinde açılması istendi ama şimdilik ertelendi.
-- **Bekleyen (backlog, YAPMA — sadece not)**: Detaylı (Neural Link) açılınca görevler üst üste biniyor/taşıyor → görevler ekrana otomatik sığdırılsın (auto-fit / taşma düzeltmesi). Kullanıcı açık şekilde "bekle yapma" dedi.
+- **Bekleyen (backlog, YAPMA — sadece not)**: Detaylı (Neural Link) açılınca görevler üst üste biniyor/taşıyor → görevler ekrana otomatik sığdırılsın (auto-fit / taşma düzeltmesi). Kullanıcı açık şekilde "bekle yapma" dedi. [Hedef arayüz/konum hâlâ netleşmedi — a/b/c/d sorusu cevapsız.]
 - **Bekleyen (backlog, YAPMA — sadece not)**: Kolay yan menüde "Ana Sayfa" ve "Görevler" aynı görev ızgarasını gösteriyor → **Ana Sayfa** tıklanınca görevler gizlensin (karşılama/özet ekranı), **Görevler** ikonuna tıklanınca görev listesi gelsin. Kullanıcı "bekle yapma, not al" dedi.
 - **Yayın**: preview'de; canlıya (sertex-ai.com) için Deploy gerekir.
 
