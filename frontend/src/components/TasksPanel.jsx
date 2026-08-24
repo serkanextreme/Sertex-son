@@ -246,6 +246,14 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
   const [archiveSort, setArchiveSort] = useState("new");
   // Arşivde iş koluna (kategori) göre gruplama — varsayılan kapalı (düz liste).
   const [archiveByCategory, setArchiveByCategory] = useState(false);
+  // Gruplu arşivde katlanmış (kapalı) iş kolu başlıkları.
+  const [collapsedArchiveCats, setCollapsedArchiveCats] = useState(() => new Set());
+  const toggleArchiveCat = (key) =>
+    setCollapsedArchiveCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
   const [showAddForm, setShowAddForm] = useState(false);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -2517,19 +2525,35 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
           });
           return (
             <div className="space-y-3" data-testid="archive-grouped-list">
-              {entries.map((g) => (
-                <div key={g.key} data-testid={`archive-cat-group-${g.key}`}>
-                  <div className="flex items-center gap-2 mb-1.5 px-1">
-                    <Tag className="h-3.5 w-3.5 text-sertex-cyan/70" />
-                    <span className="hud-text text-sertex-cyan">{g.name}</span>
-                    <span className="hud-text text-[10px] text-sertex-textMuted">({g.tasks.length})</span>
-                    <div className="flex-1 h-px bg-sertex-cyan/15" />
+              {entries.map((g) => {
+                const isCollapsed = collapsedArchiveCats.has(g.key);
+                return (
+                  <div key={g.key} data-testid={`archive-cat-group-${g.key}`}>
+                    <button
+                      type="button"
+                      onClick={() => toggleArchiveCat(g.key)}
+                      data-testid={`archive-cat-toggle-${g.key}`}
+                      className="w-full flex items-center gap-2 mb-1.5 px-1 group/cat"
+                      title={isCollapsed ? "Aç" : "Kapat"}
+                    >
+                      {isCollapsed ? (
+                        <ChevronRight className="h-3.5 w-3.5 text-sertex-cyan/70" />
+                      ) : (
+                        <ChevronDown className="h-3.5 w-3.5 text-sertex-cyan/70" />
+                      )}
+                      <Tag className="h-3.5 w-3.5 text-sertex-cyan/70" />
+                      <span className="hud-text text-sertex-cyan group-hover/cat:text-sertex-text transition-colors">{g.name}</span>
+                      <span className="hud-text text-[10px] text-sertex-textMuted">({g.tasks.length})</span>
+                      <div className="flex-1 h-px bg-sertex-cyan/15" />
+                    </button>
+                    {!isCollapsed && (
+                      <div className="space-y-2">
+                        {g.tasks.map((t) => renderStaticMember(t))}
+                      </div>
+                    )}
                   </div>
-                  <div className="space-y-2">
-                    {g.tasks.map((t) => renderStaticMember(t))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           );
         })()
