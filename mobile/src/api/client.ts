@@ -28,6 +28,7 @@ import {
   SearchUser,
   Task,
   TaskAttachment,
+  TaskTemplate,
   TaskCreatePayload,
   TaskGroup,
   TeamCategoryRow,
@@ -123,6 +124,19 @@ export const api = {
     request<Task>(`/tasks/${id}`, { method: "PATCH", body: patch }),
   createTask: (body: TaskCreatePayload) =>
     request<Task>("/tasks", { method: "POST", body }),
+  // Görev Kopyalama (Kopyala → Yapıştır) — kaynağı çoğaltır, kopya bana atanır.
+  duplicateTask: (
+    id: string,
+    opts: { include_subtasks?: boolean; include_attachments?: boolean; category_id?: string | null } = {},
+  ) =>
+    request<Task>(`/tasks/${id}/duplicate`, {
+      method: "POST",
+      body: {
+        include_subtasks: opts.include_subtasks ?? true,
+        include_attachments: opts.include_attachments ?? true,
+        category_id: opts.category_id ?? null,
+      },
+    }),
   deleteTask: (id: string, reason?: string) =>
     request<{ deleted: number }>(`/tasks/${id}${reason ? `?reason=${encodeURIComponent(reason)}` : ""}`, { method: "DELETE" }),
   searchUsers: (q: string) =>
@@ -266,6 +280,22 @@ export const api = {
     request<{ deleted: number }>(`/tasks/${tid}/attachments/${attId}`, {
       method: "DELETE",
     }),
+
+  // ── Görev Şablonları (Task Templates) ──
+  listTemplates: () => request<TaskTemplate[]>("/task-templates"),
+  getTemplate: (id: string) => request<TaskTemplate>(`/task-templates/${id}`),
+  createTemplate: (body: Partial<TaskTemplate>) =>
+    request<TaskTemplate>("/task-templates", { method: "POST", body }),
+  updateTemplate: (id: string, patch: Partial<TaskTemplate>) =>
+    request<TaskTemplate>(`/task-templates/${id}`, { method: "PATCH", body: patch }),
+  deleteTemplate: (id: string) =>
+    request<{ deleted: number }>(`/task-templates/${id}`, { method: "DELETE" }),
+  instantiateTemplate: (id: string, category_id: string | null = null) =>
+    request<Task>(`/task-templates/${id}/instantiate`, { method: "POST", body: { category_id } }),
+  listTemplateAttachments: (id: string) =>
+    request<TaskAttachment[]>(`/task-templates/${id}/attachments`),
+  deleteTemplateAttachment: (id: string, attId: string) =>
+    request<{ deleted: number }>(`/task-templates/${id}/attachments/${attId}`, { method: "DELETE" }),
   myCompletion: (id: string, completed: boolean) =>
     request<Task>(`/tasks/${id}/my-completion`, { method: "POST", body: { completed } }),
   companies: () => request<CompanyLite[]>("/task-transfer-companies"),
@@ -329,6 +359,11 @@ export function attachmentDownloadUrl(tid: string, attId: string): string {
   return `${BASE}/api/tasks/${tid}/attachments/${attId}/download`;
 }
 
+// Şablon dosya eki indirme URL'i (aynı imza).
+export function templateAttachmentDownloadUrl(tid: string, attId: string): string {
+  return `${BASE}/api/task-templates/${tid}/attachments/${attId}/download`;
+}
+
 // Authorization header for authed asset fetches (expo-image / downloadAsync).
 export async function authHeader(): Promise<Record<string, string>> {
   const token = await storage.secureGet<string>(AUTH_TOKEN_KEY, "");
@@ -340,9 +375,11 @@ export async function authHeader(): Promise<Record<string, string>> {
 export async function uploadAttachment(
   tid: string,
   file: { uri: string; name: string; type: string; size?: number },
+  kind: "task" | "template" = "task",
 ): Promise<TaskAttachment> {
+  const base = kind === "template" ? `/task-templates/${tid}` : `/tasks/${tid}`;
   const init = await request<{ upload_id: string }>(
-    `/tasks/${tid}/attachments/init`,
+    `${base}/attachments/init`,
     {
       method: "POST",
       body: {
@@ -375,7 +412,7 @@ export async function uploadAttachment(
 
   let chunkRes: Response;
   try {
-    chunkRes = await fetch(`${BASE}/api/tasks/${tid}/attachments/chunk`, {
+    chunkRes = await fetch(`${BASE}/api${base}/attachments/chunk`, {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       body: form,
@@ -388,7 +425,7 @@ export async function uploadAttachment(
     throw new ApiError(chunkRes.status, t || "Dosya yüklenemedi");
   }
 
-  return request<TaskAttachment>(`/tasks/${tid}/attachments/complete`, {
+  return request<TaskAttachment>(`${base}/attachments/complete`, {
     method: "POST",
     body: { upload_id: uploadId },
   });

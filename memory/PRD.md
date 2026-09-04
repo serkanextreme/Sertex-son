@@ -10,6 +10,16 @@ Tam liste: `/app/frontend/public/Sertex-Feature-Listesi.pdf` (üretici script: `
 
 ## ✅ Tamamlanan Fazlar
 
+### Fork'tan Özellik Taşıma — Görev Kopyalama + Şablon Kütüphanesi (2026-06 · fork) ✅
+Kullanıcı isteği ("yap"): `functional-themes` fork'unda yapılan 2 özelliği bu CANLI uygulamaya (panel-refactoring-v2, sertex-ai.com) taşı. Kaynak: public repo `github.com/serkanextreme/yedek-son` → `SERTEX_FEATURE_MIGRATION/new_features.patch`. ⛔ Veritabanına DOKUNULMADI (yalnız KOD).
+- **Uygulama**: `git apply` ile yama TEMİZ uygulandı (dry-run exit 0, hata yok) — 15 yeni + 18 değişen dosya (backend/web/mobil). Bu oturumdaki Kolay/Arşiv değişikliklerimle çakışmadı.
+- **Özellik 1 — Görev Kopyalama**: `POST /api/tasks/{tid}/duplicate` (alt görev + ek dosya kopyalama, obje depolama). Web: `TaskContextMenu`'ye "Kopyala" (`ctx-copy`), `CopyTaskModal`/`TaskPasteMenu`/`lib/taskClipboard.js`; Detaylı + Kolay'da bağlı. Mobil: `CopyTaskModal.tsx`/`taskClipboard.ts`.
+- **Özellik 2 — Şablon Kütüphanesi**: yeni `routers/templates_router.py` (`/api/task-templates` CRUD + `/instantiate` + chunked attachments), AYRI koleksiyonlar (`task_templates`, `task_template_attachments`) — mevcut task sorguları/stats/arşiv/scheduler'a dokunmaz. Web: `TemplateBar`/`TemplatesModal`/`TemplateFormModal` + `templatesApi`; Detaylı + Kolay'da mount. Mobil: `app/templates.tsx` + bileşenler.
+- **Test**: Backend `pytest test_task_duplicate.py test_task_templates.py -v -n0` → **18/18 PASS** (11 duplicate + 7 templates). Testler kendi kayıtlarını oluşturup silen fixture kullanır — mevcut veriye dokunmaz. Web (Playwright): Detaylı + Kolay'da `template-bar` göründü, `TemplatesModal` açıldı, bağlam menüsünde "KOPYALA" var. Mobil: native bundle derlendi (200), uygulama giriş ekranına redbox'sız açıldı. Backend temiz başladı (templates router mount).
+- **Yayın notu**: Değişiklikler preview'de. Canlıya (sertex-ai.com) için **NORMAL redeploy** (⛔ "Fresh Database" SEÇME). iOS/mobil uygulamanın özellikleri alması için yeni **build** gerekir.
+
+
+
 ### Arşiv — Gruplu Görünümde "Hepsini Aç/Kapat" (Detaylı + Kolay) (2026-06 · fork) ✅
 Kullanıcı isteği ("yap"): Gruplu arşive tek tıkla tüm iş kollarını aç/kapat düğmesi.
 - **Detaylı** (`TasksPanel.jsx`): Gruplu listenin üstüne (`archive-cats-toggle-all`, yalnız 2+ grup) buton — `allCollapsed` ise tümünü aç (`setCollapsedArchiveCats(new Set())`), değilse tümünü kapat (tüm key'ler). Etiket "HEPSİNİ AÇ"/"HEPSİNİ KAPAT".
