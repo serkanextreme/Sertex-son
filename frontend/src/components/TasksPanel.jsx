@@ -254,6 +254,8 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
   const [archiveByCategory, setArchiveByCategory] = useState(false);
   // Gruplu arşivde iş kolu başlığına göre hızlı filtre.
   const [archiveCatQuery, setArchiveCatQuery] = useState("");
+  // Her iş kolu grubunun İÇİNDE görev arama (grup açılınca): { [catKey]: query }
+  const [archiveGroupQuery, setArchiveGroupQuery] = useState({});
   // Gruplu arşivde katlanmış (kapalı) iş kolu başlıkları.
   const [collapsedArchiveCats, setCollapsedArchiveCats] = useState(() => new Set());
   const toggleArchiveCat = (key) =>
@@ -2607,21 +2609,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
             return a.name.localeCompare(b.name, "tr");
           });
           const q = archiveCatQuery.trim().toLocaleLowerCase("tr");
-          const shown = q
-            ? entries
-                .map((g) => {
-                  const nameHit = g.name.toLocaleLowerCase("tr").includes(q);
-                  const tasks = nameHit
-                    ? g.tasks
-                    : g.tasks.filter(
-                        (t) =>
-                          (t.title || "").toLocaleLowerCase("tr").includes(q) ||
-                          (t.description || "").toLocaleLowerCase("tr").includes(q),
-                      );
-                  return { ...g, tasks };
-                })
-                .filter((g) => g.tasks.length > 0)
-            : entries;
+          const shown = q ? entries.filter((g) => g.name.toLocaleLowerCase("tr").includes(q)) : entries;
           const allCollapsed = shown.length > 0 && shown.every((g) => collapsedArchiveCats.has(g.key));
           return (
             <div className="space-y-3" data-testid="archive-grouped-list">
@@ -2633,7 +2621,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
                       value={archiveCatQuery}
                       onChange={(e) => setArchiveCatQuery(e.target.value)}
                       data-testid="archive-cat-search"
-                      placeholder="Görev veya iş kolu ara..."
+                      placeholder="İş kolu ara..."
                       className="w-full pl-8 pr-3 py-1.5 rounded-md bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-xs placeholder:text-sertex-textMuted focus:border-sertex-cyan outline-none"
                     />
                   </div>
@@ -2650,9 +2638,17 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
                 </div>
               )}
               {shown.length === 0 ? (
-                <div className="hud-text text-sertex-textMuted py-6 text-center" data-testid="archive-cat-nomatch">Eşleşen sonuç yok</div>
+                <div className="hud-text text-sertex-textMuted py-6 text-center" data-testid="archive-cat-nomatch">Eşleşen iş kolu yok</div>
               ) : shown.map((g) => {
                 const isCollapsed = collapsedArchiveCats.has(g.key) && !q;
+                const gq = (archiveGroupQuery[g.key] || "").trim().toLocaleLowerCase("tr");
+                const gTasks = gq
+                  ? g.tasks.filter(
+                      (t) =>
+                        (t.title || "").toLocaleLowerCase("tr").includes(gq) ||
+                        (t.description || "").toLocaleLowerCase("tr").includes(gq),
+                    )
+                  : g.tasks;
                 return (
                   <div key={g.key} data-testid={`archive-cat-group-${g.key}`}>
                     <button
@@ -2673,8 +2669,24 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
                       <div className="flex-1 h-px bg-sertex-cyan/15" />
                     </button>
                     {!isCollapsed && (
-                      <div className="space-y-2">
-                        {g.tasks.map((t) => renderStaticMember(t))}
+                      <div className="space-y-2 mb-2">
+                        {g.tasks.length > 3 && (
+                          <div className="relative">
+                            <Search className="h-3.5 w-3.5 text-sertex-textMuted absolute left-2.5 top-1/2 -translate-y-1/2" />
+                            <input
+                              value={archiveGroupQuery[g.key] || ""}
+                              onChange={(e) => setArchiveGroupQuery((p) => ({ ...p, [g.key]: e.target.value }))}
+                              data-testid={`archive-group-search-${g.key}`}
+                              placeholder={`${g.name} içinde görev ara...`}
+                              className="w-full pl-8 pr-3 py-1.5 rounded-md bg-sertex-surface/40 border border-sertex-cyan/20 text-sertex-text font-mono text-xs placeholder:text-sertex-textMuted focus:border-sertex-cyan outline-none"
+                            />
+                          </div>
+                        )}
+                        {gTasks.length === 0 ? (
+                          <div className="hud-text text-sertex-textMuted py-3 text-center" data-testid={`archive-group-nomatch-${g.key}`}>Bu iş kolunda eşleşen görev yok</div>
+                        ) : (
+                          gTasks.map((t) => renderStaticMember(t))
+                        )}
                       </div>
                     )}
                   </div>

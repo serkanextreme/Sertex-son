@@ -20,7 +20,14 @@ Kullanıcı isteği ("yap"): `functional-themes` fork'unda yapılan 2 özelliği
 
 
 
-### Arşiv — Gruplu Görünümde Görev + İş Kolu Arama (Detaylı + Kolay) (2026-06 · fork) ✅
+### Arşiv — İş Kolu İÇİNDE Görev Arama (grup açılınca) (Detaylı + Kolay) (2026-06 · fork) ✅
+Kullanıcı düzeltmesi: Önceki birleşik üst kutu genel aramayla çakışıyordu (mantıksız). Doğru akış: iş kolunu SEÇ/AÇ → altında KENDİ arama kutusu → SADECE o iş kolunun görevlerinde ara.
+- **Uygulama**: Üstteki kutu tekrar sadece **iş kolu adı** filtresi (görev eşleştirme kaldırıldı). Her grup AÇIKKEN ve grupta **3'ten fazla görev** varsa, başlığın altında o iş koluna özel arama kutusu (`archive-group-search-{key}` / `kolay-arch-group-search-{key}`) → görev başlık/açıklamasına göre yalnız o grubun görevlerini filtreler; eşleşme yoksa "Bu iş kolunda eşleşen görev yok". `archiveGroupQuery`/`groupQuery` state (grup bazlı).
+- **Detaylı** (`TasksPanel.jsx`) + **Kolay** (`KolayInterface.jsx`) aynı mantık. Gruplama kapalı/düz liste bozulmadı.
+- **Test**: Ana ajan (Playwright, Fason'a 4 test görevi) — FASON VERME(4) açılınca grup-içi kutu çıktı, "gamma"→sadece o görev; az görevli grupta (KOLSUZ 1) kutu çıkmadı; grup-içi nomatch çalıştı. Derleme temiz, test verisi silindi.
+
+### Arşiv — Gruplu Görünümde Görev + İş Kolu Arama (Detaylı + Kolay) (2026-06 · fork) ✅ [DEĞİŞTİRİLDİ]
+(Bu birleşik-kutu yaklaşımı yukarıdaki "grup içi arama" ile değiştirildi — üst kutu artık yalnız iş kolu adı arar.)
 Kullanıcı isteği ("arşivdekini yap, bozmadan"): İş kolu bulununca içindeki GÖREVLERİ de arayabilme. Mevcut arama kutusu genişletildi (ikinci kutu yok, tek birleşik kutu).
 - **Davranış**: Kutuya yazılan metin hem iş kolu ADINI hem görev BAŞLIK/AÇIKLAMASINI arar. İş kolu adı eşleşirse o grubun tüm görevleri; değilse yalnız eşleşen görevler gösterilir; görevi kalmayan iş kolu grupları gizlenir. Arama aktifken gruplar otomatik açılır (katlı olsa bile). Eşleşme yoksa "Eşleşen sonuç yok". Placeholder "Görev veya iş kolu ara...".
 - **Detaylı** (`TasksPanel.jsx`) + **Kolay** (`KolayInterface.jsx`): aynı filtre mantığı; `isCollapsed = collapsed && !q` (sorgu varken zorla açık). Gruplama kapalıyken/düz listede etkisiz — mevcut davranış bozulmadı.

@@ -515,6 +515,7 @@ const KolayArchive = ({ catName }) => {
   const [loading, setLoading] = useState(true);
   const [byCat, setByCat] = useState(false);
   const [catQuery, setCatQuery] = useState("");
+  const [groupQuery, setGroupQuery] = useState({});
   const [collapsed, setCollapsed] = useState(() => new Set());
   const toggleGroup = (key) =>
     setCollapsed((prev) => {
@@ -607,21 +608,7 @@ const KolayArchive = ({ catName }) => {
         (() => {
           const glAll = groups();
           const q = catQuery.trim().toLocaleLowerCase("tr");
-          const gl = q
-            ? glAll
-                .map((g) => {
-                  const nameHit = g.name.toLocaleLowerCase("tr").includes(q);
-                  const tasks = nameHit
-                    ? g.tasks
-                    : g.tasks.filter(
-                        (t) =>
-                          (t.title || "").toLocaleLowerCase("tr").includes(q) ||
-                          (t.description || "").toLocaleLowerCase("tr").includes(q),
-                      );
-                  return { ...g, tasks };
-                })
-                .filter((g) => g.tasks.length > 0)
-            : glAll;
+          const gl = q ? glAll.filter((g) => g.name.toLocaleLowerCase("tr").includes(q)) : glAll;
           const allCollapsed = gl.length > 0 && gl.every((g) => collapsed.has(g.key));
           return (
             <div className="space-y-4" data-testid="kolay-archive-grouped">
@@ -633,7 +620,7 @@ const KolayArchive = ({ catName }) => {
                       value={catQuery}
                       onChange={(e) => setCatQuery(e.target.value)}
                       data-testid="kolay-archive-cat-search"
-                      placeholder="Görev veya iş kolu ara..."
+                      placeholder="İş kolu ara..."
                       className="w-full pl-10 pr-3 py-2 rounded-lg bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-sm placeholder:text-sertex-textMuted focus:border-sertex-cyan outline-none"
                     />
                   </div>
@@ -650,9 +637,17 @@ const KolayArchive = ({ catName }) => {
                 </div>
               )}
               {gl.length === 0 ? (
-                <div className="hud-text text-sertex-textMuted py-6 text-center" data-testid="kolay-archive-cat-nomatch">Eşleşen sonuç yok</div>
+                <div className="hud-text text-sertex-textMuted py-6 text-center" data-testid="kolay-archive-cat-nomatch">Eşleşen iş kolu yok</div>
               ) : gl.map((g) => {
                 const isCollapsed = collapsed.has(g.key) && !q;
+                const gq = (groupQuery[g.key] || "").trim().toLocaleLowerCase("tr");
+                const gTasks = gq
+                  ? g.tasks.filter(
+                      (t) =>
+                        (t.title || "").toLocaleLowerCase("tr").includes(gq) ||
+                        (t.description || "").toLocaleLowerCase("tr").includes(gq),
+                    )
+                  : g.tasks;
                 return (
                   <div key={g.key} data-testid={`kolay-arch-group-${g.key}`}>
                     <button
@@ -673,7 +668,25 @@ const KolayArchive = ({ catName }) => {
                       <div className="flex-1 h-px bg-sertex-cyan/15" />
                     </button>
                     {!isCollapsed && (
-                      <div className="grid gap-3" style={gridStyle}>{g.tasks.map(card)}</div>
+                      <div className="space-y-3">
+                        {g.tasks.length > 3 && (
+                          <div className="relative">
+                            <Search className="h-4 w-4 text-sertex-textMuted absolute left-3 top-1/2 -translate-y-1/2" />
+                            <input
+                              value={groupQuery[g.key] || ""}
+                              onChange={(e) => setGroupQuery((p) => ({ ...p, [g.key]: e.target.value }))}
+                              data-testid={`kolay-arch-group-search-${g.key}`}
+                              placeholder={`${g.name} içinde görev ara...`}
+                              className="w-full pl-10 pr-3 py-2 rounded-lg bg-sertex-surface/40 border border-sertex-cyan/20 text-sertex-text font-mono text-sm placeholder:text-sertex-textMuted focus:border-sertex-cyan outline-none"
+                            />
+                          </div>
+                        )}
+                        {gTasks.length === 0 ? (
+                          <div className="hud-text text-sertex-textMuted py-3 text-center" data-testid={`kolay-arch-group-nomatch-${g.key}`}>Bu iş kolunda eşleşen görev yok</div>
+                        ) : (
+                          <div className="grid gap-3" style={gridStyle}>{gTasks.map(card)}</div>
+                        )}
+                      </div>
                     )}
                   </div>
                 );
