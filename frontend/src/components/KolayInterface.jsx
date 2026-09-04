@@ -669,7 +669,7 @@ const KolayArchive = ({ catName }) => {
                     </button>
                     {!isCollapsed && (
                       <div className="space-y-3">
-                        {g.tasks.length > 3 && (
+                        {g.tasks.length > 1 && (
                           <div className="relative">
                             <Search className="h-4 w-4 text-sertex-textMuted absolute left-3 top-1/2 -translate-y-1/2" />
                             <input

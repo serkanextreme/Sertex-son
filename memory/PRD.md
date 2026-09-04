@@ -20,6 +20,9 @@ Kullanıcı isteği ("yap"): `functional-themes` fork'unda yapılan 2 özelliği
 
 
 
+### Arşiv — Grup-İçi Arama Alt İş Kollarında da (eşik düşürüldü) (2026-06 · fork) ✅
+Kullanıcı isteği: "alt iş kollarında da arama çıksın". Grup-içi görev arama kutusu eşiği `>3`'ten `>1`'e düşürüldü → 2+ görevli HER iş kolunda (alt/nested iş kolları dahil) kutu görünür; tek görevli grupta gereksiz olduğu için çıkmaz. Detaylı `categories` düz + parent_id taşıdığından alt iş kolu adları zaten doğru çözülüyor (ayrı grup). Detaylı + Kolay. Test (Playwright): 2 görevli Fason Verme grubunda kutu çıktı, tek görevli Kolsuz'da çıkmadı. Derleme temiz, test verisi silindi.
+
 ### Arşiv — İş Kolu İÇİNDE Görev Arama (grup açılınca) (Detaylı + Kolay) (2026-06 · fork) ✅
 Kullanıcı düzeltmesi: Önceki birleşik üst kutu genel aramayla çakışıyordu (mantıksız). Doğru akış: iş kolunu SEÇ/AÇ → altında KENDİ arama kutusu → SADECE o iş kolunun görevlerinde ara.
 - **Uygulama**: Üstteki kutu tekrar sadece **iş kolu adı** filtresi (görev eşleştirme kaldırıldı). Her grup AÇIKKEN ve grupta **3'ten fazla görev** varsa, başlığın altında o iş koluna özel arama kutusu (`archive-group-search-{key}` / `kolay-arch-group-search-{key}`) → görev başlık/açıklamasına göre yalnız o grubun görevlerini filtreler; eşleşme yoksa "Bu iş kolunda eşleşen görev yok". `archiveGroupQuery`/`groupQuery` state (grup bazlı).
