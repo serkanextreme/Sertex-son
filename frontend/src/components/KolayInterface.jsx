@@ -514,6 +514,7 @@ const KolayArchive = ({ catName }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [byCat, setByCat] = useState(false);
+  const [catQuery, setCatQuery] = useState("");
   const [collapsed, setCollapsed] = useState(() => new Set());
   const toggleGroup = (key) =>
     setCollapsed((prev) => {
@@ -604,25 +605,39 @@ const KolayArchive = ({ catName }) => {
         </div>
       ) : byCat ? (
         (() => {
-          const gl = groups();
+          const glAll = groups();
+          const q = catQuery.trim().toLocaleLowerCase("tr");
+          const gl = q ? glAll.filter((g) => g.name.toLocaleLowerCase("tr").includes(q)) : glAll;
           const allCollapsed = gl.length > 0 && gl.every((g) => collapsed.has(g.key));
           return (
             <div className="space-y-4" data-testid="kolay-archive-grouped">
-              {gl.length > 1 && (
-                <div className="flex justify-end">
+              {glAll.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="h-4 w-4 text-sertex-textMuted absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      value={catQuery}
+                      onChange={(e) => setCatQuery(e.target.value)}
+                      data-testid="kolay-archive-cat-search"
+                      placeholder="İş kolu ara..."
+                      className="w-full pl-10 pr-3 py-2 rounded-lg bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-sm placeholder:text-sertex-textMuted focus:border-sertex-cyan outline-none"
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(gl.map((g) => g.key)))}
                     data-testid="kolay-archive-toggle-all"
                     title={allCollapsed ? "Tüm iş kollarını aç" : "Tüm iş kollarını kapat"}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-sertex-cyan/30 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/60 font-mono text-xs transition-colors"
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-sertex-cyan/30 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/60 font-mono text-xs transition-colors shrink-0"
                   >
                     {allCollapsed ? <ChevronsUpDown className="h-3.5 w-3.5" /> : <ChevronsDownUp className="h-3.5 w-3.5" />}
                     {allCollapsed ? "HEPSİNİ AÇ" : "HEPSİNİ KAPAT"}
                   </button>
                 </div>
               )}
-              {gl.map((g) => {
+              {gl.length === 0 ? (
+                <div className="hud-text text-sertex-textMuted py-6 text-center" data-testid="kolay-archive-cat-nomatch">Eşleşen iş kolu yok</div>
+              ) : gl.map((g) => {
                 const isCollapsed = collapsed.has(g.key);
                 return (
                   <div key={g.key} data-testid={`kolay-arch-group-${g.key}`}>

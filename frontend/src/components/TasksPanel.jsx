@@ -252,6 +252,8 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
   const [archiveSort, setArchiveSort] = useState("new");
   // Arşivde iş koluna (kategori) göre gruplama — varsayılan kapalı (düz liste).
   const [archiveByCategory, setArchiveByCategory] = useState(false);
+  // Gruplu arşivde iş kolu başlığına göre hızlı filtre.
+  const [archiveCatQuery, setArchiveCatQuery] = useState("");
   // Gruplu arşivde katlanmış (kapalı) iş kolu başlıkları.
   const [collapsedArchiveCats, setCollapsedArchiveCats] = useState(() => new Set());
   const toggleArchiveCat = (key) =>
@@ -2604,24 +2606,38 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
             if (b.key === "__none__") return -1;
             return a.name.localeCompare(b.name, "tr");
           });
-          const allCollapsed = entries.length > 0 && entries.every((g) => collapsedArchiveCats.has(g.key));
+          const q = archiveCatQuery.trim().toLocaleLowerCase("tr");
+          const shown = q ? entries.filter((g) => g.name.toLocaleLowerCase("tr").includes(q)) : entries;
+          const allCollapsed = shown.length > 0 && shown.every((g) => collapsedArchiveCats.has(g.key));
           return (
             <div className="space-y-3" data-testid="archive-grouped-list">
               {entries.length > 1 && (
-                <div className="flex justify-end">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="h-3.5 w-3.5 text-sertex-textMuted absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      value={archiveCatQuery}
+                      onChange={(e) => setArchiveCatQuery(e.target.value)}
+                      data-testid="archive-cat-search"
+                      placeholder="İş kolu ara..."
+                      className="w-full pl-8 pr-3 py-1.5 rounded-md bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-xs placeholder:text-sertex-textMuted focus:border-sertex-cyan outline-none"
+                    />
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setCollapsedArchiveCats(allCollapsed ? new Set() : new Set(entries.map((g) => g.key)))}
+                    onClick={() => setCollapsedArchiveCats(allCollapsed ? new Set() : new Set(shown.map((g) => g.key)))}
                     data-testid="archive-cats-toggle-all"
                     title={allCollapsed ? "Tüm iş kollarını aç" : "Tüm iş kollarını kapat"}
-                    className="flex items-center gap-1 px-2 py-1 rounded-md border border-sertex-cyan/30 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/60 hud-text transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 rounded-md border border-sertex-cyan/30 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/60 hud-text transition-colors shrink-0"
                   >
                     {allCollapsed ? <ChevronsUpDown className="h-3.5 w-3.5" /> : <ChevronsDownUp className="h-3.5 w-3.5" />}
                     {allCollapsed ? "HEPSİNİ AÇ" : "HEPSİNİ KAPAT"}
                   </button>
                 </div>
               )}
-              {entries.map((g) => {
+              {shown.length === 0 ? (
+                <div className="hud-text text-sertex-textMuted py-6 text-center" data-testid="archive-cat-nomatch">Eşleşen iş kolu yok</div>
+              ) : shown.map((g) => {
                 const isCollapsed = collapsedArchiveCats.has(g.key);
                 return (
                   <div key={g.key} data-testid={`archive-cat-group-${g.key}`}>

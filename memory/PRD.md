@@ -20,6 +20,13 @@ Kullanıcı isteği ("yap"): `functional-themes` fork'unda yapılan 2 özelliği
 
 
 
+### Arşiv — Gruplu Görünümde İş Kolu Arama Kutusu (Detaylı + Kolay) (2026-06 · fork) ✅
+Kullanıcı isteği ("bozmadan yap"): Gruplu arşive iş kolu adına göre hızlı filtre kutusu — kalabalık arşivde doğru gruba tek yazımla ulaşma.
+- **Detaylı** (`TasksPanel.jsx`): `archiveCatQuery` state. Gruplu başlık satırına arama kutusu (`archive-cat-search`, yalnız 2+ grup). Türkçe-locale `includes` ile grup adına göre filtre; eşleşme yoksa "Eşleşen iş kolu yok" (`archive-cat-nomatch`). Hepsini aç/kapat artık görünen (filtrelenmiş) gruplara uygulanır.
+- **Kolay** (`KolayInterface.jsx`): `catQuery` state + `kolay-archive-cat-search` + `kolay-archive-cat-nomatch`, aynı mantık.
+- Sadece görev başlıklarını DEĞİL, iş kolu başlıklarını filtreler (görev araması ayrı). Gruplama kapalıyken görünmez.
+- **Test**: Ana ajan (Playwright, 3 test grubu) — Kolay'da kutu göründü, "fason"→sadece Fason Verme kaldı, eşleşmeyende "Eşleşen iş kolu yok". Derleme temiz. Test verisi silindi. Detaylı aynı desende.
+
 ### Arşiv — Gruplu Görünümde "Hepsini Aç/Kapat" (Detaylı + Kolay) (2026-06 · fork) ✅
 Kullanıcı isteği ("yap"): Gruplu arşive tek tıkla tüm iş kollarını aç/kapat düğmesi.
 - **Detaylı** (`TasksPanel.jsx`): Gruplu listenin üstüne (`archive-cats-toggle-all`, yalnız 2+ grup) buton — `allCollapsed` ise tümünü aç (`setCollapsedArchiveCats(new Set())`), değilse tümünü kapat (tüm key'ler). Etiket "HEPSİNİ AÇ"/"HEPSİNİ KAPAT".
