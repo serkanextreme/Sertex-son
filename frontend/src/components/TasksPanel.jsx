@@ -2607,7 +2607,21 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
             return a.name.localeCompare(b.name, "tr");
           });
           const q = archiveCatQuery.trim().toLocaleLowerCase("tr");
-          const shown = q ? entries.filter((g) => g.name.toLocaleLowerCase("tr").includes(q)) : entries;
+          const shown = q
+            ? entries
+                .map((g) => {
+                  const nameHit = g.name.toLocaleLowerCase("tr").includes(q);
+                  const tasks = nameHit
+                    ? g.tasks
+                    : g.tasks.filter(
+                        (t) =>
+                          (t.title || "").toLocaleLowerCase("tr").includes(q) ||
+                          (t.description || "").toLocaleLowerCase("tr").includes(q),
+                      );
+                  return { ...g, tasks };
+                })
+                .filter((g) => g.tasks.length > 0)
+            : entries;
           const allCollapsed = shown.length > 0 && shown.every((g) => collapsedArchiveCats.has(g.key));
           return (
             <div className="space-y-3" data-testid="archive-grouped-list">
@@ -2619,7 +2633,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
                       value={archiveCatQuery}
                       onChange={(e) => setArchiveCatQuery(e.target.value)}
                       data-testid="archive-cat-search"
-                      placeholder="İş kolu ara..."
+                      placeholder="Görev veya iş kolu ara..."
                       className="w-full pl-8 pr-3 py-1.5 rounded-md bg-sertex-surface/60 border border-sertex-cyan/25 text-sertex-text font-mono text-xs placeholder:text-sertex-textMuted focus:border-sertex-cyan outline-none"
                     />
                   </div>
@@ -2636,9 +2650,9 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
                 </div>
               )}
               {shown.length === 0 ? (
-                <div className="hud-text text-sertex-textMuted py-6 text-center" data-testid="archive-cat-nomatch">Eşleşen iş kolu yok</div>
+                <div className="hud-text text-sertex-textMuted py-6 text-center" data-testid="archive-cat-nomatch">Eşleşen sonuç yok</div>
               ) : shown.map((g) => {
-                const isCollapsed = collapsedArchiveCats.has(g.key);
+                const isCollapsed = collapsedArchiveCats.has(g.key) && !q;
                 return (
                   <div key={g.key} data-testid={`archive-cat-group-${g.key}`}>
                     <button

@@ -20,6 +20,12 @@ Kullanıcı isteği ("yap"): `functional-themes` fork'unda yapılan 2 özelliği
 
 
 
+### Arşiv — Gruplu Görünümde Görev + İş Kolu Arama (Detaylı + Kolay) (2026-06 · fork) ✅
+Kullanıcı isteği ("arşivdekini yap, bozmadan"): İş kolu bulununca içindeki GÖREVLERİ de arayabilme. Mevcut arama kutusu genişletildi (ikinci kutu yok, tek birleşik kutu).
+- **Davranış**: Kutuya yazılan metin hem iş kolu ADINI hem görev BAŞLIK/AÇIKLAMASINI arar. İş kolu adı eşleşirse o grubun tüm görevleri; değilse yalnız eşleşen görevler gösterilir; görevi kalmayan iş kolu grupları gizlenir. Arama aktifken gruplar otomatik açılır (katlı olsa bile). Eşleşme yoksa "Eşleşen sonuç yok". Placeholder "Görev veya iş kolu ara...".
+- **Detaylı** (`TasksPanel.jsx`) + **Kolay** (`KolayInterface.jsx`): aynı filtre mantığı; `isCollapsed = collapsed && !q` (sorgu varken zorla açık). Gruplama kapalıyken/düz listede etkisiz — mevcut davranış bozulmadı.
+- **Test**: Ana ajan (Playwright, 3 test görevi) — "alpha"(görev)→sadece o görev+grubu, "fason"(iş kolu)→tüm grup (2 görev), eşleşmeyende boş mesaj. Derleme temiz, test verisi silindi.
+
 ### Arşiv — Gruplu Görünümde İş Kolu Arama Kutusu (Detaylı + Kolay) (2026-06 · fork) ✅
 Kullanıcı isteği ("bozmadan yap"): Gruplu arşive iş kolu adına göre hızlı filtre kutusu — kalabalık arşivde doğru gruba tek yazımla ulaşma.
 - **Detaylı** (`TasksPanel.jsx`): `archiveCatQuery` state. Gruplu başlık satırına arama kutusu (`archive-cat-search`, yalnız 2+ grup). Türkçe-locale `includes` ile grup adına göre filtre; eşleşme yoksa "Eşleşen iş kolu yok" (`archive-cat-nomatch`). Hepsini aç/kapat artık görünen (filtrelenmiş) gruplara uygulanır.
@@ -58,7 +64,7 @@ Kullanıcı isteği (görselli): Kolay Ana Sayfa görev kartları referans görs
 - **Bekleyen (backlog, kullanıcı "bekle not al" dedi)**: Kolay yan menü Notlar/Dosyalar/Ekip hâlâ Detaylı'ya yönlendiriyor — Kolay içinde açılması istendi ama şimdilik ertelendi.
 - **Bekleyen (backlog, YAPMA — sadece not)**: Detaylı (Neural Link) açılınca görevler üst üste biniyor/taşıyor → görevler ekrana otomatik sığdırılsın (auto-fit / taşma düzeltmesi). Kullanıcı açık şekilde "bekle yapma" dedi. [Hedef arayüz/konum hâlâ netleşmedi — a/b/c/d sorusu cevapsız.]
 - **Bekleyen (backlog, YAPMA — sadece not)**: Kolay yan menüde "Ana Sayfa" ve "Görevler" aynı görev ızgarasını gösteriyor → **Ana Sayfa** tıklanınca görevler gizlensin (karşılama/özet ekranı), **Görevler** ikonuna tıklanınca görev listesi gelsin. Kullanıcı "bekle yapma, not al" dedi.
-- **Bekleyen (backlog, YAPMA — sadece not)**: Gruplu arşivde iş kolu bulununca **o iş kolunun içindeki GÖREVLERİ arama** (iş kolu çok olabilir). Öneri: gruplu arşive görev arama kutusu → metne göre görevleri filtrele, boşalan iş kolu gruplarını otomatik gizle. Detaylı + Kolay. Kullanıcı "bekle yapma" dedi.
+- **Bekleyen (backlog, YAPMA — sadece not)**: Gruplu arşivde iş kolu bulununca **o iş kolunun içindeki GÖREVLERİ arama** (iş kolu çok olabilir). ✅ YAPILDI (2026-06): birleşik arama kutusu görev başlık/açıklama + iş kolu adı arıyor.
 - **Yayın**: preview'de; canlıya (sertex-ai.com) için Deploy gerekir.
 
 
