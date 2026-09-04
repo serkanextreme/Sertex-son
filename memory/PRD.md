@@ -58,6 +58,7 @@ Kullanıcı isteği (görselli): Kolay Ana Sayfa görev kartları referans görs
 - **Bekleyen (backlog, kullanıcı "bekle not al" dedi)**: Kolay yan menü Notlar/Dosyalar/Ekip hâlâ Detaylı'ya yönlendiriyor — Kolay içinde açılması istendi ama şimdilik ertelendi.
 - **Bekleyen (backlog, YAPMA — sadece not)**: Detaylı (Neural Link) açılınca görevler üst üste biniyor/taşıyor → görevler ekrana otomatik sığdırılsın (auto-fit / taşma düzeltmesi). Kullanıcı açık şekilde "bekle yapma" dedi. [Hedef arayüz/konum hâlâ netleşmedi — a/b/c/d sorusu cevapsız.]
 - **Bekleyen (backlog, YAPMA — sadece not)**: Kolay yan menüde "Ana Sayfa" ve "Görevler" aynı görev ızgarasını gösteriyor → **Ana Sayfa** tıklanınca görevler gizlensin (karşılama/özet ekranı), **Görevler** ikonuna tıklanınca görev listesi gelsin. Kullanıcı "bekle yapma, not al" dedi.
+- **Bekleyen (backlog, YAPMA — sadece not)**: Gruplu arşivde iş kolu bulununca **o iş kolunun içindeki GÖREVLERİ arama** (iş kolu çok olabilir). Öneri: gruplu arşive görev arama kutusu → metne göre görevleri filtrele, boşalan iş kolu gruplarını otomatik gizle. Detaylı + Kolay. Kullanıcı "bekle yapma" dedi.
 - **Yayın**: preview'de; canlıya (sertex-ai.com) için Deploy gerekir.
 
 
