@@ -1,5 +1,15 @@
 # Sertex — Kişisel AI Asistan · PRD
 
+## 🟡 BEKLEYEN (kullanıcı "bekle yapma" — YAP bekleniyor, 2026-06): Görev SERİ NO + TARİH etiketi
+- Görev ekle/düzenle formunda iki checkbox: ☐ Seri No, ☐ Tarih. İşaretlenene göre kart etiketi:
+  - ikisi de → `1-10.09.26` (no + kısa tarih)
+  - sadece no → `1`
+  - sadece tarih → `10.09.2026`
+- Etiket görev kartında görünür; no/tarih ile takip+arama.
+- NETLEŞECEK: (1) tarih = oluşturulma mı / bitiş mi / elle mi? (2) kısa vs uzun yıl bilerek mi farklı? (3) seri no = kalıcı/değişmeyen global sayı mı (öneri: evet, #1'den artan, counters koleksiyonu ile atomik $inc, oluşturulunca atanır, backfill gerekir — CANLI DB'ye alan ekler, veri silmez, onay gerekli). (4) varsayılan iki kutu da işaretli mi?
+- NOT: mevcut "number_pinned/pinned_number" POZİSYON numarasıdır, bu yeni kalıcı seri ondan AYRI olmalı.
+
+
 ## ✅ TAMAMLANDI (2026-06, "YAP"): İş kolu hiyerarşisi GÖZE BATAN + Arşiv girintili
 - (1) `tasks/CategorySelect.jsx` dropdown: alt kollar artık her ata seviyesi için **parlak cyan dikey çubuk** (`w-[3px] bg-sertex-cyan/70`, self-stretch) + **girinti** (18px/seviye) + **tint arka plan** (`bg-sertex-cyan/[0.04]`). Sınırsız derinlik. "└/│" glyph'leri yerine dolu çubuk → çok daha belirgin. Detaylı/Kolay/Profesyonel add formunda ortak.
 - (2) Arşiv iş kolu gruplaması artık **ağaç sırası + girinti**: `TasksPanel.jsx` (archive-cat-group) ve `KolayInterface.jsx` (KolayArchive, `flatCats` prop eklendi) → gruplar `flattenTree` DFS sırasına göre (parent → child), child gruplar `marginLeft: depth*16-18` + `border-l-2 border-sertex-cyan/40 pl-2` ile girintili. Kolsuz en sonda.
