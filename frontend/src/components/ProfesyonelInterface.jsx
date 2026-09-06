@@ -328,6 +328,11 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                       <X className="h-3 w-3" />
                     </button>
                   )}
+                  {!loading && (
+                    <span className="ml-auto hud-text text-sertex-cyan normal-case tracking-normal" data-testid="prof-result-count">
+                      {visibleTasks.length} {q.trim() ? "sonuç" : "görev"}
+                    </span>
+                  )}
                 </div>
                 {loading ? (
                   <div className="hud-text text-sertex-textMuted py-10 text-center" data-testid="prof-loading">YÜKLENİYOR...</div>
