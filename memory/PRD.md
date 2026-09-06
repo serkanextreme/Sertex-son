@@ -1,5 +1,11 @@
 # Sertex — Kişisel AI Asistan · PRD
 
+## ✅ TAMAMLANDI (2026-06, "YAP"): İş kolu hiyerarşisi GÖZE BATAN + Arşiv girintili
+- (1) `tasks/CategorySelect.jsx` dropdown: alt kollar artık her ata seviyesi için **parlak cyan dikey çubuk** (`w-[3px] bg-sertex-cyan/70`, self-stretch) + **girinti** (18px/seviye) + **tint arka plan** (`bg-sertex-cyan/[0.04]`). Sınırsız derinlik. "└/│" glyph'leri yerine dolu çubuk → çok daha belirgin. Detaylı/Kolay/Profesyonel add formunda ortak.
+- (2) Arşiv iş kolu gruplaması artık **ağaç sırası + girinti**: `TasksPanel.jsx` (archive-cat-group) ve `KolayInterface.jsx` (KolayArchive, `flatCats` prop eklendi) → gruplar `flattenTree` DFS sırasına göre (parent → child), child gruplar `marginLeft: depth*16-18` + `border-l-2 border-sertex-cyan/40 pl-2` ile girintili. Kolsuz en sonda.
+- Doğrulama: geçici 3-seviye kategori + 2 arşivli görev ile screenshot+DOM (dropdown çubuklar; arşivde ZZTEST_ALT ml=18px+cyan border FASON VERME altında). Sonra tüm geçici veri silindi (200'ler), DB temiz.
+
+
 ## ✅ TAMAMLANDI (2026-06, "YAP"): CategorySelect hiyerarşi görünürlüğü (her derinlikte)
 - `tasks/CategorySelect.jsx` browse modunda (arama boşken) alt kollar artık ağaç gibi: her ata seviyesi için "│" kılavuz çizgisi + kendi seviyesinde "└" dalı, ikondan ÖNCE render → alt kolun ana kola bağlı olduğu net. `Array.from({length: depth})` ile ARBITRARY derinlik (alt-alt kol da) destekleniyor. Arama modu değişmedi (tam yol `getCategoryPathLabel`). Bileşen Detaylı/Kolay/Profesyonel add formunda ortak.
 - Doğrulama: geçici 3 seviyeli hiyerarşi (Fason Verme → ZZTEST_alt → ZZTEST_altalt) oluşturuldu → dropdown "Fason Verme / └ ZZTEST_alt / │ └ ZZTEST_altalt" gösterdi (screenshot+DOM), sonra geçici kategoriler silindi (200/200), DB temiz.

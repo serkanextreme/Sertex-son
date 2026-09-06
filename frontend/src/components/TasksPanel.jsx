@@ -2598,12 +2598,19 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
             buckets.get(key).push(t);
           }
           const catNameOf = (id) => categories.find((c) => c.id === id)?.name || null;
+          // İş kolu ağacı sırası + derinlik (alt kollar ana kolun hemen altında, girintili).
+          const flatCats = flattenTree(categories);
+          const depthOf = new Map(flatCats.map((c) => [c.id, c.__depth || 0]));
+          const orderOf = new Map(flatCats.map((c, i) => [c.id, i]));
           const entries = [...buckets.entries()].map(([key, tasks]) => ({
             key,
             name: key === "__none__" ? "Kolsuz" : (catNameOf(key) || "Bilinmeyen İş Kolu"),
+            depth: key === "__none__" ? 0 : (depthOf.get(key) || 0),
+            order: key === "__none__" ? Number.POSITIVE_INFINITY : (orderOf.has(key) ? orderOf.get(key) : Number.POSITIVE_INFINITY),
             tasks,
           }));
           entries.sort((a, b) => {
+            if (a.order !== b.order) return a.order - b.order;
             if (a.key === "__none__") return 1;
             if (b.key === "__none__") return -1;
             return a.name.localeCompare(b.name, "tr");
@@ -2650,7 +2657,12 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
                     )
                   : g.tasks;
                 return (
-                  <div key={g.key} data-testid={`archive-cat-group-${g.key}`}>
+                  <div
+                    key={g.key}
+                    data-testid={`archive-cat-group-${g.key}`}
+                    style={{ marginLeft: g.depth * 16 }}
+                    className={g.depth > 0 ? "border-l-2 border-sertex-cyan/40 pl-2" : ""}
+                  >
                     <button
                       type="button"
                       onClick={() => toggleArchiveCat(g.key)}

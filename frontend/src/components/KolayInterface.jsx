@@ -510,7 +510,7 @@ const KolayNotes = () => {
 };
 
 // Kolay içi Arşiv — biten görevler + iş koluna göre gruplama toggle'ı.
-const KolayArchive = ({ catName }) => {
+const KolayArchive = ({ catName, flatCats = [] }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [byCat, setByCat] = useState(false);
@@ -568,12 +568,22 @@ const KolayArchive = ({ catName }) => {
       if (!buckets.has(key)) buckets.set(key, []);
       buckets.get(key).push(t);
     }
+    // İş kolu ağacı sırası + derinlik (alt kollar ana kolun hemen altında, girintili).
+    const depthOf = new Map(flatCats.map((c) => [c.id, c.__depth || 0]));
+    const orderOf = new Map(flatCats.map((c, i) => [c.id, i]));
     const entries = [...buckets.entries()].map(([key, tasks]) => ({
       key,
       name: key === "__none__" ? "Kolsuz" : (catName(key) || "Bilinmeyen İş Kolu"),
+      depth: key === "__none__" ? 0 : (depthOf.get(key) || 0),
+      order: key === "__none__" ? Number.POSITIVE_INFINITY : (orderOf.has(key) ? orderOf.get(key) : Number.POSITIVE_INFINITY),
       tasks,
     }));
-    entries.sort((a, b) => (a.key === "__none__" ? 1 : b.key === "__none__" ? -1 : a.name.localeCompare(b.name, "tr")));
+    entries.sort((a, b) => {
+      if (a.order !== b.order) return a.order - b.order;
+      if (a.key === "__none__") return 1;
+      if (b.key === "__none__") return -1;
+      return a.name.localeCompare(b.name, "tr");
+    });
     return entries;
   };
   const gridStyle = { gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" };
@@ -649,7 +659,12 @@ const KolayArchive = ({ catName }) => {
                     )
                   : g.tasks;
                 return (
-                  <div key={g.key} data-testid={`kolay-arch-group-${g.key}`}>
+                  <div
+                    key={g.key}
+                    data-testid={`kolay-arch-group-${g.key}`}
+                    style={{ marginLeft: (g.depth || 0) * 18 }}
+                    className={(g.depth || 0) > 0 ? "border-l-2 border-sertex-cyan/40 pl-2.5" : ""}
+                  >
                     <button
                       type="button"
                       onClick={() => toggleGroup(g.key)}
@@ -1249,7 +1264,7 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
           {activeKey === "notes" && <KolayNotes />}
 
           {/* ARŞİV — biten görevler + iş koluna göre gruplama */}
-          {activeKey === "archive" && <KolayArchive catName={catName} />}
+          {activeKey === "archive" && <KolayArchive catName={catName} flatCats={flatCats} />}
 
           {/* DOSYALAR — mevcut FilePanel yeniden kullanıldı */}
           {activeKey === "files" && (
