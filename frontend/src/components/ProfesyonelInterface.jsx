@@ -16,6 +16,7 @@ import {
   Activity,
   BarChart3,
   TrendingUp,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { tasksApi, taskCategoriesApi } from "../lib/api";
@@ -23,7 +24,7 @@ import { useAuth } from "../lib/auth";
 import { setInterfaceMode } from "../lib/appearance";
 import { EditTaskModal } from "./tasks/EditTaskModal";
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 
 const isActive = (t) => t.status !== "done" && !t.archived && !t.deleted;
@@ -67,6 +68,7 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState(null);
+  const [catFilter, setCatFilter] = useState("");
 
   const load = useCallback(async () => {
     const [ts, cs] = await Promise.all([
@@ -93,14 +95,17 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
   }, [tasks]);
 
   const visibleTasks = useMemo(() => {
-    const base = tasks.filter(isActive);
+    let base = tasks.filter(isActive);
+    if (catFilter) {
+      base = base.filter((t) => (catFilter === "__none__" ? !t.category_id : t.category_id === catFilter));
+    }
     const query = q.trim().toLocaleLowerCase("tr");
     if (!query) return base;
     return base.filter((t) =>
       [t.title, t.description, t.assignee_name, t.company_name, catName(t.category_id)]
         .filter(Boolean).join(" ").toLocaleLowerCase("tr").includes(query)
     );
-  }, [tasks, cats, q]);
+  }, [tasks, cats, q, catFilter]);
 
   const upcoming = useMemo(() =>
     tasks.filter((t) => isActive(t) && t.due_date && new Date(t.due_date).getTime() >= Date.now())
@@ -117,7 +122,7 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
       counts[key] = (counts[key] || 0) + 1;
     });
     return Object.entries(counts)
-      .map(([id, count]) => ({ name: id === "__none__" ? "Kolsuz" : (catName(id) || "?"), count }))
+      .map(([id, count]) => ({ id, name: id === "__none__" ? "Kolsuz" : (catName(id) || "?"), count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
   }, [tasks, cats]);
@@ -269,6 +274,7 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                 <div className="rounded-xl border border-white/10 bg-sertex-surface/60 p-4" data-testid="prof-chart-catdist">
                   <div className="flex items-center gap-1.5 text-sertex-text font-semibold mb-3 text-sm">
                     <BarChart3 className="h-4 w-4 text-sertex-cyan" /> İş Koluna Göre Dağılım
+                    <span className="ml-auto hud-text text-sertex-textMuted normal-case tracking-normal">tıkla → filtrele</span>
                   </div>
                   {catDist.length === 0 ? (
                     <div className="hud-text text-sertex-textMuted normal-case py-8 text-center">Aktif görev yok</div>
@@ -279,7 +285,12 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                         <XAxis dataKey="name" tick={{ fill: "#9aa4b2", fontSize: 10 }} interval={0} tickLine={false} axisLine={false} />
                         <YAxis allowDecimals={false} tick={{ fill: "#9aa4b2", fontSize: 10 }} tickLine={false} axisLine={false} width={28} />
                         <Tooltip cursor={{ fill: "rgba(255,255,255,0.04)" }} contentStyle={{ background: "#0b0f1a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#e5e7eb" }} />
-                        <Bar dataKey="count" fill="rgb(var(--sx-accent-rgb))" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                        <Bar dataKey="count" radius={[4, 4, 0, 0]} maxBarSize={40} cursor="pointer"
+                          onClick={(d) => { const id = d?.id ?? d?.payload?.id; if (id != null) setCatFilter((p) => (p === id ? "" : id)); }}>
+                          {catDist.map((entry) => (
+                            <Cell key={entry.id} fill={catFilter === entry.id ? "#e5f9ff" : "rgb(var(--sx-accent-rgb))"} />
+                          ))}
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -304,13 +315,26 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
               {/* Görev ızgarası */}
               <div className="xl:col-span-2">
-                <div className="hud-text text-sertex-textMuted normal-case tracking-normal mb-2">GÖREVLER</div>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="hud-text text-sertex-textMuted normal-case tracking-normal">GÖREVLER</div>
+                  {catFilter && (
+                    <button
+                      type="button"
+                      onClick={() => setCatFilter("")}
+                      data-testid="prof-catfilter-clear"
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-sertex-cyan/15 text-sertex-cyan text-xs border border-sertex-cyan/40 hover:bg-sertex-cyan/25 transition-colors"
+                    >
+                      {catFilter === "__none__" ? "Kolsuz" : (catName(catFilter) || "?")}
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
                 {loading ? (
                   <div className="hud-text text-sertex-textMuted py-10 text-center" data-testid="prof-loading">YÜKLENİYOR...</div>
                 ) : visibleTasks.length === 0 ? (
                   <div className="rounded-xl border border-white/10 bg-sertex-surface/60 p-8 text-center" data-testid="prof-empty">
                     <div className="text-sertex-text mb-1">Aktif görev yok</div>
-                    <div className="hud-text text-sertex-textMuted normal-case">{q ? "Eşleşme bulunamadı." : "Yeni görev ekleyerek başla."}</div>
+                    <div className="hud-text text-sertex-textMuted normal-case">{(q || catFilter) ? "Eşleşme bulunamadı." : "Yeni görev ekleyerek başla."}</div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3" data-testid="prof-task-grid">
