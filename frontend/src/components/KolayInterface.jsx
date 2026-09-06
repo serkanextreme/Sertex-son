@@ -32,6 +32,7 @@ import {
   Clock,
   FileText,
   Anchor,
+  Hash,
   ChevronsDownUp,
   ChevronsUpDown,
   CircleDot,
@@ -58,6 +59,8 @@ import { CompanyCombobox } from "./tasks/CompanyCombobox";
 import { RecurringReminderFields } from "./tasks/RecurringReminderFields";
 import { PendingAttachments } from "./tasks/PendingAttachments";
 import CategorySelect from "./tasks/CategorySelect";
+import { SerialDateFields } from "./tasks/SerialDateFields";
+import { taskSerialLabel } from "../lib/taskSerial";
 import { ContextMenu } from "./TaskContextMenu";
 import { EditTaskModal } from "./tasks/EditTaskModal";
 import { ShareTaskModal } from "./tasks/ShareTaskModal";
@@ -182,6 +185,18 @@ const KolayCardBody = ({ task, number, catName, onComplete, onMenu, collapsed, o
         </span>
         {task.title}
       </div>
+      {taskSerialLabel(task) && (
+        <div className="mt-1.5">
+          <span
+            data-testid={`kolay-serial-badge-${task.id}`}
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-sertex-cyan/40 bg-sertex-cyan/10 text-sertex-cyan text-[11px] font-mono tabular-nums"
+            title="Görev takip etiketi (seri no / tarih)"
+          >
+            <Hash className="h-3 w-3" />
+            {taskSerialLabel(task)}
+          </span>
+        </div>
+      )}
 
       {!collapsed && (
         <>
@@ -253,6 +268,8 @@ const KolayAddModal = ({ cats, onClose, onCreated }) => {
   const [newReminder, setNewReminder] = useState(defaultRecurringValue());
   const [reminderConfig, setReminderConfig] = useState(null);
   const [pendingFiles, setPendingFiles] = useState([]);
+  const [assignSerial, setAssignSerial] = useState(false);
+  const [showDate, setShowDate] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -284,6 +301,8 @@ const KolayAddModal = ({ cats, onClose, onCreated }) => {
         extras.assignee_user_ids = ids;
       }
       if (newCategoryId) extras.category_id = newCategoryId;
+      if (assignSerial) extras.assign_serial = true;
+      if (showDate) extras.show_created_date = true;
       if (startDate) extras.start_date = new Date(startDate).toISOString();
       if (newReminderDisabled) extras.reminder_disabled = true;
       else if (newReminderDays != null) extras.reminder_days = newReminderDays;
@@ -432,6 +451,13 @@ const KolayAddModal = ({ cats, onClose, onCreated }) => {
             <option value="__off__">🚫 Bu görev için hatırlatıcı kapalı</option>
           </select>
           <RecurringReminderFields value={newReminder} onChange={setNewReminder} testPrefix="kolay-add-reminder" />
+          <SerialDateFields
+            testPrefix="kolay-add"
+            assignSerial={assignSerial}
+            setAssignSerial={setAssignSerial}
+            showDate={showDate}
+            setShowDate={setShowDate}
+          />
           <PendingAttachments files={pendingFiles} onChange={setPendingFiles} />
         </div>
         <div className="flex justify-end gap-2 mt-5">
@@ -784,7 +810,7 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
     const query = q.trim().toLocaleLowerCase("tr");
     if (!query) return base;
     return base.filter((t) => {
-      const hay = [t.title, t.description, t.assignee_name, t.company_name, catName(t.category_id)]
+      const hay = [t.title, t.description, t.assignee_name, t.company_name, catName(t.category_id), t.serial != null ? String(t.serial) : null]
         .filter(Boolean)
         .join(" ")
         .toLocaleLowerCase("tr");
@@ -913,7 +939,8 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
     try { await tasksApi.removeGroupMember(gid, tid); toast.success("Görev gruptan çıkarıldı"); load(); } catch { toast.error("Çıkarılamadı"); }
   };
   const saveEdit = async (patch) => {
-    try { await tasksApi.update(editing.id, patch); load(); toast.success("Kaydedildi"); } catch { toast.error("Kaydedilemedi"); }
+    try { await tasksApi.update(editing.id, patch); load(); toast.success("Kaydedildi"); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Kaydedilemedi"); throw e; }
   };
   const issueOtp = async (task) => {
     try { const res = await taskLockApi.issueOtp(task.id); setOtpDisplay({ task, ...res }); }

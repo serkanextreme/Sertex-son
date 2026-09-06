@@ -111,6 +111,9 @@ export const tasksApi = {
       ...(extras.reminder_interval_min != null ? { reminder_interval_min: extras.reminder_interval_min } : {}),
       ...(extras.reminder_repeat_total != null ? { reminder_repeat_total: extras.reminder_repeat_total } : {}),
       ...(extras.reminder_repeat_left != null ? { reminder_repeat_left: extras.reminder_repeat_left } : {}),
+      // Kalıcı Seri No + oluşturulma tarihi etiketi tercihleri.
+      ...(extras.assign_serial ? { assign_serial: true } : {}),
+      ...(extras.show_created_date ? { show_created_date: true } : {}),
     }).then((r) => r.data),
   // Görev Kopyalama (Kopyala → Yapıştır) — kaynağı çoğaltır, kopya bana atanır.
   duplicate: (id, { include_subtasks = true, include_attachments = true, category_id = null } = {}) =>

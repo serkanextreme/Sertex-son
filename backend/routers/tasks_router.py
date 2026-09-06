@@ -18,6 +18,7 @@ import uuid
 import os
 import asyncio
 from urllib.parse import quote
+from pymongo import ReturnDocument
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response, Query, Body
 
@@ -531,6 +532,23 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
             )
         return {"ok": True, "count": n}
 
+    async def _next_task_serial() -> int:
+        # Kalıcı, benzersiz seri no. counters koleksiyonunda atomik $inc;
+        # manuel atanmış bir numarayla çakışırsa bir sonrakine geçer.
+        while True:
+            cdoc = await db.counters.find_one_and_update(
+                {"_id": "task_serial"},
+                {"$inc": {"seq": 1}},
+                upsert=True,
+                return_document=ReturnDocument.AFTER,
+            )
+            cand = int(cdoc.get("seq", 0))
+            if cand <= 0:
+                continue
+            clash = await db.tasks.find_one({"serial": cand}, {"_id": 1})
+            if not clash:
+                return cand
+
     @router.post("/tasks", response_model=Task)
     async def create_task(req: TaskCreate, user: dict = Depends(licensed_user_dep)):
         owner_id = user["id"]
@@ -630,6 +648,10 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
                     for k, v in dself.items()
                     if v and k in _LOCK_FLAG_KEYS and not managed.get(k)
                 }
+        if req.show_created_date:
+            t.show_created_date = True
+        if req.assign_serial:
+            t.serial = await _next_task_serial()
         td = t.model_dump()
         td["user_id"] = owner_id
         # ÖZELLİK A — build the assignees list (per-person completion tracking).
@@ -781,6 +803,33 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         actions = _detect_lock_actions(update)
         if actions:
             await _check_task_lock(doc, user, actions)
+        # --- Seri No (kalıcı) kontrolü ---
+        assign_serial = update.pop("assign_serial", None)
+        if "serial" in update:
+            # Manuel seri no değişimi YALNIZCA süper yönetici.
+            if not is_super_admin(user):
+                raise HTTPException(status_code=403, detail="Seri no yalnızca süper yönetici tarafından değiştirilebilir")
+            sval = update["serial"]
+            if sval in (None, ""):
+                update["serial"] = None
+            else:
+                try:
+                    sval = int(sval)
+                except (TypeError, ValueError):
+                    raise HTTPException(status_code=400, detail="Seri no bir sayı olmalı")
+                if sval <= 0:
+                    raise HTTPException(status_code=400, detail="Seri no 0'dan büyük olmalı")
+                dup = await db.tasks.find_one({"serial": sval, "id": {"$ne": tid}}, {"_id": 0, "title": 1})
+                if dup:
+                    raise HTTPException(status_code=409, detail=f"Seri no {sval} zaten '{dup.get('title', '?')}' görevinde kullanılıyor")
+                update["serial"] = sval
+        elif assign_serial is not None:
+            if assign_serial:
+                if not doc.get("serial"):
+                    update["serial"] = await _next_task_serial()
+                # zaten serial varsa değiştirme
+            else:
+                update["serial"] = None
         if "status" in update and update["status"] not in ("pending", "done", "paused", "overdue"):
             raise HTTPException(status_code=400, detail="Geçersiz durum")
         # Sertleştirme: id'siz gönderilen alt görevlere sunucuda kalıcı id ata

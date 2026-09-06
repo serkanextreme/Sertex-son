@@ -171,6 +171,11 @@ class Task(BaseModel):
     # sabit kalır (pinned_number); diğer görevler bu numarayı atlar (çakışma yok).
     number_pinned: bool = False
     pinned_number: Optional[int] = None
+    # Kalıcı Seri No (takip için) — bir kez otomatik/sıralı atanır, sabit kalır.
+    # None = seri no yok. Yalnızca süper yönetici elle değiştirebilir (benzersiz).
+    serial: Optional[int] = None
+    # Görev kartı etiketinde oluşturulma tarihini göster (kullanıcı tercihi).
+    show_created_date: bool = False
     archived: bool = False
     archived_at: Optional[str] = None
     # İptal — "İptal Et" ile işaretlenen görev. Arşivin "İPTAL" grubuna düşer
@@ -271,6 +276,10 @@ class TaskCreate(BaseModel):
     # created with an `assignees` list; the legacy `assignee_user_id`
     # (single-owner transfer) is ignored in favour of this.
     assignee_user_ids: Optional[List[str]] = None
+    # Seri No / Tarih etiketi. assign_serial=True → oluştururken otomatik sıralı
+    # seri no atanır. show_created_date → kartta oluşturulma tarihini göster.
+    assign_serial: Optional[bool] = None
+    show_created_date: Optional[bool] = None
 
 
 class TaskDuplicateReq(BaseModel):
@@ -309,6 +318,11 @@ class TaskUpdate(BaseModel):
     digest_muted: Optional[bool] = None
     number_pinned: Optional[bool] = None
     pinned_number: Optional[int] = None
+    show_created_date: Optional[bool] = None
+    # Seri No kontrolü. assign_serial=True → yoksa otomatik ata (varsa koru);
+    # False → temizle. serial (manuel) YALNIZ süper yönetici; benzersiz olmalı.
+    assign_serial: Optional[bool] = None
+    serial: Optional[int] = None
 
 
 class ReorderTasksReq(BaseModel):

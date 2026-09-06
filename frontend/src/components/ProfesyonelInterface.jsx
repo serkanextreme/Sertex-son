@@ -17,12 +17,14 @@ import {
   BarChart3,
   TrendingUp,
   X,
+  Hash,
 } from "lucide-react";
 import { toast } from "sonner";
 import { tasksApi, taskCategoriesApi } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { setInterfaceMode } from "../lib/appearance";
 import { AddTaskModal } from "./tasks/AddTaskModal";
+import { taskSerialLabel } from "../lib/taskSerial";
 import {
   BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -113,7 +115,7 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
     const query = q.trim().toLocaleLowerCase("tr");
     if (!query) return base;
     return base.filter((t) =>
-      [t.title, t.description, t.assignee_name, t.company_name, catName(t.category_id)]
+      [t.title, t.description, t.assignee_name, t.company_name, catName(t.category_id), t.serial != null ? String(t.serial) : null]
         .filter(Boolean).join(" ").toLocaleLowerCase("tr").includes(query)
     );
   }, [tasks, cats, q, catFilter]);
@@ -378,6 +380,18 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                               </div>
                             )}
                           </div>
+                          {taskSerialLabel(t) && (
+                            <div className="mb-2">
+                              <span
+                                data-testid={`prof-serial-badge-${t.id}`}
+                                title="Görev takip etiketi (seri no / tarih)"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-sertex-cyan/40 bg-sertex-cyan/10 text-sertex-cyan text-[11px] font-mono tabular-nums"
+                              >
+                                <Hash className="h-3 w-3" />
+                                {taskSerialLabel(t)}
+                              </span>
+                            </div>
+                          )}
                           {catName(t.category_id) && (
                             <div className="hud-text text-sertex-textMuted normal-case tracking-normal mb-2">{catName(t.category_id)}</div>
                           )}

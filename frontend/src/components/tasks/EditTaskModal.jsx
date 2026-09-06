@@ -10,6 +10,8 @@ import { RecurringReminderFields } from "./RecurringReminderFields";
 import { TaskAttachments } from "./TaskAttachments";
 import { recurringValueFromTask, resolveRecurringReminder } from "../../lib/reminderUtils";
 import { flattenCategoryOptions } from "../../lib/categoryTree";
+import { SerialDateFields } from "./SerialDateFields";
+import { isSuperAdmin } from "../../lib/roles";
 
 export const EditTaskModal = ({ task, onClose, onSave, isTeamView, categories = [], teamMembers = [], currentUser = null }) => {
   const [title, setTitle] = useState(task.title);
@@ -40,6 +42,14 @@ export const EditTaskModal = ({ task, onClose, onSave, isTeamView, categories = 
   // kurulmaz (regresyon güvenliği).
   const [reminder, setReminder] = useState(() => recurringValueFromTask(task));
   const [reminderDirty, setReminderDirty] = useState(false);
+  // Kalıcı Seri No + oluşturulma tarihi etiketi. Seri no KALICI: seri nosuz
+  // göreve sonradan atanabilir; mevcut seri no yalnızca süper yönetici tarafından
+  // elle değiştirilebilir/silinebilir.
+  const [showDate, setShowDate] = useState(!!task.show_created_date);
+  const [assignSerial, setAssignSerial] = useState(task.serial != null);
+  const [serialOverride, setSerialOverride] = useState("");
+  const isSuper = isSuperAdmin(currentUser);
+  const originalHasSerial = task.serial != null;
 
   // Group categories by company_id so the modal can render <optgroup>s.
   // Managers with cross-company grants see multiple groups; single-company
@@ -135,6 +145,23 @@ export const EditTaskModal = ({ task, onClose, onSave, isTeamView, categories = 
     if (task.status === "done") {
       patch.completed_at = completedAt ? new Date(completedAt).toISOString() : null;
     }
+    // Kalıcı Seri No + oluşturulma tarihi etiketi tercihleri.
+    patch.show_created_date = showDate;
+    const ov = (serialOverride || "").trim();
+    if (isSuper && ov !== "") {
+      const n = parseInt(ov, 10);
+      if (Number.isNaN(n) || n <= 0) {
+        toast.error("Seri no 0'dan büyük bir sayı olmalı");
+        return;
+      }
+      patch.serial = n;
+    } else if (!originalHasSerial && assignSerial) {
+      // Seri nosuz göreve sonradan otomatik seri no ata (herkes).
+      patch.assign_serial = true;
+    } else if (isSuper && originalHasSerial && !assignSerial) {
+      // Mevcut seri no'yu yalnızca süper yönetici temizleyebilir.
+      patch.assign_serial = false;
+    }
     // Tekrarlı hatırlatıcı — yalnızca bölüm değiştirildiyse patch'e ekle.
     if (reminderDirty) {
       const rr = resolveRecurringReminder(reminder);
@@ -148,8 +175,13 @@ export const EditTaskModal = ({ task, onClose, onSave, isTeamView, categories = 
       patch.reminder_repeat_left = rr.reminder_repeat_left;
       patch.reminder_repeat_total = rr.reminder_repeat_total;
     }
-    await onSave(patch);
-    onClose();
+    try {
+      await onSave(patch);
+      onClose();
+    } catch {
+      // Kaydetme başarısız (ör. yinelenen seri no 409) — hata mesajı onSave
+      // içinde gösterildi; kullanıcı düzeltebilsin diye pencere AÇIK kalır.
+    }
   };
 
   return createPortal(
@@ -310,6 +342,18 @@ export const EditTaskModal = ({ task, onClose, onSave, isTeamView, categories = 
               </select>
             </div>
           )}
+          <SerialDateFields
+            testPrefix="edit"
+            assignSerial={assignSerial}
+            setAssignSerial={setAssignSerial}
+            showDate={showDate}
+            setShowDate={setShowDate}
+            currentSerial={task.serial != null ? task.serial : null}
+            allowOverride
+            isSuper={isSuper}
+            serialOverride={serialOverride}
+            setSerialOverride={setSerialOverride}
+          />
           <div className="grid grid-cols-2 gap-2" style={{ display: isTeamView ? undefined : "none" }}>
             <div>
               <div className="hud-text text-sertex-textMuted mb-1">GÖREV SAHİBİ</div>

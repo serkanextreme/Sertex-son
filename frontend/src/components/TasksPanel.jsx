@@ -54,6 +54,7 @@ import { MultiAssigneeSelect } from "./tasks/MultiAssigneeSelect";
 import { PendingAttachments } from "./tasks/PendingAttachments";
 import { PersonFilterSelect } from "./tasks/PersonFilterSelect";
 import CategorySelect from "./tasks/CategorySelect";
+import { SerialDateFields } from "./tasks/SerialDateFields";
 import { CompanyCombobox } from "./tasks/CompanyCombobox";
 import { LinkTasksModal } from "./tasks/LinkTasksModal";
 import { RecurringReminderFields } from "./tasks/RecurringReminderFields";
@@ -285,6 +286,9 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
   const [categories, setCategories] = useState([]);
   const [categoryFilter, setCategoryFilter] = useState(initialCategory || ""); // "" = all, "__none__" = uncategorized
   const [newCategoryId, setNewCategoryId] = useState("");
+  // Kalıcı Seri No + oluşturulma tarihi etiketi (Yeni Görev formu).
+  const [newAssignSerial, setNewAssignSerial] = useState(false);
+  const [newShowDate, setNewShowDate] = useState(false);
   // Görev arama — binlerce görev içinde başlık/açıklama/kişi/şirket/iş kolu/alt
   // görevlere göre canlı arama. Hiçbir mevcut filtreyi bozmaz (üstüne biner).
   const [searchQuery, setSearchQuery] = useState("");
@@ -915,6 +919,8 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
       if (newCategoryId) {
         extras.category_id = newCategoryId;
       }
+      if (newAssignSerial) extras.assign_serial = true;
+      if (newShowDate) extras.show_created_date = true;
       if (startDate) {
         extras.start_date = new Date(startDate).toISOString();
       }
@@ -967,6 +973,8 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
       setAssigneeUserIds([]);
       setPendingFiles([]);
       setNewCategoryId("");
+      setNewAssignSerial(false);
+      setNewShowDate(false);
       setNewReminderDays(null);
       setNewReminderDisabled(false);
       setNewReminder(defaultRecurringValue());
@@ -1186,7 +1194,8 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
       load();
       toast.success("Kaydedildi");
     } catch (e) {
-      toast.error("Kaydedilemedi");
+      toast.error(e?.response?.data?.detail || "Kaydedilemedi");
+      throw e;
     }
   };
 
@@ -1589,6 +1598,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
           t.assignee_name,
           t.company_name,
           catName,
+          t.serial != null ? String(t.serial) : null,
           ...(Array.isArray(t.subtasks) ? t.subtasks.map((s) => s?.text) : []),
         ]
           .filter(Boolean)
@@ -2439,6 +2449,13 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
             value={newReminder}
             onChange={setNewReminder}
             testPrefix="new-task-reminder"
+          />
+          <SerialDateFields
+            testPrefix="task"
+            assignSerial={newAssignSerial}
+            setAssignSerial={setNewAssignSerial}
+            showDate={newShowDate}
+            setShowDate={setNewShowDate}
           />
           {/* 📎 Görev oluşturulurken dosya ekle (görev oluşunca yüklenir) */}
           <PendingAttachments files={pendingFiles} onChange={setPendingFiles} />

@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import {
   Check, Pause, Plus, MoreVertical, BellRing, RotateCcw, Clock, AlertTriangle,
   Bell, GripVertical, User, Building2, Tag, Lock, Unlock, Eye, Users, BellOff,
-  ChevronsDownUp, ChevronsUpDown, Maximize2, Minimize2, CircleCheckBig, RefreshCw, CornerLeftUp, CornerDownRight, Undo2, Anchor, ChevronRight, ChevronDown,
+  ChevronsDownUp, ChevronsUpDown, Maximize2, Minimize2, CircleCheckBig, RefreshCw, CornerLeftUp, CornerDownRight, Undo2, Anchor, ChevronRight, ChevronDown, Hash,
 } from "lucide-react";
 import { tasksApi, taskLockApi } from "../lib/api";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ import { Highlight } from "./tasks/Highlight";
 import { TaskAttachments } from "./tasks/TaskAttachments";
 import { formatIntervalShort } from "../lib/reminderUtils";
 import { getCategoryPath } from "../lib/categoryTree";
+import { taskSerialLabel } from "../lib/taskSerial";
 import { isCatTreeExpanded, setCatTreeExpanded } from "../lib/catTreePrefs";
 import { QuickReminderEditModal } from "./tasks/QuickReminderEditModal";
 
@@ -446,6 +447,16 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
                 </span>
               )}
               <Highlight text={task.title} query={highlight} />
+              {taskSerialLabel(task) && (
+                <span
+                  data-testid={`task-serial-badge-${task.id}`}
+                  title="Görev takip etiketi (seri no / tarih)"
+                  className="inline-flex items-center gap-0.5 ml-1.5 px-1.5 py-0.5 rounded-full border border-sertex-cyan/50 bg-sertex-cyan/10 text-sertex-cyan align-middle text-[10px] font-mono tabular-nums leading-none"
+                >
+                  <Hash className="h-2.5 w-2.5" />
+                  {taskSerialLabel(task)}
+                </span>
+              )}
               {/* Faz 9 CP4.27 — kilit rozeti (Faz 9 CP5 P2 — memoized) */}
               {lockBadge && (
                 <span

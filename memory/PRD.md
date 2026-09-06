@@ -1,6 +1,15 @@
 # Sertex — Kişisel AI Asistan · PRD
 
-## 🟡 BEKLEYEN (spec KESİN, kullanıcı "bekle yapma" — YAP bekleniyor, 2026-06): Görev SERİ NO + TARİH etiketi
+## ✅ TAMAMLANDI (2026-06, "YAP"): Görev SERİ NO + TARİH etiketi (frontend bağlandı)
+- **Frontend wiring bitti** (backend zaten hazırdı): Ortak `tasks/SerialDateFields.jsx` (☐ Seri No / ☐ Tarih, varsayılan BOŞ) 4 yere bağlandı → Detaylı Yeni Görev formu (`TasksPanel.jsx`, testPrefix `task`), Kolay `KolayAddModal` (`kolay-add`), Profesyonel ortak `AddTaskModal` (`prof-add`), ve `EditTaskModal` (`edit`). Payload: create → `assign_serial`+`show_created_date` (api.js whitelist'e eklendi); edit → `show_created_date` + (süper yönetici manuel `serial` / yoksa `assign_serial`).
+- **Etiket rozeti** (`lib/taskSerial.js` `taskSerialLabel`): TaskCard (Detaylı, `task-serial-badge-{id}`), KolayCardBody (`kolay-serial-badge-{id}`), Profesyonel kart (`prof-serial-badge-{id}`). Biçim: ikisi→`1-06.09.2026`, no→`1`, tarih→`06.09.2026`, hiçbiri→rozet yok. Hash ikonlu cyan pill.
+- **Arama**: seri no arama haystack'ine eklendi (Detaylı + Kolay + Profesyonel) → numarayla bulunur.
+- **Süper yönetici**: EditTaskModal'da elle seri no girişi (`edit-serial-input`); yinelenen numara → backend 409 → artık **seri-no'ya özel uyarı toast** (`e.response.data.detail`) + pencere AÇIK kalır (düzeltilebilsin). Seri nosuz göreve "Seri No" işaretleyip kaydetme → otomatik sıradaki numara. Mevcut seri no yalnız süper yönetici tarafından değiştirilir/temizlenir (kalıcılık korunur).
+- **Test**: testing_agent `iteration_127.json` — 3 arayüz + EditTaskModal + otomatik artış (4→5→6→7) + arama + yinelenen 409 reddi + Detaylı regresyon TÜMÜ GEÇTİ. Tüm ZZTEST test görevleri soft+kalıcı silindi, CANLI DB temiz.
+- **Yayın**: preview'de; canlıya (sertex-ai.com) için Deploy gerekir.
+
+### Orijinal spec (referans):
+## 🟢 SPEC (uygulandı): Görev SERİ NO + TARİH etiketi
 - Form (Yeni Görev + Görevi Düzenle) 2 checkbox, varsayılan BOŞ: ☐ Seri No, ☐ Tarih.
 - Etiket: ikisi→`1-10.09.2026`, sadece no→`1`, sadece tarih→`10.09.2026`, hiçbiri→etiket yok (seri nosuz görev normal açılır).
 - Tarih = görevin OLUŞTURULMA tarihi, biçim `DD.MM.YYYY` (hep uzun yıl).

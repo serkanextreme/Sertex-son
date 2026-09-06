@@ -12,6 +12,7 @@ import { CompanyCombobox } from "./CompanyCombobox";
 import { RecurringReminderFields } from "./RecurringReminderFields";
 import { PendingAttachments } from "./PendingAttachments";
 import CategorySelect from "./CategorySelect";
+import { SerialDateFields } from "./SerialDateFields";
 
 // Detaylı/Kolay ile aynı "Yeni Görev Ekle" formu. testPrefix ile
 // her temanın kendi data-testid'leri korunur (kolay-add / prof-add).
@@ -32,6 +33,8 @@ export const AddTaskModal = ({ cats, onClose, onCreated, testPrefix = "add" }) =
   const [newReminder, setNewReminder] = useState(defaultRecurringValue());
   const [reminderConfig, setReminderConfig] = useState(null);
   const [pendingFiles, setPendingFiles] = useState([]);
+  const [assignSerial, setAssignSerial] = useState(false);
+  const [showDate, setShowDate] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -62,6 +65,8 @@ export const AddTaskModal = ({ cats, onClose, onCreated, testPrefix = "add" }) =
         extras.assignee_user_ids = ids;
       }
       if (newCategoryId) extras.category_id = newCategoryId;
+      if (assignSerial) extras.assign_serial = true;
+      if (showDate) extras.show_created_date = true;
       if (startDate) extras.start_date = new Date(startDate).toISOString();
       if (newReminderDisabled) extras.reminder_disabled = true;
       else if (newReminderDays != null) extras.reminder_days = newReminderDays;
@@ -209,6 +214,13 @@ export const AddTaskModal = ({ cats, onClose, onCreated, testPrefix = "add" }) =
             <option value="__off__">🚫 Bu görev için hatırlatıcı kapalı</option>
           </select>
           <RecurringReminderFields value={newReminder} onChange={setNewReminder} testPrefix={`${testPrefix}-reminder`} />
+          <SerialDateFields
+            testPrefix={testPrefix}
+            assignSerial={assignSerial}
+            setAssignSerial={setAssignSerial}
+            showDate={showDate}
+            setShowDate={setShowDate}
+          />
           <PendingAttachments files={pendingFiles} onChange={setPendingFiles} />
         </div>
         <div className="flex justify-end gap-2 mt-5">

@@ -1,0 +1,37 @@
+{
+  "summary": "Frontend wiring verification of Task Serial No (Seri No) + Created-date (Tarih) badge on serkan (super_admin). Executed full E2E on Detayli/Neural Link (all 4 label variants + auto-increment + serial-search + edit-modal assign-serial + super_admin duplicate-serial 409 rejection), plus interface-switch parity on Kolay & Profesyonel (both show serial checkboxes on their add-modals and serial badges on their task cards). All ZZTEST_SERIAL/ZZTEST_UI tasks created for testing were cleaned up (soft + permanent DELETE) — live DB restored to clean state.",
+  "platforms_tested": ["web"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [],
+      "integration_issues": [
+        {
+          "flow": "EditTaskModal → duplicate serial",
+          "issue": "Duplicate-serial rejection surfaces only a GENERIC toast 'Kaydedilemedi' (the same fallback shown for any save failure); backend returns HTTP 409 but the frontend doesn't extract the server's specific duplicate message. Requirement says 'warning toast (409)' — rejection itself works (task serial is unchanged) but the message is not distinguishable from other save errors. Nice-to-have: show a serial-specific warning like 'Bu seri numara zaten kullanılıyor' when response.status === 409.",
+          "affected_selectors": ["[data-testid='edit-serial-input']", "[data-testid='edit-save']"]
+        }
+      ],
+      "design_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": [],
+  "action_items": [
+    "(optional polish) On EditTaskModal save, if the backend responds 409 for the serial endpoint, show a serial-specific warning toast instead of the generic 'Kaydedilemedi'. Duplicate rejection itself is functional."
+  ],
+  "critical_code_review_comments": [
+    "SerialDateFields correctly gates the manual serial input behind (allowOverride && isSuper) — matches the 'only super_admin can manually edit an existing serial' rule.",
+    "EditTaskModal.handleSave logic is correct: super_admin manual override wins; else assign_serial flag is sent only when transitioning None→has-serial (assign) or has-serial→cleared (super-only); avoids accidental serial mutations.",
+    "TasksPanel search filter includes `t.serial` in the haystack (line ~1600) so serial-number search works out of the box.",
+    "Badge rendering for Detayli/Kolay/Profesyonel all use the same taskSerialLabel() helper — display format is guaranteed consistent across the 3 interfaces."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% (all acceptance criteria met; one non-blocking polish item)"},
+  "test_credentials": "serkan / 19071987 (super_admin, owner)",
+  "seed_data_creation": "Created 4 test tasks in Detayli (ZZTEST_SERIAL both / only-serial / only-date / none) + 1 in Kolay/Prof verification (ZZTEST_UI both). ALL 5 were soft-deleted and then permanent-deleted after testing via DELETE /api/tasks/{id} + DELETE /api/tasks/{id}/permanent — verified 0 remaining ZZTEST tasks in the DB.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Feature is production-ready. Serial auto-increment observed sequentially (4→5→6→7 across tasks). Verified testids: task-serialdate, task-serial-check, task-date-check (default UNCHECKED), task-serial-badge-<id> ('N-DD.MM.YYYY' | 'N' | 'DD.MM.YYYY' | absent), edit-serialdate, edit-serial-check, edit-serial-input (super_admin only), kolay-add-serialdate/kolay-add-serial-check/kolay-add-date-check/kolay-serial-badge-<id>, prof-add-serialdate/prof-add-serial-check/prof-add-date-check/prof-serial-badge-<id>. Duplicate-serial: backend responds 409, frontend rejects save (task.serial unchanged) — toast is generic; consider specific message if UX polish needed.",
+  "rca of the issue": "N/A — no blocking bugs. The 'generic toast on 409' is a minor UX shortcoming, not a functional defect: the request is refused, the task remains unchanged, and the modal stays open showing the invalid value."
+}
