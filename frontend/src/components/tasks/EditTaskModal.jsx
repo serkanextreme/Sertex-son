@@ -9,7 +9,7 @@ import { REMINDER_DAY_CHOICES } from "../../lib/taskHelpers";
 import { RecurringReminderFields } from "./RecurringReminderFields";
 import { TaskAttachments } from "./TaskAttachments";
 import { recurringValueFromTask, resolveRecurringReminder } from "../../lib/reminderUtils";
-import { getCategoryPathLabel } from "../../lib/categoryTree";
+import { flattenCategoryOptions } from "../../lib/categoryTree";
 
 export const EditTaskModal = ({ task, onClose, onSave, isTeamView, categories = [], teamMembers = [], currentUser = null }) => {
   const [title, setTitle] = useState(task.title);
@@ -299,13 +299,13 @@ export const EditTaskModal = ({ task, onClose, onSave, isTeamView, categories = 
                 {categoriesByCompany.length > 1
                   ? categoriesByCompany.map(([cid, bucket]) => (
                       <optgroup key={cid} label={bucket.companyName || "Şirket"}>
-                        {bucket.items.map((c) => (
-                          <option key={c.id} value={c.id}>{getCategoryPathLabel(c.id, categories)}</option>
+                        {flattenCategoryOptions(bucket.items).map((o) => (
+                          <option key={o.id} value={o.id}>{o.label}</option>
                         ))}
                       </optgroup>
                     ))
-                  : categories.map((c) => (
-                      <option key={c.id} value={c.id}>{getCategoryPathLabel(c.id, categories)}</option>
+                  : flattenCategoryOptions(categories).map((o) => (
+                      <option key={o.id} value={o.id}>{o.label}</option>
                     ))}
               </select>
             </div>

@@ -5,7 +5,7 @@ import { LayoutTemplate, X, Plus, Trash2, User, Users } from "lucide-react";
 import { toast } from "sonner";
 import { templatesApi, templateAttachmentsApi } from "../../lib/api";
 import { REMINDER_DAY_CHOICES } from "../../lib/taskHelpers";
-import { getCategoryPathLabel } from "../../lib/categoryTree";
+import { flattenCategoryOptions } from "../../lib/categoryTree";
 import { TaskAttachments } from "./TaskAttachments";
 
 // Şablon oluştur / düzenle. Yeni şablonda "Kaydet" önce şablonu oluşturur,
@@ -139,8 +139,8 @@ export const TemplateFormModal = ({ template, categories = [], currentUser = nul
               <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} data-testid="template-category"
                 className="w-full bg-sertex-surface/60 border border-sertex-cyan/25 rounded-md px-2 py-1.5 text-sm font-mono text-sertex-text focus:border-sertex-cyan outline-none">
                 <option value="">— İş kolu yok —</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{getCategoryPathLabel(c.id, categories)}</option>
+                {flattenCategoryOptions(categories).map((o) => (
+                  <option key={o.id} value={o.id}>{o.label}</option>
                 ))}
               </select>
             </div>

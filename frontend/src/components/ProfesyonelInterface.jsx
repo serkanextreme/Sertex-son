@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   LayoutDashboard,
@@ -14,11 +14,17 @@ import {
   Layers,
   Clock,
   Activity,
+  BarChart3,
+  TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { tasksApi, taskCategoriesApi } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { setInterfaceMode } from "../lib/appearance";
+import { EditTaskModal } from "./tasks/EditTaskModal";
+import {
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts";
 
 const isActive = (t) => t.status !== "done" && !t.archived && !t.deleted;
 const isOverdue = (t) => isActive(t) && t.due_date && new Date(t.due_date).getTime() < Date.now();
@@ -60,16 +66,19 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
   const [cats, setCats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [editing, setEditing] = useState(null);
 
-  useEffect(() => {
-    Promise.all([
+  const load = useCallback(async () => {
+    const [ts, cs] = await Promise.all([
       tasksApi.list(false, "mine").catch(() => []),
       taskCategoriesApi.list("my_tasks").catch(() => []),
-    ]).then(([ts, cs]) => {
-      setTasks(Array.isArray(ts) ? ts : []);
-      setCats(Array.isArray(cs) ? cs : []);
-    }).finally(() => setLoading(false));
+    ]);
+    setTasks(Array.isArray(ts) ? ts : []);
+    setCats(Array.isArray(cs) ? cs : []);
+    setLoading(false);
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const catName = (id) => cats.find((c) => c.id === id)?.name || null;
 
@@ -99,6 +108,39 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
   [tasks]);
 
   const recent = useMemo(() => tasks.filter(isActive).slice(0, 5), [tasks]);
+
+  // İş koluna göre aktif görev dağılımı (en yoğun 6 kol).
+  const catDist = useMemo(() => {
+    const counts = {};
+    tasks.filter(isActive).forEach((t) => {
+      const key = t.category_id || "__none__";
+      counts[key] = (counts[key] || 0) + 1;
+    });
+    return Object.entries(counts)
+      .map(([id, count]) => ({ name: id === "__none__" ? "Kolsuz" : (catName(id) || "?"), count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+  }, [tasks, cats]);
+
+  // Son 7 gün — günlük tamamlanan görev sayısı.
+  const weekTrend = useMemo(() => {
+    const days = [];
+    const now = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(now);
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() - i);
+      days.push({ key: d.getTime(), label: d.toLocaleDateString("tr-TR", { weekday: "short" }), count: 0 });
+    }
+    tasks.forEach((t) => {
+      if (t.status !== "done" || !t.completed_at) return;
+      const c = new Date(t.completed_at);
+      c.setHours(0, 0, 0, 0);
+      const slot = days.find((x) => x.key === c.getTime());
+      if (slot) slot.count += 1;
+    });
+    return days;
+  }, [tasks]);
 
   const NAV = [
     { key: "home", label: "Panel", icon: LayoutDashboard, onClick: null },
@@ -221,6 +263,44 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
               })}
             </div>
 
+            {/* Analiz grafikleri */}
+            {!loading && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6" data-testid="prof-charts">
+                <div className="rounded-xl border border-white/10 bg-sertex-surface/60 p-4" data-testid="prof-chart-catdist">
+                  <div className="flex items-center gap-1.5 text-sertex-text font-semibold mb-3 text-sm">
+                    <BarChart3 className="h-4 w-4 text-sertex-cyan" /> İş Koluna Göre Dağılım
+                  </div>
+                  {catDist.length === 0 ? (
+                    <div className="hud-text text-sertex-textMuted normal-case py-8 text-center">Aktif görev yok</div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={160}>
+                      <BarChart data={catDist} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fill: "#9aa4b2", fontSize: 10 }} interval={0} tickLine={false} axisLine={false} />
+                        <YAxis allowDecimals={false} tick={{ fill: "#9aa4b2", fontSize: 10 }} tickLine={false} axisLine={false} width={28} />
+                        <Tooltip cursor={{ fill: "rgba(255,255,255,0.04)" }} contentStyle={{ background: "#0b0f1a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#e5e7eb" }} />
+                        <Bar dataKey="count" fill="rgb(var(--sx-accent-rgb))" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+                <div className="rounded-xl border border-white/10 bg-sertex-surface/60 p-4" data-testid="prof-chart-trend">
+                  <div className="flex items-center gap-1.5 text-sertex-text font-semibold mb-3 text-sm">
+                    <TrendingUp className="h-4 w-4 text-sertex-cyan" /> Son 7 Gün — Tamamlanan
+                  </div>
+                  <ResponsiveContainer width="100%" height={160}>
+                    <LineChart data={weekTrend} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                      <XAxis dataKey="label" tick={{ fill: "#9aa4b2", fontSize: 10 }} tickLine={false} axisLine={false} />
+                      <YAxis allowDecimals={false} tick={{ fill: "#9aa4b2", fontSize: 10 }} tickLine={false} axisLine={false} width={28} />
+                      <Tooltip contentStyle={{ background: "#0b0f1a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#e5e7eb" }} />
+                      <Line type="monotone" dataKey="count" stroke="rgb(var(--sx-accent-rgb))" strokeWidth={2} dot={{ r: 3, fill: "rgb(var(--sx-accent-rgb))" }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
               {/* Görev ızgarası */}
               <div className="xl:col-span-2">
@@ -245,7 +325,9 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: Math.min(i * 0.03, 0.3) }}
-                          className="rounded-xl border border-white/10 bg-sertex-surface/60 p-4 hover:border-sertex-cyan/40 transition-colors"
+                          onClick={() => setEditing(t)}
+                          role="button"
+                          className="rounded-xl border border-white/10 bg-sertex-surface/60 p-4 hover:border-sertex-cyan/40 transition-colors cursor-pointer"
                           data-testid={`prof-card-${t.id}`}
                         >
                           <div className="flex items-start justify-between gap-2 mb-1">
@@ -309,6 +391,26 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
           </div>
         </div>
       </div>
+
+      {editing && (
+        <EditTaskModal
+          task={editing}
+          onClose={() => setEditing(null)}
+          onSave={async (patch) => {
+            try {
+              await tasksApi.update(editing.id, patch);
+              await load();
+              toast.success("Kaydedildi");
+            } catch {
+              toast.error("Kaydedilemedi");
+            }
+          }}
+          isTeamView={false}
+          categories={cats}
+          teamMembers={[]}
+          currentUser={user}
+        />
+      )}
     </div>
   );
 };

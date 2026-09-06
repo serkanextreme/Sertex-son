@@ -56,6 +56,15 @@ export function flattenTree(categories, parentId = null, depth = 0, out = []) {
   return out;
 }
 
+// Native <select> için hiyerarşik sıralı seçenekler: ana kol A→Z,
+// her alt kol parent'ının hemen altında girintili. label = nbsp girinti + isim.
+export function flattenCategoryOptions(categories) {
+  return flattenTree(categories).map((c) => {
+    const depth = c.__depth || 0;
+    return { id: c.id, label: `${"\u00A0\u00A0\u00A0".repeat(depth)}${depth > 0 ? "↳ " : ""}${c.name}` };
+  });
+}
+
 // İş kolu mini-rapor toplaması (rollup). `direct` = { catId: {total, done} }
 // doğrudan sayılar; her kol için kendisi + tüm alt kollarını toplar.
 // Dönüş: { catId: {total, done, pct} }.
