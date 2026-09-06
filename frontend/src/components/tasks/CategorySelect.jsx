@@ -79,6 +79,7 @@ export const CategorySelect = ({ categories = [], value = "", onChange, testId =
             </button>
             {filtered.map((c) => {
               const on = value === c.id;
+              const depth = c.__depth || 0;
               return (
                 <button
                   type="button"
@@ -92,15 +93,21 @@ export const CategorySelect = ({ categories = [], value = "", onChange, testId =
                   <span className="h-4 w-4 rounded border border-sertex-cyan/40 flex items-center justify-center shrink-0">
                     {on && <Check className="h-2.5 w-2.5 text-sertex-cyan" />}
                   </span>
+                  {!query.trim() && depth > 0 && (
+                    <span className="flex self-stretch shrink-0 font-mono text-sertex-cyan/45 select-none leading-none" aria-hidden="true" data-testid={`${testId}-branch-${c.id}`}>
+                      {Array.from({ length: depth }).map((_, i) => (
+                        <span key={i} className="inline-flex items-center justify-center" style={{ width: 16 }}>
+                          {i === depth - 1 ? "└" : "│"}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                   {c.color ? (
                     <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: c.color }} />
                   ) : (
                     <Tag className="h-3 w-3 text-sertex-textMuted shrink-0" />
                   )}
-                  <span
-                    className="flex-1 text-sm font-mono truncate"
-                    style={{ paddingLeft: query.trim() ? 0 : (c.__depth || 0) * 14 }}
-                  >
+                  <span className="flex-1 text-sm font-mono truncate">
                     {query.trim() ? getCategoryPathLabel(c.id, categories) : c.name}
                   </span>
                 </button>

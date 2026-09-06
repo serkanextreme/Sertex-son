@@ -1,5 +1,11 @@
 # Sertex — Kişisel AI Asistan · PRD
 
+## ✅ TAMAMLANDI (2026-06, "YAP"): CategorySelect hiyerarşi görünürlüğü (her derinlikte)
+- `tasks/CategorySelect.jsx` browse modunda (arama boşken) alt kollar artık ağaç gibi: her ata seviyesi için "│" kılavuz çizgisi + kendi seviyesinde "└" dalı, ikondan ÖNCE render → alt kolun ana kola bağlı olduğu net. `Array.from({length: depth})` ile ARBITRARY derinlik (alt-alt kol da) destekleniyor. Arama modu değişmedi (tam yol `getCategoryPathLabel`). Bileşen Detaylı/Kolay/Profesyonel add formunda ortak.
+- Doğrulama: geçici 3 seviyeli hiyerarşi (Fason Verme → ZZTEST_alt → ZZTEST_altalt) oluşturuldu → dropdown "Fason Verme / └ ZZTEST_alt / │ └ ZZTEST_altalt" gösterdi (screenshot+DOM), sonra geçici kategoriler silindi (200/200), DB temiz.
+
+
+
 ## ✅ TAMAMLANDI (2026-06, "YAP"): PROFESYONEL tıklama davranışı
 - (1) Görev kartı + "Son Görevler" + "Yaklaşan Son Tarihler" tıklama → ARTIK EditTaskModal AÇILMIYOR. `jumpToTask(id)` → `window.__sertex_pending_task_jump` + `onOpenSection("tasks")` + `CustomEvent("sertex:task-jump")` → Neural Link açılıp göreve gidiyor ve 4sn parlatıyor. Profesyonel'de kalınıyor. Doğrulama: kart tıkla → edit modal=False, sidebar açık, task-item highlight cyan ring.
 - (2) "Yeni Görev" butonu → Neural Link değil, tam add formu. Yeni paylaşılan bileşen `tasks/AddTaskModal.jsx` (KolayAddModal'ın testPrefix'li birebir kopyası) — Profesyonel'de `testPrefix="prof-add"`. Kolay'a DOKUNULMADI (kendi inline KolayAddModal'ı duruyor). Doğrulama: prof-add-modal açıldı (başlık/tarih/atama/iş kolu/hatırlatıcı/dosya). Canlı DB'yi korumak için gerçek submit yapılmadı (mantık Kolay ile aynı).
