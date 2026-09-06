@@ -54,7 +54,7 @@ const initials = (name) => (name || "").trim().split(/\s+/).map((w) => w[0]).joi
  * + görev ızgarası (ilerleme çubuklu) + sağ sütun (son görevler / yaklaşan tarihler).
  * Mevcut API + navigasyon yeniden kullanılır; Detaylı görünüm dokunulmaz.
  */
-const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }) => {
+const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
   const { user, teamFeaturesVisible } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [cats, setCats] = useState([]);
@@ -120,7 +120,13 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMo
     <div
       className="absolute inset-0 z-10 overflow-hidden"
       data-testid="profesyonel-interface"
-      style={{ right: !isMobile && sidebarOpen ? 360 : 0, bottom: isMobile ? 64 : 0, transition: "right 300ms" }}
+      style={{
+        top: isMobile ? 0 : "var(--sx-sb-top, 0px)",
+        right: isMobile ? 0 : "var(--sx-sb-right, 0px)",
+        left: isMobile ? 0 : "var(--sx-sb-left, 0px)",
+        bottom: isMobile ? 64 : "var(--sx-sb-bottom, 0px)",
+        transition: "top 300ms, right 300ms, left 300ms, bottom 300ms",
+      }}
     >
       <div className="flex h-full">
         {/* Sol menü */}
