@@ -4,6 +4,7 @@
 - (1) Görev kartı + "Son Görevler" + "Yaklaşan Son Tarihler" tıklama → ARTIK EditTaskModal AÇILMIYOR. `jumpToTask(id)` → `window.__sertex_pending_task_jump` + `onOpenSection("tasks")` + `CustomEvent("sertex:task-jump")` → Neural Link açılıp göreve gidiyor ve 4sn parlatıyor. Profesyonel'de kalınıyor. Doğrulama: kart tıkla → edit modal=False, sidebar açık, task-item highlight cyan ring.
 - (2) "Yeni Görev" butonu → Neural Link değil, tam add formu. Yeni paylaşılan bileşen `tasks/AddTaskModal.jsx` (KolayAddModal'ın testPrefix'li birebir kopyası) — Profesyonel'de `testPrefix="prof-add"`. Kolay'a DOKUNULMADI (kendi inline KolayAddModal'ı duruyor). Doğrulama: prof-add-modal açıldı (başlık/tarih/atama/iş kolu/hatırlatıcı/dosya). Canlı DB'yi korumak için gerçek submit yapılmadı (mantık Kolay ile aynı).
 - Kaldırıldı: Profesyonel `editing` state + `EditTaskModal` importu/kullanımı.
+- **✅ CANLI VERİ TESTİ (2026-06)**: Profesyonel "Yeni Görev" ile gerçek görev eklendi → Aktif 21→22, toast "Görev eklendi", ızgarada+aramada (1 sonuç) göründü, karta tıklayınca Neural Link'te de göründü. Test görevi sonrasında soft+permanent delete (200/200) ile silinip canlı DB temiz bırakıldı.
 - ⚠️ Gelecek refactor notu: `AddTaskModal.jsx` artık paylaşılan; Kolay'ın inline `KolayAddModal`'ı da bir ara buna geçirilip tekrar (duplication) giderilebilir.
 
 
