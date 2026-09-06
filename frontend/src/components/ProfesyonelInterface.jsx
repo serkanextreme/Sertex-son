@@ -22,7 +22,7 @@ import { toast } from "sonner";
 import { tasksApi, taskCategoriesApi } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { setInterfaceMode } from "../lib/appearance";
-import { EditTaskModal } from "./tasks/EditTaskModal";
+import { AddTaskModal } from "./tasks/AddTaskModal";
 import {
   BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -67,8 +67,19 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
   const [cats, setCats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
-  const [editing, setEditing] = useState(null);
+  const [adding, setAdding] = useState(false);
   const [catFilter, setCatFilter] = useState("");
+
+  // Göreve tıklayınca: Neural Link panelini aç, GÖREVLER sekmesine geç ve
+  // o görevi bulup parlat ("görev burada"). Mekanizma bildirim zili ile aynı.
+  const jumpToTask = useCallback((taskId) => {
+    if (!taskId) return;
+    try { window.__sertex_pending_task_jump = { task_id: taskId, ts: Date.now() }; } catch { /* noop */ }
+    onOpenSection?.("tasks");
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent("sertex:task-jump", { detail: { task_id: taskId } }));
+    }, 80);
+  }, [onOpenSection]);
 
   const load = useCallback(async () => {
     const [ts, cs] = await Promise.all([
@@ -247,7 +258,7 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
               </div>
               <button
                 type="button"
-                onClick={() => onOpenSection?.("tasks")}
+                onClick={() => setAdding(true)}
                 data-testid="prof-add-task"
                 className="flex items-center gap-2 px-4 py-2 rounded-lg bg-sertex-cyan text-sertex-bg hover:opacity-90 transition-opacity text-sm font-semibold shrink-0"
               >
@@ -354,7 +365,7 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: Math.min(i * 0.03, 0.3) }}
-                          onClick={() => setEditing(t)}
+                          onClick={() => jumpToTask(t.id)}
                           role="button"
                           className="rounded-xl border border-white/10 bg-sertex-surface/60 p-4 hover:border-sertex-cyan/40 transition-colors cursor-pointer"
                           data-testid={`prof-card-${t.id}`}
@@ -395,7 +406,13 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                   {recent.length === 0 ? (
                     <div className="hud-text text-sertex-textMuted normal-case">Kayıt yok</div>
                   ) : recent.map((t) => (
-                    <div key={t.id} className="flex items-center gap-2 py-1.5 border-b border-white/5 last:border-0">
+                    <div
+                      key={t.id}
+                      onClick={() => jumpToTask(t.id)}
+                      role="button"
+                      data-testid={`prof-recent-${t.id}`}
+                      className="flex items-center gap-2 py-1.5 border-b border-white/5 last:border-0 cursor-pointer hover:text-sertex-cyan transition-colors"
+                    >
                       <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: bucketOf(t).color === "accent" ? "rgb(var(--sx-accent-rgb))" : bucketOf(t).color }} />
                       <span className="text-sm text-sertex-textSecondary truncate">{t.title}</span>
                     </div>
@@ -409,7 +426,13 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                   {upcoming.length === 0 ? (
                     <div className="hud-text text-sertex-textMuted normal-case">Yaklaşan tarih yok</div>
                   ) : upcoming.map((t) => (
-                    <div key={t.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-white/5 last:border-0">
+                    <div
+                      key={t.id}
+                      onClick={() => jumpToTask(t.id)}
+                      role="button"
+                      data-testid={`prof-upcoming-${t.id}`}
+                      className="flex items-center justify-between gap-2 py-1.5 border-b border-white/5 last:border-0 cursor-pointer hover:text-sertex-cyan transition-colors"
+                    >
                       <span className="text-sm text-sertex-textSecondary truncate">{t.title}</span>
                       <span className="hud-text text-sertex-cyan normal-case tracking-normal shrink-0">{fmtDate(t.due_date)}</span>
                     </div>
@@ -421,23 +444,12 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
         </div>
       </div>
 
-      {editing && (
-        <EditTaskModal
-          task={editing}
-          onClose={() => setEditing(null)}
-          onSave={async (patch) => {
-            try {
-              await tasksApi.update(editing.id, patch);
-              await load();
-              toast.success("Kaydedildi");
-            } catch {
-              toast.error("Kaydedilemedi");
-            }
-          }}
-          isTeamView={false}
-          categories={cats}
-          teamMembers={[]}
-          currentUser={user}
+      {adding && (
+        <AddTaskModal
+          testPrefix="prof-add"
+          cats={cats}
+          onClose={() => setAdding(false)}
+          onCreated={load}
         />
       )}
     </div>
