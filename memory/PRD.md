@@ -1,13 +1,16 @@
 # Sertex — Kişisel AI Asistan · PRD
 
-## 🟡 BEKLEYEN (kullanıcı "bekle yapma" — YAP bekleniyor, 2026-06): Görev SERİ NO + TARİH etiketi
-- Görev ekle/düzenle formunda iki checkbox: ☐ Seri No, ☐ Tarih. İşaretlenene göre kart etiketi:
-  - ikisi de → `1-10.09.26` (no + kısa tarih)
-  - sadece no → `1`
-  - sadece tarih → `10.09.2026`
-- Etiket görev kartında görünür; no/tarih ile takip+arama.
-- NETLEŞECEK: (1) tarih = oluşturulma mı / bitiş mi / elle mi? (2) kısa vs uzun yıl bilerek mi farklı? (3) seri no = kalıcı/değişmeyen global sayı mı (öneri: evet, #1'den artan, counters koleksiyonu ile atomik $inc, oluşturulunca atanır, backfill gerekir — CANLI DB'ye alan ekler, veri silmez, onay gerekli). (4) varsayılan iki kutu da işaretli mi?
-- NOT: mevcut "number_pinned/pinned_number" POZİSYON numarasıdır, bu yeni kalıcı seri ondan AYRI olmalı.
+## 🟡 BEKLEYEN (spec KESİN, kullanıcı "bekle yapma" — YAP bekleniyor, 2026-06): Görev SERİ NO + TARİH etiketi
+- Form (Yeni Görev + Görevi Düzenle) 2 checkbox, varsayılan BOŞ: ☐ Seri No, ☐ Tarih.
+- Etiket: ikisi→`1-10.09.2026`, sadece no→`1`, sadece tarih→`10.09.2026`, hiçbiri→etiket yok (seri nosuz görev normal açılır).
+- Tarih = görevin OLUŞTURULMA tarihi, biçim `DD.MM.YYYY` (hep uzun yıl).
+- Seri No: KALICI/değişmez, GLOBAL, OTOMATİK sıralı atanır (kullanıcı elle yazmaz; sıradaki numarayı sistem verir). counters koleksiyonu + atomik $inc.
+- Sadece SÜPER YÖNETİCİ seri no'yu elle değiştirebilir (diğerlerinde salt-okunur). Değiştirince aynı numara varsa UYAR + kaydettirme (benzersiz kalsın). [override "yine de kaydet" opsiyonu kullanıcı isterse eklenir.]
+- Seri nosuz görev "Düzenle"de "Seri No" işaretlenince SONRADAN otomatik seri no alır.
+- Görünüm: kartlar (Detaylı/Kolay/Profesyonel) + Görevi Düzenle + ARAMADA numarayla bulunur.
+- CANLI DB: model'e `serial` (nullable) + tarih-göster tercihi (`show_created_date`) alanları + counters kaydı eklenir. VERİ SİLİNMEZ. Mevcut görevlere geriye dönük numara ATANMAZ (varsayılan boş) — sadece kutu işaretlendikçe numara alır.
+- NOT: mevcut `number_pinned/pinned_number` POZİSYON numarasıdır — bu yeni kalıcı seri ondan AYRI.
+
 
 
 ## ✅ TAMAMLANDI (2026-06, "YAP"): İş kolu hiyerarşisi GÖZE BATAN + Arşiv girintili
