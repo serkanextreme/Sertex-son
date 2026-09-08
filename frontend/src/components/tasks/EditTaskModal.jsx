@@ -9,7 +9,7 @@ import { REMINDER_DAY_CHOICES } from "../../lib/taskHelpers";
 import { RecurringReminderFields } from "./RecurringReminderFields";
 import { TaskAttachments } from "./TaskAttachments";
 import { recurringValueFromTask, resolveRecurringReminder } from "../../lib/reminderUtils";
-import { flattenCategoryOptions } from "../../lib/categoryTree";
+import CategorySelect from "./CategorySelect";
 import { SerialDateFields } from "./SerialDateFields";
 import { isSuperAdmin } from "../../lib/roles";
 
@@ -50,25 +50,6 @@ export const EditTaskModal = ({ task, onClose, onSave, isTeamView, categories = 
   const [serialOverride, setSerialOverride] = useState("");
   const isSuper = isSuperAdmin(currentUser);
   const originalHasSerial = task.serial != null;
-
-  // Group categories by company_id so the modal can render <optgroup>s.
-  // Managers with cross-company grants see multiple groups; single-company
-  // users see one flat list.
-  const categoriesByCompany = React.useMemo(() => {
-    const map = new Map();
-    for (const c of categories) {
-      const key = c.company_id || "__none__";
-      if (!map.has(key)) map.set(key, { companyName: null, items: [] });
-      map.get(key).items.push(c);
-    }
-    // Resolve company names via teamMembers (best-effort — cache miss falls
-    // back to a generic label so the dropdown still renders correctly).
-    for (const [cid, bucket] of map) {
-      const member = teamMembers.find((m) => m.company_id === cid);
-      bucket.companyName = member?.company_name || null;
-    }
-    return Array.from(map.entries());
-  }, [categories, teamMembers]);
 
   // Unique company names for the ŞİRKET dropdown (task ownership label).
   const companyOptions = React.useMemo(() => {
@@ -315,31 +296,17 @@ export const EditTaskModal = ({ task, onClose, onSave, isTeamView, categories = 
             }}
             testPrefix="edit-reminder"
           />
-          {/* Faz 9 CP4.15 — İş Kolu picker inside edit modal. Grouped by
-              company via <optgroup> so cross-company managers can see whose
-              category is whose. Hidden entirely when no categories exist. */}
+          {/* İş Kolu seçici — "Yeni Görev" formuyla aynı hiyerarşik CategorySelect
+              (cyan dikey çubuklu ağaç). Kolsuz seçenek de bileşen içinde. */}
           {categories.length > 0 && (
             <div>
               <div className="hud-text text-sertex-textMuted mb-1">🏷️ İŞ KOLU</div>
-              <select
+              <CategorySelect
+                categories={categories}
                 value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                data-testid="edit-category"
-                className="w-full bg-sertex-surface/60 border border-sertex-cyan/25 rounded-md px-2 py-1.5 text-sm font-mono text-sertex-text focus:border-sertex-cyan outline-none"
-              >
-                <option value="">— İş kolu yok —</option>
-                {categoriesByCompany.length > 1
-                  ? categoriesByCompany.map(([cid, bucket]) => (
-                      <optgroup key={cid} label={bucket.companyName || "Şirket"}>
-                        {flattenCategoryOptions(bucket.items).map((o) => (
-                          <option key={o.id} value={o.id}>{o.label}</option>
-                        ))}
-                      </optgroup>
-                    ))
-                  : flattenCategoryOptions(categories).map((o) => (
-                      <option key={o.id} value={o.id}>{o.label}</option>
-                    ))}
-              </select>
+                onChange={setCategoryId}
+                testId="edit-category"
+              />
             </div>
           )}
           <SerialDateFields

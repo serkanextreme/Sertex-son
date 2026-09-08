@@ -1,6 +1,13 @@
 # Sertex — Kişisel AI Asistan · PRD
 
-## ✅ TAMAMLANDI (2026-06, "YAP"): Görev SERİ NO + TARİH etiketi (frontend bağlandı)
+## ✅ TAMAMLANDI (2026-06, "YAP"): 2 hata düzeltmesi — Panel senkronu + Düzenle iş kolu görünümü
+- **Sorun 1 — Dışarı taşınan Neural Link ↔ sağdaki Neural Link senkron değildi**: Kök neden: `TasksPanel` mutasyon fonksiyonları (arşivle/iptal/geri yükle/kalıcı sil/düzenle-kaydet/durum…) yalnız kendi örneğini yeniliyordu; dışarı taşınan pencereler (`DetachedPanelsHost`) `refreshSignal` de almıyordu. Çözüm: yeni `notifyTasksChanged()` → `onDataChanged` + GLOBAL `window` olayı `sertex:tasks-changed`; her TasksPanel örneği bu olayı dinleyip `load()` eder (load olay yaymadığı için döngü yok). Tüm mutasyon başarı yollarına bağlandı (29 nokta). Artık dışarıdaki pencere + sağdaki panel çift yönlü ANINDA senkron.
+- **Sorun 2 — "Görevi Düzenle"de iş kolu açılır listesi eski stildeydi**: `EditTaskModal` artık eski native `<select>` (flattenCategoryOptions/optgroup) yerine "Yeni Görev" formuyla aynı hiyerarşik `CategorySelect` bileşenini kullanıyor (cyan ağaç + arama kutusu). Kullanılmayan `categoriesByCompany` useMemo + `flattenCategoryOptions` importu kaldırıldı.
+- **Test**: testing_agent `iteration_128.json` — Sorun 2 parite (edit-category = CategorySelect, native değil) + Sorun 1 ÇİFT YÖNLÜ senkron (dışarı→sidebar 25→24, sidebar→dışarı 24→23, manuel yenileme YOK) + dock + Detaylı regresyon TÜMÜ GEÇTİ. Arşivlenen test görevleri geri alındı, canlı DB aynen korundu.
+- **Yayın**: preview'de; canlıya (sertex-ai.com) için Deploy gerekir.
+
+
+
 - **Frontend wiring bitti** (backend zaten hazırdı): Ortak `tasks/SerialDateFields.jsx` (☐ Seri No / ☐ Tarih, varsayılan BOŞ) 4 yere bağlandı → Detaylı Yeni Görev formu (`TasksPanel.jsx`, testPrefix `task`), Kolay `KolayAddModal` (`kolay-add`), Profesyonel ortak `AddTaskModal` (`prof-add`), ve `EditTaskModal` (`edit`). Payload: create → `assign_serial`+`show_created_date` (api.js whitelist'e eklendi); edit → `show_created_date` + (süper yönetici manuel `serial` / yoksa `assign_serial`).
 - **Etiket rozeti** (`lib/taskSerial.js` `taskSerialLabel`): TaskCard (Detaylı, `task-serial-badge-{id}`), KolayCardBody (`kolay-serial-badge-{id}`), Profesyonel kart (`prof-serial-badge-{id}`). Biçim: ikisi→`1-06.09.2026`, no→`1`, tarih→`06.09.2026`, hiçbiri→rozet yok. Hash ikonlu cyan pill.
 - **Arama**: seri no arama haystack'ine eklendi (Detaylı + Kolay + Profesyonel) → numarayla bulunur.

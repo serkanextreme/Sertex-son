@@ -1,0 +1,28 @@
+{
+  "summary": "Verified both bug fixes on web (Detayli/Neural Link). BUG 2 (EditTaskModal category picker parity): Right-click a task → DÜZENLE opens edit-task-modal; the İŞ KOLU picker exposes edit-category-wrap + edit-category (tag=BUTTON, NOT native <select>). Clicking it opens edit-category-panel with edit-category-search — parity with the Yeni Görev CategorySelect confirmed. BUG 1 (cross-panel live sync): opened detach-panel-btn → detached-panel-window rendered (two tasks-panel instances present). Archiving from DETACHED made the sidebar drop from 25→24 tasks without any manual refresh; then archiving from SIDEBAR made the DETACHED window drop from 24→23. Regression: default Detayli sphere+HUD renders; docking via detached-panel-dock-<id> (back-arrow) works and removes the floating window. Live DB left clean: both test-archived tasks were unarchived (PATCH /api/tasks/{id} archived:false → 200) and final active count returned to 25 (matches pre-test); archive badge remained at 27 (unchanged).",
+  "platforms_tested": ["web"],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "web": {
+      "ui_bugs": [],
+      "integration_issues": [],
+      "design_issues": []
+    }
+  },
+  "parity_issues": [],
+  "test_report_links": ["/app/test_reports/bug_sync_final.jpeg", "/app/test_reports/detach_debug.jpeg"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "TasksPanel.jsx is 3033 lines — file-size threshold (>700) exceeded. Consider extracting the archive-view logic and the reminder/notify sub-flows into hooks/subcomponents.",
+    "notifyTasksChanged() uses a plain window Event — works across in-tab TasksPanel instances (verified). If cross-tab sync is later desired, promote to BroadcastChannel or localStorage-storage event.",
+    "detachedPanels.js store is in-memory + localStorage; DetachedPanelsHost subscribes and re-renders. Fine for single-tab. LS key sertex_detached_panels_v1 restores window on reload — behavior consistent."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped per request)", "frontend": "100%"},
+  "test_credentials": "serkan / 19071987 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None. Two existing tasks were temporarily archived for the sync assertion, then unarchived via PATCH /api/tasks/{id} back to 'archived:false' — final state matches initial (25 active tasks, archive badge = 27).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "For BUG 1 verification: clear localStorage key 'sertex_detached_panels_v1' before clicking [data-testid=detach-panel-btn], otherwise if a panel entry is stale the click is a no-op (dedupe by category key). Two tasks-panel instances end up in the DOM — index 0 is sidebar, index 1 is detached. Context menu action testIDs are ctx-archive / ctx-unarchive / ctx-edit / ctx-cancel-task (see TaskContextMenu.jsx). Archive counts endpoint is /api/tasks/archive-counts?scope=mine; unarchive is PATCH /api/tasks/{id} with body {archived:false}.",
+  "rca of the issue": "N/A — both fixes verified working. BUG 1 mechanism confirmed: TasksPanel.notifyTasksChanged() dispatches window Event 'sertex:tasks-changed' after every successful mutation; every mounted TasksPanel installs a listener that re-runs load(). load() itself does NOT dispatch, so no infinite loop. BUG 2 mechanism: EditTaskModal.jsx now imports CategorySelect and renders it with testId='edit-category' (line 304-309), replacing the previous native <select>."
+}

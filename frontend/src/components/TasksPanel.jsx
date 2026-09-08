@@ -514,9 +514,27 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
     }
   }, [showArchived, taskScope, archiveGroup]);
 
+  // Panel örnekleri arası CANLI SENKRON: her başarılı görev değişikliğinden
+  // sonra çağrılır → hem üst bileşene (stat rozetleri/refreshKey) haber verir
+  // hem de GLOBAL bir olay yayınlar; böylece aynı anda açık olan TÜM TasksPanel
+  // örnekleri (sağdaki Neural Link + dışarı taşınan pencereler) listelerini
+  // anında tazeler. load() olayı yaymadığı için döngü oluşmaz.
+  const notifyTasksChanged = useCallback(() => {
+    if (onDataChanged) onDataChanged();
+    try { window.dispatchEvent(new Event("sertex:tasks-changed")); } catch (e) { /* ignore */ }
+  }, [onDataChanged]);
+
   useEffect(() => {
     load();
   }, [load, refreshSignal]);
+
+  // Başka bir panel örneği (ör. dışarı taşınan pencere) görev değiştirince
+  // bu örnek de kendini tazeler.
+  useEffect(() => {
+    const onChanged = () => load();
+    window.addEventListener("sertex:tasks-changed", onChanged);
+    return () => window.removeEventListener("sertex:tasks-changed", onChanged);
+  }, [load]);
 
   // Toast hızlı aksiyonu (ertele/tamamla) sonrası listeyi tazele.
   useEffect(() => {
@@ -713,6 +731,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
     toast.success(archived ? "Görev arşivlendi" : "Arşivden çıkarıldı");
     try {
       await tasksApi.setArchived(id, archived);
+      notifyTasksChanged();
     } catch (e) {
       toast.error("İşlem başarısız — geri alınıyor");
       load();
@@ -728,6 +747,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
     try {
       await tasksApi.cancel(id, res.reason);
       load();
+      notifyTasksChanged();
     } catch (e) {
       toast.error(e?.response?.status === 423 ? (e.response.data?.detail || "Görev kilitli") : "İptal başarısız");
       load();
@@ -741,6 +761,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
     try {
       await tasksApi.uncancel(id);
       load();
+      notifyTasksChanged();
     } catch (e) {
       toast.error("Geri yükleme başarısız");
       load();
@@ -754,6 +775,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
     try {
       await tasksApi.restore(id);
       load();
+      notifyTasksChanged();
     } catch (e) {
       toast.error("Geri yükleme başarısız");
       load();
@@ -774,6 +796,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
       await tasksApi.permanentDelete(id);
       toast.success("Görev kalıcı olarak silindi");
       load();
+      notifyTasksChanged();
     } catch (e) {
       toast.error(e?.response?.status === 403 ? "Kalıcı silme yetkiniz yok" : "Silme başarısız");
       load();
@@ -793,6 +816,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
       const r = await tasksApi.emptyTrash(taskScope);
       toast.success(`${r.deleted || 0} görev kalıcı olarak silindi`);
       load();
+      notifyTasksChanged();
     } catch (e) {
       toast.error(e?.response?.status === 403 ? "Yetkiniz yok" : "Boşaltma başarısız");
     }
@@ -980,7 +1004,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
       setNewReminder(defaultRecurringValue());
       setShowAddForm(false);
       load();
-      onDataChanged?.();
+      notifyTasksChanged();
       toast.success(
         mode === "multi"
           ? `Görev ${ids.length} kişiye atandı${includesSelf ? " (siz dahil)" : ""}`
@@ -997,7 +1021,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
     try {
       await tasksApi.setStatus(id, status);
       load();
-      onDataChanged?.();
+      notifyTasksChanged();
     } catch (e) {
       toast.error("Güncellenemedi");
     }
@@ -1009,7 +1033,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
     try {
       await tasksApi.delete(id, res.reason);
       load();
-      onDataChanged?.();
+      notifyTasksChanged();
       toast.success("Çöp kutusuna taşındı");
     } catch (e) {
       // Faz 9 CP4.27 — 423 = task locked. Show the actionable detail from the
@@ -1027,14 +1051,14 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
   const reassignTask = async (id, newOwnerId) => {
     await tasksApi.reassign(id, newOwnerId);
     load();
-    onDataChanged?.();
+    notifyTasksChanged();
   };
 
   // Şirkete Devret — görevi bir şirkete aktar (sahipsiz + kolsuz orphan).
   const transferTaskToCompany = async (id, companyId) => {
     await tasksApi.transferToCompany(id, companyId);
     load();
-    onDataChanged?.();
+    notifyTasksChanged();
   };
 
   // Alt görevi tam bir göreve dönüştür (promote) → sunucuda oluştur + listeyi
@@ -1047,7 +1071,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
       toast.error(e?.response?.data?.detail || "Göreve dönüştürülemedi");
     }
     load();
-    onDataChanged?.();
+    notifyTasksChanged();
   };
 
   // Promote'u geri al → görevi ana görevin alt görevine geri çevir.
@@ -1059,7 +1083,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
       toast.error(e?.response?.data?.detail || "Alt göreve dönüştürülemedi");
     }
     load();
-    onDataChanged?.();
+    notifyTasksChanged();
   };
 
   // Sıra numarası sabitle/kaldır. pinned=true iken number verilir (otomatik veya
@@ -1084,7 +1108,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
       toast.error(e?.response?.data?.detail || "İşlem başarısız");
     }
     load();
-    onDataChanged?.();
+    notifyTasksChanged();
   };
 
   // Dürt / Hatırlat — personele görev hatırlatması gönder (çan + push).
@@ -1117,7 +1141,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
         : "Kolsuz";
       toast.success(`Görev → ${name}`);
       load();
-      onDataChanged?.();
+      notifyTasksChanged();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Değiştirilemedi");
     }
@@ -1135,7 +1159,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
       });
       toast.success(`Yapıştırıldı → ${categoryName || "Kolsuz"}`);
       load();
-      onDataChanged?.();
+      notifyTasksChanged();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Yapıştırılamadı");
     }
@@ -1144,7 +1168,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
   // Şablondan görev oluştur (instantiate) → oluşan görevi Düzenle'de aç.
   const handleUseTemplate = (task) => {
     load();
-    onDataChanged?.();
+    notifyTasksChanged();
     if (task) setEditing(task);
   };
 
@@ -1162,7 +1186,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
           : `Uyarı: ${days} gün önce`,
       );
       load();
-      onDataChanged?.();
+      notifyTasksChanged();
     } catch (e) {
       toast.error("Değiştirilemedi");
     }
@@ -1172,7 +1196,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
       await tasksApi.update(id, { reminder_disabled: !!disabled });
       toast.success(disabled ? "Bu görev için hatırlatıcı kapatıldı" : "Hatırlatıcı yeniden aktif");
       load();
-      onDataChanged?.();
+      notifyTasksChanged();
     } catch (e) {
       toast.error("Değiştirilemedi");
     }
@@ -1182,7 +1206,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
       await tasksApi.update(id, { digest_muted: !!muted });
       toast.success(muted ? "Bu görev sabah özetinden çıkarıldı" : "Bu görev sabah özetine eklendi");
       load();
-      onDataChanged?.();
+      notifyTasksChanged();
     } catch (e) {
       toast.error("Değiştirilemedi");
     }
@@ -1192,6 +1216,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
     try {
       await tasksApi.update(editing.id, patch);
       load();
+      notifyTasksChanged();
       toast.success("Kaydedildi");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Kaydedilemedi");
@@ -1451,7 +1476,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
     onSetReminderDisabled: (v) => setTaskReminderDisabled(t.id, v),
     onToggleDigestMute: (v) => setTaskDigestMuted(t.id, v),
     currentUser: user,
-    onLockChanged: () => { load(); onDataChanged?.(); },
+    onLockChanged: () => { load(); notifyTasksChanged(); },
     onLinkTasks: () => setLinkModal({ mode: "create", taskId: t.id }),
     onEditGroup: () => t.group_id && setLinkModal({ mode: "edit", groupId: t.group_id }),
     onRemoveFromGroup: () => t.group_id && removeFromGroup(t.group_id, t.id),
@@ -1512,7 +1537,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
       await tasksApi.removeGroupMember(gid, tid);
       toast.success("Görev gruptan çıkarıldı");
       load();
-      onDataChanged?.();
+      notifyTasksChanged();
     } catch (e) {
       console.error("[TasksPanel] gruptan çıkarma hatası:", e);
       toast.error("Çıkarılamadı");
@@ -1531,7 +1556,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
       await tasksApi.deleteGroup(group.id);
       toast.success("Grup bağlantısı çözüldü");
       load();
-      onDataChanged?.();
+      notifyTasksChanged();
     } catch (e) {
       console.error("[TasksPanel] grup çözme hatası:", e);
       toast.error("İşlem başarısız");
@@ -2854,7 +2879,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
                   onSetReminderDays={(d) => setTaskReminderDays(t.id, d)}
                   onSetReminderDisabled={(v) => setTaskReminderDisabled(t.id, v)}
                   currentUser={user}
-                  onLockChanged={() => { load(); onDataChanged?.(); }}
+                  onLockChanged={() => { load(); notifyTasksChanged(); }}
                   onLinkTasks={() => setLinkModal({ mode: "create", taskId: t.id })}
                   onEditGroup={() => t.group_id && setLinkModal({ mode: "edit", groupId: t.group_id })}
                   onRemoveFromGroup={() => t.group_id && removeFromGroup(t.group_id, t.id)}
@@ -2919,7 +2944,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
           preselectedIds={linkCandidates.preselected}
           group={linkCandidates.group}
           onClose={() => setLinkModal(null)}
-          onSaved={() => { load(); onDataChanged?.(); }}
+          onSaved={() => { load(); notifyTasksChanged(); }}
         />
       )}
       {/* Faz 9 CP4.33 — global unlock modal fired from NotificationBell */}
@@ -2927,7 +2952,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
         <UnlockOtpModal
           task={pendingUnlockTask}
           onClose={() => setPendingUnlockTask(null)}
-          onVerified={() => { load(); onDataChanged?.(); setPendingUnlockTask(null); }}
+          onVerified={() => { load(); notifyTasksChanged(); setPendingUnlockTask(null); }}
         />
       )}
       {/* Task 4 — dışarı alınan görevler büyük yüzen pencerede */}
@@ -2966,7 +2991,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
               onSetReminderDisabled={(v) => setTaskReminderDisabled(t.id, v)}
               onToggleDigestMute={(v) => setTaskDigestMuted(t.id, v)}
               currentUser={user}
-              onLockChanged={() => { load(); onDataChanged?.(); }}
+              onLockChanged={() => { load(); notifyTasksChanged(); }}
             />
           </DetachedTaskWindow>
         );
