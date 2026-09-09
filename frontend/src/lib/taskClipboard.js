@@ -43,6 +43,12 @@ export function clearTaskClipboard() {
   setTaskClipboard(null);
 }
 
+// Mevcut pano içeriğini kısmen güncelle (ör. dahil etme seçenekleri).
+export function updateTaskClipboard(patch) {
+  if (!state) return;
+  setTaskClipboard({ ...state, ...patch });
+}
+
 export function useTaskClipboard() {
   const [clip, setClip] = useState(state);
   useEffect(() => {

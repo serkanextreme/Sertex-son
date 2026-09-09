@@ -66,7 +66,7 @@ import ExportSelectModal from "./ExportSelectModal";
 import { TaskPasteMenu } from "./tasks/TaskPasteMenu";
 import { TemplateBar } from "./tasks/TemplateBar";
 import { TemplatesModal } from "./tasks/TemplatesModal";
-import { useTaskClipboard, clearTaskClipboard, setTaskClipboard } from "../lib/taskClipboard";
+import { useTaskClipboard, clearTaskClipboard, setTaskClipboard, updateTaskClipboard } from "../lib/taskClipboard";
 
 // Faz 9 CP6 — TasksPanel bileşenleri ayrı dosyalara taşındı (davranış birebir aynı).
 import { TaskCard } from "./TaskCard";
@@ -2248,6 +2248,24 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
           <span className="hud-text text-sertex-cyan truncate flex-1">
             Kopyalandı: {clipboard.title}
           </span>
+          <button
+            onClick={() => updateTaskClipboard({ includeSubtasks: !clipboard.includeSubtasks })}
+            data-testid="task-clipboard-toggle-subtasks"
+            title="Alt görevleri de kopyala"
+            className={`hud-text flex items-center gap-1 px-1.5 py-0.5 rounded border shrink-0 ${clipboard.includeSubtasks ? "border-sertex-cyan/60 bg-sertex-cyan/15 text-sertex-cyan" : "border-white/15 text-sertex-textMuted"}`}
+          >
+            <span className={`h-2.5 w-2.5 rounded-sm border ${clipboard.includeSubtasks ? "bg-sertex-cyan border-sertex-cyan" : "border-white/40"}`} />
+            Alt görevler
+          </button>
+          <button
+            onClick={() => updateTaskClipboard({ includeAttachments: !clipboard.includeAttachments })}
+            data-testid="task-clipboard-toggle-attachments"
+            title="Dosyaları da kopyala"
+            className={`hud-text flex items-center gap-1 px-1.5 py-0.5 rounded border shrink-0 ${clipboard.includeAttachments ? "border-sertex-cyan/60 bg-sertex-cyan/15 text-sertex-cyan" : "border-white/15 text-sertex-textMuted"}`}
+          >
+            <span className={`h-2.5 w-2.5 rounded-sm border ${clipboard.includeAttachments ? "bg-sertex-cyan border-sertex-cyan" : "border-white/40"}`} />
+            Dosyalar
+          </button>
           <span className="hud-text text-sertex-textMuted/70 text-[10px] hidden md:inline shrink-0">
             iş koluna sağ tıkla → Yapıştır
           </span>

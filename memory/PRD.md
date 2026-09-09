@@ -6,6 +6,7 @@
 - **Çözüm**: `CopyTaskModal` kaldırıldı (import + state + render, hem `TasksPanel` hem `KolayInterface`). "Kopyala" artık seçili görevi ANINDA panoya alıyor (`setTaskClipboard`, varsayılan: alt görevler + dosyalar dahil) + toast "Panoya kopyalandı: <başlık>…". Yapıştırma yolu (iş koluna sağ-tık → Yapıştır) aynen korundu.
 - **Test (ana ajan, screenshot)**: Detaylı'da 2. görev sağ-tık→Kopyala → modal AÇILMADI, pano.sourceId == hedef görev id (doğrulandı), pano çubuğu doğru başlık; iş koluna sağ-tık → Yapıştır menüsü doğru görevi ("ZORLUK SEVİYESİNİ AYARLA → FASON VERME") gösterdi. Canlı veri değişmedi (yapıştır tıklanmadı, pano temizlendi). Kolay'a birebir aynı düzeltme uygulandı. Derleme temiz.
 - **Yayın**: preview'de; canlıya (sertex-ai.com) için Deploy gerekir.
+- **Ek (2026-06) — Kopyalama seçenekleri**: "Kopyala" TEK TIK + anında kaldı (hata geri gelmedi). Seçenekler kalıcı "Kopyalandı" çubuğuna iki toggle olarak eklendi: **Alt görevler** + **Dosyalar** (varsayılan: dosyalar dahil, alt görevler görevde varsa dahil). `taskClipboard.js`'e `updateTaskClipboard(patch)` eklendi; toggle'lar pano bayraklarını canlı günceller; `handlePaste` bunları `duplicate(include_subtasks/include_attachments)` ile kullanır. Detaylı + Kolay çubuklarına eklendi. Screenshot testi: Dosyalar OFF→includeAttachments=false, Alt görevler ON→includeSubtasks=true (doğrulandı).
 
 
 
