@@ -1,6 +1,14 @@
 # Sertex — Kişisel AI Asistan · PRD
 
-## ✅ TAMAMLANDI (2026-06, "YAP"): 2 hata düzeltmesi — Panel senkronu + Düzenle iş kolu görünümü
+## ✅ TAMAMLANDI (2026-06, "YAP"): Görev Kopyala hatası — yanlış/eski görev yapıştırılıyordu
+- **Belirti**: "Kopyala" deyince seçilen kart değil, önceden kopyalanan eski görev ("Dosya Transferleri") yapıştırılıyordu.
+- **Kök neden**: İki adımlı kopyalama + kalıcı pano. "Kopyala" hemen kopyalamıyor, bir `CopyTaskModal` açıyordu; pano ancak penceredeki "KOPYALA" ile güncelleniyordu. Pencereyi onaylamadan kapatınca (veya dosya sayısı yüklenirken düğme pasifken) pano ESKİ görevde kalıyor → yanlış yapıştırma. `onClose` panoya dokunmuyordu.
+- **Çözüm**: `CopyTaskModal` kaldırıldı (import + state + render, hem `TasksPanel` hem `KolayInterface`). "Kopyala" artık seçili görevi ANINDA panoya alıyor (`setTaskClipboard`, varsayılan: alt görevler + dosyalar dahil) + toast "Panoya kopyalandı: <başlık>…". Yapıştırma yolu (iş koluna sağ-tık → Yapıştır) aynen korundu.
+- **Test (ana ajan, screenshot)**: Detaylı'da 2. görev sağ-tık→Kopyala → modal AÇILMADI, pano.sourceId == hedef görev id (doğrulandı), pano çubuğu doğru başlık; iş koluna sağ-tık → Yapıştır menüsü doğru görevi ("ZORLUK SEVİYESİNİ AYARLA → FASON VERME") gösterdi. Canlı veri değişmedi (yapıştır tıklanmadı, pano temizlendi). Kolay'a birebir aynı düzeltme uygulandı. Derleme temiz.
+- **Yayın**: preview'de; canlıya (sertex-ai.com) için Deploy gerekir.
+
+
+
 - **Sorun 1 — Dışarı taşınan Neural Link ↔ sağdaki Neural Link senkron değildi**: Kök neden: `TasksPanel` mutasyon fonksiyonları (arşivle/iptal/geri yükle/kalıcı sil/düzenle-kaydet/durum…) yalnız kendi örneğini yeniliyordu; dışarı taşınan pencereler (`DetachedPanelsHost`) `refreshSignal` de almıyordu. Çözüm: yeni `notifyTasksChanged()` → `onDataChanged` + GLOBAL `window` olayı `sertex:tasks-changed`; her TasksPanel örneği bu olayı dinleyip `load()` eder (load olay yaymadığı için döngü yok). Tüm mutasyon başarı yollarına bağlandı (29 nokta). Artık dışarıdaki pencere + sağdaki panel çift yönlü ANINDA senkron.
 - **Sorun 2 — "Görevi Düzenle"de iş kolu açılır listesi eski stildeydi**: `EditTaskModal` artık eski native `<select>` (flattenCategoryOptions/optgroup) yerine "Yeni Görev" formuyla aynı hiyerarşik `CategorySelect` bileşenini kullanıyor (cyan ağaç + arama kutusu). Kullanılmayan `categoriesByCompany` useMemo + `flattenCategoryOptions` importu kaldırıldı.
 - **Test**: testing_agent `iteration_128.json` — Sorun 2 parite (edit-category = CategorySelect, native değil) + Sorun 1 ÇİFT YÖNLÜ senkron (dışarı→sidebar 25→24, sidebar→dışarı 24→23, manuel yenileme YOK) + dock + Detaylı regresyon TÜMÜ GEÇTİ. Arşivlenen test görevleri geri alındı, canlı DB aynen korundu.

@@ -69,11 +69,10 @@ import { LockConfigModal } from "./tasks/LockConfigModal";
 import { UnlockOtpModal } from "./tasks/UnlockOtpModal";
 import { OtpDisplayModal } from "./tasks/OtpDisplayModal";
 import { LinkTasksModal } from "./tasks/LinkTasksModal";
-import { CopyTaskModal } from "./tasks/CopyTaskModal";
 import { TaskPasteMenu } from "./tasks/TaskPasteMenu";
 import { TemplateBar } from "./tasks/TemplateBar";
 import { TemplatesModal } from "./tasks/TemplatesModal";
-import { useTaskClipboard, clearTaskClipboard } from "../lib/taskClipboard";
+import { useTaskClipboard, clearTaskClipboard, setTaskClipboard } from "../lib/taskClipboard";
 import { printTasks, exportTasksExcel, exportTasksWord } from "../lib/taskExport";
 
 // Son tarih + duruma göre basit durum rozeti (Sertex'te ayrı "öncelik" alanı yok).
@@ -766,7 +765,6 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
   const [ctxMenu, setCtxMenu] = useState(null); // { task, x, y }
   const [editing, setEditing] = useState(null);
   // Görev Kopyalama (Kopyala → Yapıştır) — Detaylı ile aynı pano.
-  const [copyModalTask, setCopyModalTask] = useState(null);
   const [pasteMenu, setPasteMenu] = useState(null); // { x, y, categoryId, categoryName }
   const clipboard = useTaskClipboard();
   // Görev Şablonları.
@@ -951,7 +949,15 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
   const handleAction = (task, action, extra) => {
     if (action === "delete") removeTask(task.id, task.title);
     else if (action === "edit") setEditing(task);
-    else if (action === "copy") setCopyModalTask(task);
+    else if (action === "copy") {
+      setTaskClipboard({
+        sourceId: task.id,
+        title: task.title,
+        includeSubtasks: (task.subtasks || []).length > 0,
+        includeAttachments: true,
+      });
+      toast.success(`Panoya kopyalandı: ${task.title} — bir iş koluna sağ tıklayıp Yapıştır'ı seçin.`);
+    }
     else if (action === "share") setSharing(task);
     else if (action === "archive") setArchived(task.id, true);
     else if (action === "unarchive") setArchived(task.id, false);
@@ -1339,10 +1345,7 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
       {editing && (
         <EditTaskModal task={editing} onClose={() => setEditing(null)} onSave={saveEdit} isTeamView={false} categories={cats} teamMembers={[]} currentUser={user} />
       )}
-      {/* Görev Kopyalama — Kopyala penceresi + iş koluna Yapıştır menüsü */}
-      {copyModalTask && (
-        <CopyTaskModal task={copyModalTask} onClose={() => setCopyModalTask(null)} />
-      )}
+      {/* Görev Kopyalama — iş koluna Yapıştır menüsü (kopyalama tek tıkla panoya alır) */}
       {pasteMenu && clipboard?.sourceId && (
         <TaskPasteMenu
           x={pasteMenu.x}

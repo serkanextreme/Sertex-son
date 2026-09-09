@@ -63,11 +63,10 @@ import { showReminderToast } from "../lib/reminderToast";
 import { confirmDialog, promptDialog } from "../lib/confirm";
 import { printTasks, exportTasksExcel, exportTasksWord } from "../lib/taskExport";
 import ExportSelectModal from "./ExportSelectModal";
-import { CopyTaskModal } from "./tasks/CopyTaskModal";
 import { TaskPasteMenu } from "./tasks/TaskPasteMenu";
 import { TemplateBar } from "./tasks/TemplateBar";
 import { TemplatesModal } from "./tasks/TemplatesModal";
-import { useTaskClipboard, clearTaskClipboard } from "../lib/taskClipboard";
+import { useTaskClipboard, clearTaskClipboard, setTaskClipboard } from "../lib/taskClipboard";
 
 // Faz 9 CP6 — TasksPanel bileşenleri ayrı dosyalara taşındı (davranış birebir aynı).
 import { TaskCard } from "./TaskCard";
@@ -300,7 +299,6 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
   // Görev → İş Kolu sürükle-bırakta imlecin o an üstünde olduğu çip.
   const [taskDragOverCatId, setTaskDragOverCatId] = useState(null);
   // Görev Kopyalama (Kopyala → Yapıştır).
-  const [copyModalTask, setCopyModalTask] = useState(null);
   const [pasteMenu, setPasteMenu] = useState(null); // { x, y, categoryId, categoryName }
   const clipboard = useTaskClipboard();
   // Görev Şablonları (Şablon Kütüphanesi).
@@ -1149,6 +1147,19 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
 
   // Görev Kopyalama — panodaki görevi hedef iş koluna (categoryId; null =
   // KOLSUZ) çoğalt. Pano temizlenene kadar durur → çok kez yapıştırılabilir.
+  // "Kopyala" — seçili görevi ANINDA panoya al (alt görevler + dosyalar dahil).
+  // Eskiden bir onay penceresi açılıyordu; kullanıcı onaylamadan kapatınca eski
+  // görev panoda kalıp yanlış yapıştırılıyordu. Artık tek tık = doğru kopya.
+  const copyTaskToClipboard = (t) => {
+    setTaskClipboard({
+      sourceId: t.id,
+      title: t.title,
+      includeSubtasks: (t.subtasks || []).length > 0,
+      includeAttachments: true,
+    });
+    toast.success(`Panoya kopyalandı: ${t.title} — bir iş koluna sağ tıklayıp Yapıştır'ı seçin.`);
+  };
+
   const handlePaste = async (categoryId, categoryName) => {
     if (!clipboard?.sourceId) return;
     try {
@@ -1452,7 +1463,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
     onStatusChange: (status) => setStatus(t.id, status),
     onDelete: () => removeTask(t.id),
     onEdit: () => setEditing(t),
-    onCopy: () => setCopyModalTask(t),
+    onCopy: () => copyTaskToClipboard(t),
     onSetReminder: (iso, opts) => setReminder(t.id, iso, opts),
     onClearReminder: () => clearReminder(t.id),
     onSetSubtasks: (subs) => setSubtasks(t.id, subs),
@@ -2914,10 +2925,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
           currentUser={user}
         />
       )}
-      {/* Görev Kopyalama — Kopyala penceresi + iş koluna Yapıştır menüsü */}
-      {copyModalTask && (
-        <CopyTaskModal task={copyModalTask} onClose={() => setCopyModalTask(null)} />
-      )}
+      {/* Görev Kopyalama — iş koluna Yapıştır menüsü (kopyalama tek tıkla panoya alır) */}
       {pasteMenu && clipboard?.sourceId && (
         <TaskPasteMenu
           x={pasteMenu.x}
