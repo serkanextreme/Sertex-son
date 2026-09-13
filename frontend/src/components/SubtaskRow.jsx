@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { Reorder, useDragControls } from "framer-motion";
-import { Check, Pause, MoreVertical, Clock, AlertTriangle, Bell, GripVertical, Anchor } from "lucide-react";
+import { Check, Pause, MoreVertical, Clock, AlertTriangle, Bell, GripVertical, Anchor, Circle, CheckCircle2 } from "lucide-react";
 import { Highlight } from "./tasks/Highlight";
 
 const subIsOverdue = (s) => {
@@ -26,7 +26,7 @@ const subtaskStyle = (s) => {
 // ============ SUBTASK CONTEXT MENU ============
 export const SUBTASK_SIZE_KEY_PREFIX = "sertex_subtask_size_";
 
-export const SubtaskRow = ({ sub, idx, taskId, displayNumber, onToggle, onOpenMenu, onLongPressStart, onLongPressEnd, highlight = "" }) => {
+export const SubtaskRow = ({ sub, idx, taskId, displayNumber, onToggle, onOpenMenu, onLongPressStart, onLongPressEnd, highlight = "", selectMode = false, selected = false, onSelectToggle }) => {
   const controls = useDragControls();
   const sStyle = subtaskStyle(sub);
   const sOverdue = subIsOverdue(sub);
@@ -83,7 +83,7 @@ export const SubtaskRow = ({ sub, idx, taskId, displayNumber, onToggle, onOpenMe
         ...(savedSize?.width ? { width: savedSize.width } : {}),
         ...(savedSize?.height ? { height: savedSize.height } : {}),
       }}
-      className={`subtask-resizable flex items-start gap-1.5 group/sub rounded px-1 py-0.5 border ${sStyle.border} ${sStyle.bg} transition-colors`}
+      className={`subtask-resizable flex items-start gap-1.5 group/sub rounded px-1 py-0.5 border ${sStyle.border} ${sStyle.bg} transition-colors${selected ? " ring-1 ring-violet-400/70 bg-violet-500/10" : ""}`}
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -121,7 +121,10 @@ export const SubtaskRow = ({ sub, idx, taskId, displayNumber, onToggle, onOpenMe
       >
         {isDone && <Check className="h-2.5 w-2.5 text-white" />}
       </button>
-      <div className="flex-1 min-w-0">
+      <div
+        className={`flex-1 min-w-0 ${selectMode ? "cursor-pointer" : ""}`}
+        onClick={selectMode ? () => onSelectToggle(idx) : undefined}
+      >
         {(sub.status === "paused" || sOverdue) && (
           <div className={`hud-text flex items-center gap-1 ${sStyle.accent}`}>
             {sub.status === "paused" ? (
@@ -176,19 +179,31 @@ export const SubtaskRow = ({ sub, idx, taskId, displayNumber, onToggle, onOpenMe
           </div>
         )}
       </div>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          const rect = e.currentTarget.getBoundingClientRect();
-          onOpenMenu(idx, rect.left - 200, rect.bottom + 4);
-        }}
-        data-testid={`subtask-menu-${taskId}-${idx}`}
-        title="Alt görev menüsü"
-        aria-label="Alt görev menüsü"
-        className="opacity-0 group-hover/sub:opacity-100 focus:opacity-100 shrink-0 h-5 w-5 flex items-center justify-center border border-sertex-cyan/25 hover:border-sertex-cyan hover:bg-sertex-cyan/15 rounded text-sertex-cyan transition-all"
-      >
-        <MoreVertical className="h-3 w-3" />
-      </button>
+      {selectMode ? (
+        <button
+          onClick={(e) => { e.stopPropagation(); onSelectToggle(idx); }}
+          data-testid={`subtask-select-${taskId}-${idx}`}
+          title="Seç"
+          aria-label="Seç"
+          className={`shrink-0 h-5 w-5 flex items-center justify-center rounded-full border transition-all ${selected ? "border-violet-400 bg-violet-500/50 text-white" : "border-violet-400/50 text-violet-300 hover:bg-violet-500/15"}`}
+        >
+          {selected ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3 w-3" />}
+        </button>
+      ) : (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            const rect = e.currentTarget.getBoundingClientRect();
+            onOpenMenu(idx, rect.left - 200, rect.bottom + 4);
+          }}
+          data-testid={`subtask-menu-${taskId}-${idx}`}
+          title="Alt görev menüsü"
+          aria-label="Alt görev menüsü"
+          className="opacity-0 group-hover/sub:opacity-100 focus:opacity-100 shrink-0 h-5 w-5 flex items-center justify-center border border-sertex-cyan/25 hover:border-sertex-cyan hover:bg-sertex-cyan/15 rounded text-sertex-cyan transition-all"
+        >
+          <MoreVertical className="h-3 w-3" />
+        </button>
+      )}
     </Reorder.Item>
   );
 };

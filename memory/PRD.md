@@ -1,5 +1,14 @@
 # Sertex — Kişisel AI Asistan · PRD
 
+## ✅ TAMAMLANDI (2026-06, "YAP"): Alt görevlerde ÇOKLU SEÇİM + toplu işlem
+- **İstek**: Görev kartındaki alt görevleri tek tek işlemek zor → 3-nokta menüsüne "Seç", seçili sayısını göster, seçilenlere tek tıkla toplu işlem.
+- **Çözüm (paylaşılan bileşenler → Detaylı+Kolay+Profesyonel hepsinde)**: `SubtaskMenu`'ye "Seç" (violet, `sub-ctx-select`) eklendi. `TaskCard`'a `subSelectMode` + `selectedSubIds` (id bazlı) durumları + toplu yardımcılar (`applyBulkSub`/`bulkStatus`/`bulkDelete`/`bulkSetDate`, hepsi `onSetSubtasks` tek yazımıyla). Toplu çubuk: "N seçildi" + Tümünü Seç/Temizle/Vazgeç + Tamamla/Beklet/Aktif/Tarihi geçti/Tarih ekle(datetime)/Sil. `SubtaskRow`'a `selectMode/selected/onSelectToggle` — seçim göstergesi SAĞDA **yuvarlak mor** (soldaki kare yeşil "bitti" kutusuyla karışmaz), seçili satır violet ring+bg, satır yazısına tıklamak da seçer.
+- **Bozulmayan**: Sol "bitti" kutusu, sürükle-sırala, tekli sağ-tık menüsü aynen korundu.
+- **Test (ana ajan, screenshot)**: alt göreve sağ-tık→Seç → çubuk açıldı, "1 seçildi"→Tümünü Seç→"3 seçildi", sağda mor yuvarlak seçim işaretleri göründü. Yıkıcı işlem uygulanmadı (Vazgeç), canlı veri değişmedi. Derleme temiz.
+- **BACKLOG (kullanıcı notu)**: Aynı çoklu seçim + toplu işlem ANA GÖREV KARTLARINA da eklenecek (sonra).
+- **Yayın**: preview'de; canlıya (sertex-ai.com) için Deploy gerekir.
+
+
 ## ✅ TAMAMLANDI (2026-06, "YAP"): Görev Kopyala hatası — yanlış/eski görev yapıştırılıyordu
 - **Belirti**: "Kopyala" deyince seçilen kart değil, önceden kopyalanan eski görev ("Dosya Transferleri") yapıştırılıyordu.
 - **Kök neden**: İki adımlı kopyalama + kalıcı pano. "Kopyala" hemen kopyalamıyor, bir `CopyTaskModal` açıyordu; pano ancak penceredeki "KOPYALA" ile güncelleniyordu. Pencereyi onaylamadan kapatınca (veya dosya sayısı yüklenirken düğme pasifken) pano ESKİ görevde kalıyor → yanlış yapıştırma. `onClose` panoya dokunmuyordu.

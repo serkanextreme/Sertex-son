@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import {
   Check, Pause, Plus, MoreVertical, BellRing, RotateCcw, Clock, AlertTriangle,
   Bell, GripVertical, User, Building2, Tag, Lock, Unlock, Eye, Users, BellOff,
-  ChevronsDownUp, ChevronsUpDown, Maximize2, Minimize2, CircleCheckBig, RefreshCw, CornerLeftUp, CornerDownRight, Undo2, Anchor, ChevronRight, ChevronDown, Hash,
+  ChevronsDownUp, ChevronsUpDown, Maximize2, Minimize2, CircleCheckBig, RefreshCw, CornerLeftUp, CornerDownRight, Undo2, Anchor, ChevronRight, ChevronDown, Hash, Play, Trash2, X, ListChecks,
 } from "lucide-react";
 import { tasksApi, taskLockApi } from "../lib/api";
 import { toast } from "sonner";
@@ -101,6 +101,11 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
   const [newSub, setNewSub] = useState("");
   const [showSubInput, setShowSubInput] = useState(false);
   const [subCtx, setSubCtx] = useState(null); // { idx, x, y }
+  // Alt görev ÇOKLU SEÇİM modu (id bazlı → sıralama değişse de korunur) + toplu tarih.
+  const [subSelectMode, setSubSelectMode] = useState(false);
+  const [selectedSubIds, setSelectedSubIds] = useState([]);
+  const [bulkDateOpen, setBulkDateOpen] = useState(false);
+  const [bulkDate, setBulkDate] = useState("");
   const [childCtx, setChildCtx] = useState(null); // "BU GÖREVDEN ÇIKANLAR" satırına sağ-tık menüsü: { childId, title, x, y }
   const subLongPressTimer = useRef();
   const subtasks = useMemo(() => (Array.isArray(task.subtasks) ? task.subtasks : []), [task.subtasks]);
@@ -142,6 +147,12 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
   };
 
   const handleSubAction = (idx, action, extra) => {
+    if (action === "select") {
+      const s = subtasks[idx];
+      setSubSelectMode(true);
+      setSelectedSubIds(s ? [s.id] : []);
+      return;
+    }
     if (action === "delete") {
       onSetSubtasks(subtasks.filter((_, i) => i !== idx));
       return;
@@ -201,6 +212,42 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
       return;
     }
     updateSubtaskAt(idx, { status: action });
+  };
+
+  // ===== Alt görev toplu (çoklu seçim) işlemleri — seçim id bazlı =====
+  const toggleSubSelect = (id) =>
+    setSelectedSubIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const exitSubSelect = () => { setSubSelectMode(false); setSelectedSubIds([]); setBulkDateOpen(false); setBulkDate(""); };
+  const applyBulkSub = (mutator) => {
+    const sel = new Set(selectedSubIds);
+    const next = [];
+    for (const s of subtasks) {
+      if (sel.has(s.id)) { const r = mutator(s); if (r !== null) next.push(r); }
+      else next.push(s);
+    }
+    onSetSubtasks(next);
+  };
+  const bulkStatus = (status) => {
+    if (!selectedSubIds.length) return;
+    const n = selectedSubIds.length;
+    applyBulkSub((s) => ({ ...s, status, done: status === "done" }));
+    toast.success(`${n} alt göreve uygulandı`);
+    exitSubSelect();
+  };
+  const bulkDelete = () => {
+    if (!selectedSubIds.length) return;
+    const n = selectedSubIds.length;
+    applyBulkSub(() => null);
+    toast.success(`${n} alt görev silindi`);
+    exitSubSelect();
+  };
+  const bulkSetDate = () => {
+    if (!selectedSubIds.length || !bulkDate) { toast.error("Bir zaman seçin"); return; }
+    const n = selectedSubIds.length;
+    const iso = new Date(bulkDate).toISOString();
+    applyBulkSub((s) => ({ ...s, due_date: iso, reminder_fired: false }));
+    toast.success(`${n} alt göreve tarih eklendi`);
+    exitSubSelect();
   };
 
   // Load persisted size for this task
@@ -845,6 +892,32 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
             <>
             {(subtasks.length > 0 || showSubInput) && (
               <div className="mt-2 border-t border-sertex-cyan/15 pt-1.5" data-testid={`subtasks-${task.id}`}>
+                {subSelectMode && (
+                  <div
+                    className="flex flex-wrap items-center gap-1.5 mb-1.5 p-1.5 rounded-md border border-violet-400/40 bg-violet-500/10"
+                    data-testid={`subtask-bulk-bar-${task.id}`}
+                  >
+                    <span className="hud-text text-violet-200 flex items-center gap-1 mr-1" data-testid={`subtask-bulk-count-${task.id}`}>
+                      <ListChecks className="h-3 w-3" /> {selectedSubIds.length} seçildi
+                    </span>
+                    <button onClick={() => setSelectedSubIds(subtasks.map((s) => s.id))} data-testid={`subtask-bulk-selectall-${task.id}`} className="hud-text px-1.5 py-0.5 rounded border border-violet-400/40 text-violet-200 hover:bg-violet-500/20">Tümünü Seç</button>
+                    <button onClick={() => setSelectedSubIds([])} className="hud-text px-1.5 py-0.5 rounded border border-white/15 text-sertex-textMuted hover:text-sertex-text">Temizle</button>
+                    <span className="w-px h-4 bg-white/10 mx-0.5" />
+                    <button disabled={!selectedSubIds.length} onClick={() => bulkStatus("done")} data-testid={`subtask-bulk-done-${task.id}`} className="hud-text px-1.5 py-0.5 rounded border border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-40 flex items-center gap-1"><Check className="h-3 w-3" /> Tamamla</button>
+                    <button disabled={!selectedSubIds.length} onClick={() => bulkStatus("paused")} className="hud-text px-1.5 py-0.5 rounded border border-yellow-400/40 text-yellow-300 hover:bg-yellow-500/15 disabled:opacity-40 flex items-center gap-1"><Pause className="h-3 w-3" /> Beklet</button>
+                    <button disabled={!selectedSubIds.length} onClick={() => bulkStatus("pending")} className="hud-text px-1.5 py-0.5 rounded border border-sertex-cyan/40 text-sertex-cyan hover:bg-sertex-cyan/10 disabled:opacity-40 flex items-center gap-1"><Play className="h-3 w-3" /> Aktif</button>
+                    <button disabled={!selectedSubIds.length} onClick={() => bulkStatus("overdue")} className="hud-text px-1.5 py-0.5 rounded border border-rose-400/40 text-rose-300 hover:bg-rose-500/15 disabled:opacity-40 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Tarihi geçti</button>
+                    <button disabled={!selectedSubIds.length} onClick={() => setBulkDateOpen((v) => !v)} data-testid={`subtask-bulk-date-toggle-${task.id}`} className="hud-text px-1.5 py-0.5 rounded border border-sertex-cyan/40 text-sertex-cyan hover:bg-sertex-cyan/10 disabled:opacity-40 flex items-center gap-1"><Clock className="h-3 w-3" /> Tarih ekle</button>
+                    <button disabled={!selectedSubIds.length} onClick={bulkDelete} data-testid={`subtask-bulk-delete-${task.id}`} className="hud-text px-1.5 py-0.5 rounded border border-rose-400/40 text-rose-300 hover:bg-rose-500/15 disabled:opacity-40 flex items-center gap-1"><Trash2 className="h-3 w-3" /> Sil</button>
+                    <button onClick={exitSubSelect} data-testid={`subtask-bulk-cancel-${task.id}`} className="hud-text px-1.5 py-0.5 rounded border border-white/15 text-sertex-textMuted hover:text-sertex-text flex items-center gap-1 ml-auto"><X className="h-3 w-3" /> Vazgeç</button>
+                    {bulkDateOpen && (
+                      <div className="w-full flex items-center gap-1.5 pt-1">
+                        <input type="datetime-local" value={bulkDate} onChange={(e) => setBulkDate(e.target.value)} onClick={(e) => e.stopPropagation()} data-testid={`subtask-bulk-date-input-${task.id}`} className="bg-sertex-surface/60 border border-sertex-cyan/25 rounded px-2 py-1 text-xs font-mono text-sertex-text focus:border-sertex-cyan outline-none" />
+                        <button onClick={bulkSetDate} data-testid={`subtask-bulk-date-apply-${task.id}`} className="hud-text px-2 py-1 rounded bg-sertex-cyan/20 border border-sertex-cyan text-sertex-cyan hover:bg-sertex-cyan hover:text-sertex-bg">Uygula</button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 <Reorder.Group
                   axis="y"
                   values={subtasks}
@@ -862,6 +935,9 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
                           idx={idx}
                           taskId={task.id}
                           displayNumber={isSubDone ? null : num}
+                          selectMode={subSelectMode}
+                          selected={selectedSubIds.includes(s.id)}
+                          onSelectToggle={() => toggleSubSelect(s.id)}
                           onToggle={(i, next) => updateSubtaskAt(i, { done: next, status: next ? "done" : "pending" })}
                           onOpenMenu={(i, x, y) => setSubCtx({ idx: i, x, y })}
                           onLongPressStart={(i, e) => {

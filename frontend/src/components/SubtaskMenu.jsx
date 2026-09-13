@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { Check, Pause, Play, Trash2, Clock, AlertTriangle, X, ChevronRight, GripVertical, Pencil, ArrowUpRight, Anchor } from "lucide-react";
+import { Check, Pause, Play, Trash2, Clock, AlertTriangle, X, ChevronRight, GripVertical, Pencil, ArrowUpRight, Anchor, ListChecks } from "lucide-react";
 import { toast } from "sonner";
 
 export const SubtaskMenu = ({ x, y, sub, displayNumber, onAction, onClose }) => {
@@ -56,6 +56,7 @@ export const SubtaskMenu = ({ x, y, sub, displayNumber, onAction, onClose }) => 
 
   const isDone = sub.done || sub.status === "done";
   const items = [
+    { icon: ListChecks, label: "Seç", color: "text-violet-300 hover:bg-violet-500/15", action: "select" },
     { icon: Pencil, label: "Düzenle", color: "text-sertex-cyan hover:bg-sertex-cyan/10", action: "edit", hasSubmenu: true },
     !isDone && { icon: Check, label: "Tamamlandı", color: "text-emerald-300 hover:bg-emerald-500/15", action: "done" },
     sub.status !== "paused" && { icon: Pause, label: "Beklemeye al", color: "text-yellow-300 hover:bg-yellow-500/15", action: "paused" },
