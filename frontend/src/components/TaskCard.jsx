@@ -249,6 +249,32 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
     toast.success(`${n} alt göreve tarih eklendi`);
     exitSubSelect();
   };
+  // Toplu SABİTLE — seçili bitmemiş alt görevleri MEVCUT sıra numaralarına
+  // sabitler. Mevcut numaralar zaten benzersiz olduğundan çakışma olmaz.
+  const bulkPin = () => {
+    if (!selectedSubIds.length) return;
+    const sel = new Set(selectedSubIds);
+    let count = 0;
+    const next = subtasks.map((s) => {
+      if (!sel.has(s.id)) return s;
+      if (s.done || s.status === "done") return s; // bitmiş alt görev sabitlenmez
+      const num = subNumbers[s.id];
+      if (num == null) return s;
+      count += 1;
+      return { ...s, number_pinned: true, pinned_number: num };
+    });
+    onSetSubtasks(next);
+    toast.success(`${count} alt görevin sıra numarası sabitlendi`);
+    exitSubSelect();
+  };
+  const bulkUnpin = () => {
+    if (!selectedSubIds.length) return;
+    const sel = new Set(selectedSubIds);
+    const n = selectedSubIds.length;
+    onSetSubtasks(subtasks.map((s) => (sel.has(s.id) ? { ...s, number_pinned: false, pinned_number: null } : s)));
+    toast.success(`${n} alt görevin sabiti kaldırıldı`);
+    exitSubSelect();
+  };
 
   // Load persisted size for this task
   // Kart boyutu — detached (büyük pencere) ile sidebar için AYRI kayıt tut.
@@ -908,6 +934,8 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
                     <button disabled={!selectedSubIds.length} onClick={() => bulkStatus("pending")} className="hud-text px-1.5 py-0.5 rounded border border-sertex-cyan/40 text-sertex-cyan hover:bg-sertex-cyan/10 disabled:opacity-40 flex items-center gap-1"><Play className="h-3 w-3" /> Aktif</button>
                     <button disabled={!selectedSubIds.length} onClick={() => bulkStatus("overdue")} className="hud-text px-1.5 py-0.5 rounded border border-rose-400/40 text-rose-300 hover:bg-rose-500/15 disabled:opacity-40 flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Tarihi geçti</button>
                     <button disabled={!selectedSubIds.length} onClick={() => setBulkDateOpen((v) => !v)} data-testid={`subtask-bulk-date-toggle-${task.id}`} className="hud-text px-1.5 py-0.5 rounded border border-sertex-cyan/40 text-sertex-cyan hover:bg-sertex-cyan/10 disabled:opacity-40 flex items-center gap-1"><Clock className="h-3 w-3" /> Tarih ekle</button>
+                    <button disabled={!selectedSubIds.length} onClick={bulkPin} data-testid={`subtask-bulk-pin-${task.id}`} className="hud-text px-1.5 py-0.5 rounded border border-amber-400/40 text-amber-300 hover:bg-amber-500/15 disabled:opacity-40 flex items-center gap-1"><Anchor className="h-3 w-3" /> Sabitle</button>
+                    <button disabled={!selectedSubIds.length} onClick={bulkUnpin} data-testid={`subtask-bulk-unpin-${task.id}`} className="hud-text px-1.5 py-0.5 rounded border border-white/15 text-sertex-textMuted hover:text-amber-200 disabled:opacity-40 flex items-center gap-1"><Anchor className="h-3 w-3" /> Sabiti kaldır</button>
                     <button disabled={!selectedSubIds.length} onClick={bulkDelete} data-testid={`subtask-bulk-delete-${task.id}`} className="hud-text px-1.5 py-0.5 rounded border border-rose-400/40 text-rose-300 hover:bg-rose-500/15 disabled:opacity-40 flex items-center gap-1"><Trash2 className="h-3 w-3" /> Sil</button>
                     <button onClick={exitSubSelect} data-testid={`subtask-bulk-cancel-${task.id}`} className="hud-text px-1.5 py-0.5 rounded border border-white/15 text-sertex-textMuted hover:text-sertex-text flex items-center gap-1 ml-auto"><X className="h-3 w-3" /> Vazgeç</button>
                     {bulkDateOpen && (
