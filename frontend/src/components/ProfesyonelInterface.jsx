@@ -18,6 +18,9 @@ import {
   TrendingUp,
   X,
   Hash,
+  ListChecks,
+  Circle,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { tasksApi, taskCategoriesApi } from "../lib/api";
@@ -25,6 +28,9 @@ import { useAuth } from "../lib/auth";
 import { setInterfaceMode } from "../lib/appearance";
 import { AddTaskModal } from "./tasks/AddTaskModal";
 import { taskSerialLabel } from "../lib/taskSerial";
+import { useTaskBulk } from "../lib/useTaskBulk";
+import { TaskBulkBar } from "./tasks/TaskBulkBar";
+import { computeTaskNumbers } from "../lib/taskBulkActions";
 import {
   BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -119,6 +125,12 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
         .filter(Boolean).join(" ").toLocaleLowerCase("tr").includes(query)
     );
   }, [tasks, cats, q, catFilter]);
+
+  // Ana görev ÇOKLU SEÇİM + toplu işlem (Sabitle için çakışmasız sıra numarası).
+  const profBulk = useTaskBulk({
+    numberFor: (id) => computeTaskNumbers(visibleTasks)[id],
+    refresh: load,
+  });
 
   const upcoming = useMemo(() =>
     tasks.filter((t) => isActive(t) && t.due_date && new Date(t.due_date).getTime() >= Date.now())
@@ -342,11 +354,34 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                     </button>
                   )}
                   {!loading && (
-                    <span className="ml-auto hud-text text-sertex-cyan normal-case tracking-normal" data-testid="prof-result-count">
-                      {visibleTasks.length} {q.trim() ? "sonuç" : "görev"}
-                    </span>
+                    <div className="ml-auto flex items-center gap-2">
+                      <span className="hud-text text-sertex-cyan normal-case tracking-normal" data-testid="prof-result-count">
+                        {visibleTasks.length} {q.trim() ? "sonuç" : "görev"}
+                      </span>
+                      {visibleTasks.length > 0 && !profBulk.selectMode && (
+                        <button
+                          type="button"
+                          onClick={() => profBulk.start()}
+                          data-testid="prof-bulk-select"
+                          title="Toplu seçim modu"
+                          className="flex items-center gap-1 px-2 py-0.5 rounded-md border border-violet-400/40 text-violet-200 hover:bg-violet-500/15 text-xs font-mono transition-colors"
+                        >
+                          <ListChecks className="h-3.5 w-3.5" /> Seç
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
+                {profBulk.selectMode && (
+                  <TaskBulkBar
+                    count={profBulk.ids.length}
+                    testPrefix="prof-bulk"
+                    onSelectAll={() => profBulk.selectAll(visibleTasks.map((t) => t.id))}
+                    onClear={profBulk.clear}
+                    onCancel={profBulk.exit}
+                    onAction={profBulk.runAction}
+                  />
+                )}
                 {loading ? (
                   <div className="hud-text text-sertex-textMuted py-10 text-center" data-testid="prof-loading">YÜKLENİYOR...</div>
                 ) : visibleTasks.length === 0 ? (
@@ -361,19 +396,34 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                       const badgeColor = b.color === "accent" ? "rgb(var(--sx-accent-rgb))" : b.color;
                       const prog = progressOf(t);
                       const due = fmtDate(t.due_date);
+                      const selected = profBulk.has(t.id);
                       return (
                         <motion.div
                           key={t.id}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: Math.min(i * 0.03, 0.3) }}
-                          onClick={() => jumpToTask(t.id)}
+                          onClick={() => (profBulk.selectMode ? profBulk.toggle(t.id) : jumpToTask(t.id))}
                           role="button"
-                          className="rounded-xl border border-white/10 bg-sertex-surface/60 p-4 hover:border-sertex-cyan/40 transition-colors cursor-pointer"
+                          className={`rounded-xl border bg-sertex-surface/60 p-4 transition-colors cursor-pointer ${selected ? "border-violet-400 ring-2 ring-violet-400 shadow-[0_0_16px_rgba(167,139,250,0.5)]" : "border-white/10 hover:border-sertex-cyan/40"}`}
                           data-testid={`prof-card-${t.id}`}
                         >
                           <div className="flex items-start justify-between gap-2 mb-1">
-                            <div className="text-sertex-text font-semibold leading-snug line-clamp-2">{t.title}</div>
+                            <div className="flex items-start gap-2 min-w-0">
+                              {profBulk.selectMode && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); profBulk.toggle(t.id); }}
+                                  data-testid={`prof-select-${t.id}`}
+                                  title="Seç"
+                                  aria-label="Seç"
+                                  className={`mt-0.5 h-5 w-5 flex items-center justify-center rounded-full border shrink-0 transition-all ${selected ? "border-violet-400 bg-violet-500/50 text-white" : "border-violet-400/50 text-violet-300 hover:bg-violet-500/15"}`}
+                                >
+                                  {selected ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3 w-3" />}
+                                </button>
+                              )}
+                              <div className="text-sertex-text font-semibold leading-snug line-clamp-2">{t.title}</div>
+                            </div>
                             {t.assignee_name && (
                               <div className="h-6 w-6 shrink-0 rounded-full bg-white/10 flex items-center justify-center text-[10px] text-sertex-textSecondary" title={t.assignee_name}>
                                 {initials(t.assignee_name)}

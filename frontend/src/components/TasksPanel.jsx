@@ -70,6 +70,8 @@ import { useTaskClipboard, clearTaskClipboard, setTaskClipboard, updateTaskClipb
 
 // Faz 9 CP6 — TasksPanel bileşenleri ayrı dosyalara taşındı (davranış birebir aynı).
 import { TaskCard } from "./TaskCard";
+import { useTaskBulk } from "../lib/useTaskBulk";
+import { TaskBulkBar } from "./tasks/TaskBulkBar";
 import {
   ReorderableTaskCard,
   DetachedPlaceholderCard,
@@ -1423,6 +1425,12 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
     }
     return m;
   }, [sorted]);
+
+  // Ana görev ÇOKLU SEÇİM + toplu işlem (Sabitle mevcut sıra numarasına).
+  const taskBulk = useTaskBulk({
+    numberFor: (id) => numById[id],
+    refresh: () => { load(); notifyTasksChanged(); },
+  });
   // Bağlı görevleri tek blok haline getir; sıra global sort_order'dan gelir.
   const groupRows = useMemo(() => {
     const rows = [];
@@ -1464,6 +1472,10 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
     onDelete: () => removeTask(t.id),
     onEdit: () => setEditing(t),
     onCopy: () => copyTaskToClipboard(t),
+    selectMode: taskBulk.selectMode,
+    selected: taskBulk.has(t.id),
+    onSelectToggle: () => taskBulk.toggle(t.id),
+    onSelect: () => taskBulk.start(t.id),
     onSetReminder: (iso, opts) => setReminder(t.id, iso, opts),
     onClearReminder: () => clearReminder(t.id),
     onSetSubtasks: (subs) => setSubtasks(t.id, subs),
@@ -2277,6 +2289,17 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
             <X className="h-3 w-3" /> Panoyu Temizle
           </button>
         </div>
+      )}
+
+      {taskBulk.selectMode && (
+        <TaskBulkBar
+          count={taskBulk.ids.length}
+          testPrefix="task-bulk"
+          onSelectAll={() => taskBulk.selectAll(sorted.map((t) => t.id))}
+          onClear={taskBulk.clear}
+          onCancel={taskBulk.exit}
+          onAction={taskBulk.runAction}
+        />
       )}
 
       {/* İş Kolu FİLTRE ağacı — tıklanabilir, açılır-kapanır liste (ana kol → alt kol) */}

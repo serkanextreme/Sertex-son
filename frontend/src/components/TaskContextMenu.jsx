@@ -5,7 +5,7 @@ import {
   Check, Pause, Play, Trash2, Clock, AlertTriangle, Edit3, Bell,
   ChevronRight, BellOff, GripVertical, Archive, ArchiveRestore, UserPlus,
   Tag, Lock, Unlock, KeyRound, Share2, RefreshCw, Printer, FileSpreadsheet,
-  FileText, FileDown, Link2, Unlink, RotateCcw, CornerLeftUp, Anchor, Ban, Copy,
+  FileText, FileDown, Link2, Unlink, RotateCcw, CornerLeftUp, Anchor, Ban, Copy, ListChecks,
 } from "lucide-react";
 import { LOCK_KEY_LABELS } from "../lib/taskLocks";
 import { toast } from "sonner";
@@ -92,6 +92,7 @@ export const ContextMenu = ({ x, y, task, onAction, onClose, isTeamView, onReass
       action: "permanent-delete",
     },
   ] : [
+    { icon: ListChecks, label: "Seç", color: "text-violet-300 hover:bg-violet-500/15", action: "select" },
     task.status !== "done" && {
       icon: Check,
       label: "Tamamlandı",

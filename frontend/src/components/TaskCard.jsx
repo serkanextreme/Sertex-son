@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import {
   Check, Pause, Plus, MoreVertical, BellRing, RotateCcw, Clock, AlertTriangle,
   Bell, GripVertical, User, Building2, Tag, Lock, Unlock, Eye, Users, BellOff,
-  ChevronsDownUp, ChevronsUpDown, Maximize2, Minimize2, CircleCheckBig, RefreshCw, CornerLeftUp, CornerDownRight, Undo2, Anchor, ChevronRight, ChevronDown, Hash, Play, Trash2, X, ListChecks,
+  ChevronsDownUp, ChevronsUpDown, Maximize2, Minimize2, CircleCheckBig, RefreshCw, CornerLeftUp, CornerDownRight, Undo2, Anchor, ChevronRight, ChevronDown, Hash, Play, Trash2, X, ListChecks, Circle, CheckCircle2,
 } from "lucide-react";
 import { tasksApi, taskLockApi } from "../lib/api";
 import { toast } from "sonner";
@@ -45,7 +45,7 @@ const taskDurationLabel = (start, end) => {
 };
 
 
-export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit, onCopy, onSetReminder, onClearReminder, onSetSubtasks, onSetArchived, onReassign, onTransferCompany, onPromoteSubtask, onDemoteToSubtask, onDemoteChild, onPinNumber, onUnpinNumber, promotedChildren = [], dragControls, isTeamView, isHighlighted, categoryName, categories, onSetCategory, reminderConfig, onSetReminderDays, onSetReminderDisabled, currentUser, onLockChanged, collapsed = false, onToggleCollapse, detached = false, onToggleDetach, onNudge, nudgeCount = 0, onLinkTasks, onEditGroup, onRemoveFromGroup, onToggleDigestMute, highlight = "", archiveGroup = null, canPermanentDelete = false, onCancel, onUncancel, onRestore, onPermanentDelete, archiveSettings = null }) => {
+export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit, onCopy, onSetReminder, onClearReminder, onSetSubtasks, onSetArchived, onReassign, onTransferCompany, onPromoteSubtask, onDemoteToSubtask, onDemoteChild, onPinNumber, onUnpinNumber, promotedChildren = [], dragControls, isTeamView, isHighlighted, categoryName, categories, onSetCategory, reminderConfig, onSetReminderDays, onSetReminderDisabled, currentUser, onLockChanged, collapsed = false, onToggleCollapse, detached = false, onToggleDetach, onNudge, nudgeCount = 0, onLinkTasks, onEditGroup, onRemoveFromGroup, onToggleDigestMute, highlight = "", archiveGroup = null, canPermanentDelete = false, onCancel, onUncancel, onRestore, onPermanentDelete, archiveSettings = null, selectMode = false, selected = false, onSelectToggle, onSelect }) => {
   const layer = dueSoonLayer(task, reminderConfig);
   const style = statusStyle(task, layer);
   const overdue = isOverdue(task);
@@ -370,6 +370,7 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
 
   const handleAction = (action, extra) => {
     if (action === "delete") onDelete();
+    else if (action === "select") onSelect?.();
     else if (action === "edit") onEdit();
     else if (action === "copy") onCopy?.();
     else if (action === "share") setShowShare(true);
@@ -446,7 +447,7 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
           ...(savedSize?.width ? { width: savedSize.width } : (detached ? { width: "100%" } : {})),
           ...(!collapsed && savedSize?.height ? { height: savedSize.height } : {}),
         }}
-        className={`task-resizable relative rounded-lg border ${style.border} ${style.bg} p-2.5 transition-colors group ${isHighlighted ? "ring-2 ring-sertex-cyan animate-pulse shadow-[0_0_20px_rgba(0,229,255,0.5)]" : ""}`}
+        className={`task-resizable relative rounded-lg border ${style.border} ${style.bg} p-2.5 transition-colors group ${isHighlighted ? "ring-2 ring-sertex-cyan animate-pulse shadow-[0_0_20px_rgba(0,229,255,0.5)]" : ""}${selected ? " ring-2 ring-violet-400 shadow-[0_0_16px_rgba(167,139,250,0.5)]" : ""}`}
         data-testid={`task-item-${task.id}`}
       >
         {dragControls && (
@@ -464,6 +465,17 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
           </button>
         )}
         <div className={`flex items-start gap-2 ${dragControls ? "pl-3" : ""}`}>
+          {selectMode && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onSelectToggle?.(); }}
+              data-testid={`task-select-${task.id}`}
+              title="Seç"
+              aria-label="Seç"
+              className={`mt-0.5 shrink-0 h-5 w-5 flex items-center justify-center rounded-full border transition-all ${selected ? "border-violet-400 bg-violet-500/50 text-white" : "border-violet-400/50 text-violet-300 hover:bg-violet-500/15"}`}
+            >
+              {selected ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3 w-3" />}
+            </button>
+          )}
           <button
             onClick={toggleDone}
             data-testid={`task-check-${task.id}`}

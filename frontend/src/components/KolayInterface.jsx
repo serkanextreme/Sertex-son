@@ -33,10 +33,11 @@ import {
   FileText,
   Anchor,
   Hash,
+  Circle,
+  CheckCircle2,
   ChevronsDownUp,
   ChevronsUpDown,
   CircleDot,
-  CheckCircle2,
   ChevronRight,
   ChevronDown,
   Trash2,
@@ -62,6 +63,9 @@ import CategorySelect from "./tasks/CategorySelect";
 import { SerialDateFields } from "./tasks/SerialDateFields";
 import { taskSerialLabel } from "../lib/taskSerial";
 import { ContextMenu } from "./TaskContextMenu";
+import { useTaskBulk } from "../lib/useTaskBulk";
+import { TaskBulkBar } from "./tasks/TaskBulkBar";
+import { computeTaskNumbers } from "../lib/taskBulkActions";
 import { EditTaskModal } from "./tasks/EditTaskModal";
 import { ShareTaskModal } from "./tasks/ShareTaskModal";
 import { ReassignModal } from "./tasks/ReassignModal";
@@ -98,7 +102,7 @@ const fmtDateTime = (iso) => {
 };
 
 // Zengin kart gövdesi — referans görsele göre (kutucuk + uyarı ikonu + ⚓ + 🕐 + 📄 etiket + küçült/menü).
-const KolayCardBody = ({ task, number, catName, onComplete, onMenu, collapsed, onToggleCollapse, dragHandleProps }) => {
+const KolayCardBody = ({ task, number, catName, onComplete, onMenu, collapsed, onToggleCollapse, dragHandleProps, selectMode = false, selected = false, onSelectToggle }) => {
   const b = bucketOf(task);
   const badgeColor = b.color === "accent" ? "rgb(var(--sx-accent-rgb))" : b.color;
   const overdue = b.label === "Süresi Geçti";
@@ -109,13 +113,25 @@ const KolayCardBody = ({ task, number, catName, onComplete, onMenu, collapsed, o
 
   return (
     <div
-      className="glass-panel rounded-xl p-3.5 border border-sertex-cyan/25 flex flex-col h-full relative group"
+      className={`glass-panel rounded-xl p-3.5 border border-sertex-cyan/25 flex flex-col h-full relative group${selected ? " ring-2 ring-violet-400 shadow-[0_0_16px_rgba(167,139,250,0.5)]" : ""}`}
       data-testid={`kolay-card-${task.id}`}
       style={overdue ? { borderColor: "rgba(244,63,94,0.45)" } : undefined}
     >
       {/* Üst şerit: sol = sürükle + tamamla kutucuğu · sağ = küçült/büyüt + ⋮ */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-1.5">
+          {selectMode && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onSelectToggle?.(); }}
+              data-testid={`kolay-select-${task.id}`}
+              title="Seç"
+              aria-label="Seç"
+              className={`h-5 w-5 flex items-center justify-center rounded-full border transition-all shrink-0 ${selected ? "border-violet-400 bg-violet-500/50 text-white" : "border-violet-400/50 text-violet-300 hover:bg-violet-500/15"}`}
+            >
+              {selected ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3 w-3" />}
+            </button>
+          )}
           {dragHandleProps && (
             <button
               type="button"
@@ -225,7 +241,7 @@ const KolayCardBody = ({ task, number, catName, onComplete, onMenu, collapsed, o
 };
 
 // dnd-kit sürüklenebilir sarmalayıcı (2 yönlü ızgara sıralaması).
-const KolaySortableCard = ({ task, number, catName, onComplete, onMenu, collapsed, onToggleCollapse }) => {
+const KolaySortableCard = ({ task, number, catName, onComplete, onMenu, collapsed, onToggleCollapse, selectMode, selected, onSelectToggle }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -244,6 +260,9 @@ const KolaySortableCard = ({ task, number, catName, onComplete, onMenu, collapse
         collapsed={collapsed}
         onToggleCollapse={onToggleCollapse}
         dragHandleProps={listeners}
+        selectMode={selectMode}
+        selected={selected}
+        onSelectToggle={onSelectToggle}
       />
     </div>
   );
@@ -822,6 +841,12 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
     return m;
   }, [activeTasks]);
 
+  // Ana görev çoklu seçim + toplu işlem (pin için çakışmasız numara).
+  const kolayBulk = useTaskBulk({
+    numberFor: (id) => computeTaskNumbers(activeTasks)[id],
+    refresh: load,
+  });
+
   const canReorder = !q.trim() && !catFilter;
   const closeMenu = () => setCtxMenu(null);
 
@@ -948,6 +973,7 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
   // ContextMenu onAction — TaskCard.handleAction ile birebir.
   const handleAction = (task, action, extra) => {
     if (action === "delete") removeTask(task.id, task.title);
+    else if (action === "select") kolayBulk.start(task.id);
     else if (action === "edit") setEditing(task);
     else if (action === "copy") {
       setTaskClipboard({
@@ -1237,6 +1263,17 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
                 </div>
               )}
 
+              {kolayBulk.selectMode && (
+                <TaskBulkBar
+                  count={kolayBulk.ids.length}
+                  testPrefix="kolay-bulk"
+                  onSelectAll={() => kolayBulk.selectAll(activeTasks.map((t) => t.id))}
+                  onClear={kolayBulk.clear}
+                  onCancel={kolayBulk.exit}
+                  onAction={kolayBulk.runAction}
+                />
+              )}
+
               {flatCats.length > 0 && (
                 <div className="flex items-center gap-2 mb-6 overflow-x-auto scrollbar-sertex pb-1" data-testid="kolay-cat-filter">
                   {[{ id: "", name: "Tümü" }, ...flatCats, { id: "__none__", name: "Kolsuz" }].map((c) => {
@@ -1296,7 +1333,7 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
                       data-testid="kolay-task-grid"
                     >
                       {activeTasks.map((t) => (
-                        <KolaySortableCard key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} />
+                        <KolaySortableCard key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} selectMode={kolayBulk.selectMode} selected={kolayBulk.has(t.id)} onSelectToggle={() => kolayBulk.toggle(t.id)} />
                       ))}
                     </div>
                   </SortableContext>
@@ -1304,7 +1341,7 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
               ) : (
                 <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }} data-testid="kolay-task-grid">
                   {activeTasks.map((t) => (
-                    <KolayCardBody key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} />
+                    <KolayCardBody key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} selectMode={kolayBulk.selectMode} selected={kolayBulk.has(t.id)} onSelectToggle={() => kolayBulk.toggle(t.id)} />
                   ))}
                 </div>
               )}

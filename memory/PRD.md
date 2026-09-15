@@ -2719,3 +2719,13 @@ Kullanıcı bildirimi: Bir iş kolu (ör. "ORTAK İŞLER") seçiliyken ARŞİV'e
 **Kök neden:** `mobile/app.json` içinde `ios.infoPlist.ITSAppUsesNonExemptEncryption` YOKTU → App Store Connect her build'i "Export Compliance" cevabı için beklemeye alıyor, bu yüzden build testçi grubuna dağıtılmıyor (davet/yükleme engelleniyor).
 **Düzeltme:** `ios.infoPlist.ITSAppUsesNonExemptEncryption: false` eklendi (uygulama yalnızca standart HTTPS/TLS kullanıyor = muaf). Artık yeni build'ler otomatik uyumlu sayılır.
 **Doğrulama sınırı:** Bu NATIVE build ayarıdır; Metro/preview veya testing_agent ile doğrulanamaz. Sadece YENİ bir Publish build'i (sürüm artar) ile doğrulanır. Mevcut 1.0.2(116) build'i için geçici çözüm: App Store Connect → o build → Export Compliance sorusunu "standart şifreleme" olarak cevapla → anında testçilere açılır.
+
+## ✅ Ana Görev Toplu İşlem — TÜM ARAYÜZLER + E2E (2026-06 · fork) TAMAMLANDI
+**Kapsam:** Alt görevlerdeki "Seç + toplu işlem" mantığı ana görev kartlarına da taşındı ve Detaylı (TasksPanel), Kolay ve Profesyonel arayüzlerinin ÜÇÜNDE de çalışıyor.
+**Ortak altyapı (web):**
+- `lib/useTaskBulk.js` — seçim durumu hook'u (selectMode/ids/has/toggle/start/selectAll/clear/exit/runAction). runAction Promise.allSettled → biri kilitli olsa da diğerleri uygulanır; sonuç toast'u (uygulandı/başarısız).
+- `lib/taskBulkActions.js` — yürütücü: done/paused/pending/overdue/archive/delete/pin/unpin → mevcut tasksApi (setStatus/setArchived/delete/update). `computeTaskNumbers(orderedTasks)` sabit-numara çakışmasız sıra no üretir (Profesyonel gibi sıra no göstermeyen arayüzler için).
+- `components/tasks/TaskBulkBar.jsx` — mor yüzen çubuk: sayaç + Tümünü Seç/Temizle/Vazgeç + Tamamla/Beklet/Aktif/Tarihi geçti/Arşivle/Sabitle/Sabiti kaldır/Sil.
+**Bağlama:** TasksPanel (`taskBulk`, karta seç halkası), KolayInterface (`kolayBulk`, kartta mor halka), ProfesyonelInterface (`profBulk` — GÖREVLER başlığı yanında **"Seç" düğmesi**; kart tıklaması seçim modunda toggle'a döner, seçili kartta mor ring + halka). testPrefix'ler: `task-bulk`/`kolay-bulk`/`prof-bulk`.
+**Yan düzeltme:** KolayInterface.jsx içinde önceki oturumdan kalan ÇİFT `CheckCircle2` lucide import'u tüm webpack derlemesini bozuyordu → kaldırıldı.
+**E2E (canlı veri, güvenli):** 6 geçici görev (ZZTEST_PIN/DONE/DEL_A/B) oluşturuldu; Profesyonel arayüzde arama ile İZOLE edilip gerçek UI toplu akışıyla test edildi: Sabitle→number_pinned=True (pinned_number 1&2), Tamamla→status=done, Sil→deleted=True (çöp). Hepsi API ile doğrulandı, ardından 6 görev de `DELETE /tasks/{id}/permanent` ile kalıcı silindi (GET→404, canlı veri tertemiz).
