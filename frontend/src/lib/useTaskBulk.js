@@ -15,6 +15,7 @@ const LABELS = {
   archive: "arşivlendi",
   pin: "sıra numarası sabitlendi",
   unpin: "sabiti kaldırıldı",
+  move: "iş koluna taşındı",
   delete: "çöp kutusuna taşındı",
 };
 
@@ -33,7 +34,7 @@ export function useTaskBulk({ numberFor, refresh } = {}) {
   const exit = useCallback(() => { setSelectMode(false); setIds([]); }, []);
 
   const runAction = useCallback(
-    async (action) => {
+    async (action, extra) => {
       const targetIds = ids;
       if (!targetIds.length) return;
       if (action === "delete") {
@@ -46,7 +47,7 @@ export function useTaskBulk({ numberFor, refresh } = {}) {
         });
         if (!ok) return;
       }
-      const results = await runBulkTaskAction(targetIds, action, { numberFor });
+      const results = await runBulkTaskAction(targetIds, action, { numberFor, categoryId: extra?.categoryId });
       const okCount = results.filter((r) => r.status === "fulfilled").length;
       const failCount = results.length - okCount;
       if (refresh) refresh();

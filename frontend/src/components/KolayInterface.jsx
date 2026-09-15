@@ -1267,6 +1267,7 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
                 <TaskBulkBar
                   count={kolayBulk.ids.length}
                   testPrefix="kolay-bulk"
+                  categories={cats}
                   onSelectAll={() => kolayBulk.selectAll(activeTasks.map((t) => t.id))}
                   onClear={kolayBulk.clear}
                   onCancel={kolayBulk.exit}

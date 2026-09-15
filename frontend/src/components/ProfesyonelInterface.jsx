@@ -376,6 +376,7 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                   <TaskBulkBar
                     count={profBulk.ids.length}
                     testPrefix="prof-bulk"
+                    categories={cats}
                     onSelectAll={() => profBulk.selectAll(visibleTasks.map((t) => t.id))}
                     onClear={profBulk.clear}
                     onCancel={profBulk.exit}

@@ -2729,3 +2729,11 @@ Kullanıcı bildirimi: Bir iş kolu (ör. "ORTAK İŞLER") seçiliyken ARŞİV'e
 **Bağlama:** TasksPanel (`taskBulk`, karta seç halkası), KolayInterface (`kolayBulk`, kartta mor halka), ProfesyonelInterface (`profBulk` — GÖREVLER başlığı yanında **"Seç" düğmesi**; kart tıklaması seçim modunda toggle'a döner, seçili kartta mor ring + halka). testPrefix'ler: `task-bulk`/`kolay-bulk`/`prof-bulk`.
 **Yan düzeltme:** KolayInterface.jsx içinde önceki oturumdan kalan ÇİFT `CheckCircle2` lucide import'u tüm webpack derlemesini bozuyordu → kaldırıldı.
 **E2E (canlı veri, güvenli):** 6 geçici görev (ZZTEST_PIN/DONE/DEL_A/B) oluşturuldu; Profesyonel arayüzde arama ile İZOLE edilip gerçek UI toplu akışıyla test edildi: Sabitle→number_pinned=True (pinned_number 1&2), Tamamla→status=done, Sil→deleted=True (çöp). Hepsi API ile doğrulandı, ardından 6 görev de `DELETE /tasks/{id}/permanent` ile kalıcı silindi (GET→404, canlı veri tertemiz).
+
+## ✅ Toplu İşlem — "İş Koluna Taşı" eklendi (2026-06 · fork) TAMAMLANDI
+Toplu işlem çubuğuna (üç arayüzde ortak) **"İş Koluna Taşı"** açılır menülü butonu eklendi: basınca hiyerarşik iş kolu listesi (girintili, `flattenCategoryOptions`) + "Kolsuz" açılır; seçilince tüm seçili görevler tek adımda `tasksApi.update(id,{category_id})` ile taşınır.
+- `taskBulkActions.js`: yeni `case "move"` → `category_id` (Kolsuz için "").
+- `useTaskBulk.js`: `runAction(action, extra)` — `extra.categoryId` executor'a geçer; LABELS.move = "iş koluna taşındı".
+- `TaskBulkBar.jsx`: `categories` prop + backdrop'lu açılır menü (testid'ler: `${prefix}-move`, `-move-menu`, `-move-opt-<catId|none>`).
+- Bağlama: TasksPanel `categories={categories}`, Kolay `categories={cats}`, Profesyonel `categories={cats}`.
+- E2E (canlı, güvenli): 2 kolsuz test görevi Profesyonel UI'dan "Fason Verme"ye taşındı → API'de category_id doğrulandı → görevler kalıcı silindi (404). Not: super_admin için `POST /task-categories` şirket ister; mevcut gerçek iş kolu hedef alındı.

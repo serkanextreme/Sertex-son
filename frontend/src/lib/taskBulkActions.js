@@ -3,7 +3,7 @@
 // biri kilitli/başarısız olsa da diğerleri uygulanır).
 import { tasksApi } from "./api";
 
-// action: done | paused | pending | overdue | archive | delete | pin | unpin
+// action: done | paused | pending | overdue | archive | delete | pin | unpin | move
 export async function runBulkTaskAction(ids, action, opts = {}) {
   const numberFor = opts.numberFor || (() => null);
   const calls = ids.map((id) => {
@@ -13,6 +13,8 @@ export async function runBulkTaskAction(ids, action, opts = {}) {
       case "pending":
       case "overdue":
         return tasksApi.setStatus(id, action);
+      case "move":
+        return tasksApi.update(id, { category_id: opts.categoryId || "" });
       case "archive":
         return tasksApi.setArchived(id, true);
       case "delete":

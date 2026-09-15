@@ -2295,6 +2295,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
         <TaskBulkBar
           count={taskBulk.ids.length}
           testPrefix="task-bulk"
+          categories={categories}
           onSelectAll={() => taskBulk.selectAll(sorted.map((t) => t.id))}
           onClear={taskBulk.clear}
           onCancel={taskBulk.exit}
