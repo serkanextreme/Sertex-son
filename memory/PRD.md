@@ -2737,3 +2737,8 @@ Toplu işlem çubuğuna (üç arayüzde ortak) **"İş Koluna Taşı"** açılı
 - `TaskBulkBar.jsx`: `categories` prop + backdrop'lu açılır menü (testid'ler: `${prefix}-move`, `-move-menu`, `-move-opt-<catId|none>`).
 - Bağlama: TasksPanel `categories={categories}`, Kolay `categories={cats}`, Profesyonel `categories={cats}`.
 - E2E (canlı, güvenli): 2 kolsuz test görevi Profesyonel UI'dan "Fason Verme"ye taşındı → API'de category_id doğrulandı → görevler kalıcı silindi (404). Not: super_admin için `POST /task-categories` şirket ister; mevcut gerçek iş kolu hedef alındı.
+
+## 🐛 FIX — Toplu çubuk "Seç"e tepki yok gibi görünüyordu (2026-06 · fork)
+Kullanıcı raporu: Detaylı + "DIŞARI TAŞI" ile açılan yüzen (detached) Neural Link penceresinde bir kartın 3-nokta → SEÇ'ine basınca "hiçbir şey olmuyor, mor çubuk çıkmıyor".
+Kök neden: `TaskBulkBar` panelin EN ÜSTÜNDE (kategori filtresi + görev listesinin üstünde) render oluyordu. Kullanıcı listede aşağı kaydırıp SEÇ'e basınca seçim modu açılıyor ama çubuk yukarıda görüş alanı dışında kalıyordu; karttaki 20px halka da gözden kaçıyordu → "tepki yok" algısı. (Programatik olarak DOM'da bar+halka hep vardı.)
+Çözüm: `TaskBulkBar` kök div'i **`sticky top-0 z-30` + opak `bg-sertex-bg/95 backdrop-blur`** yapıldı; artık kaydırılmış olsa bile çubuk panelin tepesine yapışıp her zaman görünür. Ortak bileşen → Detaylı (ana rail + detached), Kolay, Profesyonel hepsinde geçerli. Detached pencerede kaydırılıp doğrulandı (bar görünür, "1 SEÇILDI").

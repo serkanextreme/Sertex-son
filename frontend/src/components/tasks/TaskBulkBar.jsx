@@ -19,7 +19,7 @@ export const TaskBulkBar = ({ count = 0, testPrefix = "task-bulk", categories = 
 
   return (
     <div
-      className="flex flex-wrap items-center gap-1.5 mb-2 p-1.5 rounded-md border border-violet-400/40 bg-violet-500/10"
+      className="sticky top-0 z-30 flex flex-wrap items-center gap-1.5 mb-2 p-1.5 rounded-md border border-violet-400/50 bg-sertex-bg/95 backdrop-blur-sm shadow-lg shadow-violet-900/30"
       data-testid={`${testPrefix}-bar`}
     >
       <span className="hud-text text-violet-200 flex items-center gap-1 mr-1" data-testid={`${testPrefix}-count`}>
