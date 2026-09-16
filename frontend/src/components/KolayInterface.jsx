@@ -45,6 +45,7 @@ import {
   Tag,
   RotateCcw,
   ClipboardPaste,
+  ListChecks,
 } from "lucide-react";
 import { toast } from "sonner";
 import { tasksApi, taskCategoriesApi, taskLockApi, notesApi, teamApi, reminderConfigApi, taskAttachmentsApi } from "../lib/api";
@@ -78,6 +79,10 @@ import { TemplateBar } from "./tasks/TemplateBar";
 import { TemplatesModal } from "./tasks/TemplatesModal";
 import { useTaskClipboard, clearTaskClipboard, setTaskClipboard, updateTaskClipboard } from "../lib/taskClipboard";
 import { printTasks, exportTasksExcel, exportTasksWord } from "../lib/taskExport";
+import { useTaskActions } from "../lib/useTaskActions";
+import { TaskCardModal } from "./tasks/TaskCardModal";
+import TaskCategoriesManagement from "./TaskCategoriesManagement";
+import { flattenSubs } from "../lib/subtaskTree";
 
 // Son tarih + duruma göre basit durum rozeti (Sertex'te ayrı "öncelik" alanı yok).
 const bucketOf = (t) => {
@@ -102,7 +107,7 @@ const fmtDateTime = (iso) => {
 };
 
 // Zengin kart gövdesi — referans görsele göre (kutucuk + uyarı ikonu + ⚓ + 🕐 + 📄 etiket + küçült/menü).
-const KolayCardBody = ({ task, number, catName, onComplete, onMenu, collapsed, onToggleCollapse, dragHandleProps, selectMode = false, selected = false, onSelectToggle }) => {
+const KolayCardBody = ({ task, number, catName, onComplete, onMenu, collapsed, onToggleCollapse, dragHandleProps, selectMode = false, selected = false, onSelectToggle, onOpen }) => {
   const b = bucketOf(task);
   const badgeColor = b.color === "accent" ? "rgb(var(--sx-accent-rgb))" : b.color;
   const overdue = b.label === "Süresi Geçti";
@@ -110,11 +115,14 @@ const KolayCardBody = ({ task, number, catName, onComplete, onMenu, collapsed, o
   const cat = catName(task.category_id);
   const tag = task.company_name || task.assignee_name || null;
   const pinnedNum = task.number_pinned && task.pinned_number != null ? task.pinned_number : number;
+  const subs = flattenSubs(Array.isArray(task.subtasks) ? task.subtasks : []);
+  const subDone = subs.filter((s) => s.done || s.status === "done").length;
 
   return (
     <div
-      className={`glass-panel rounded-xl p-3.5 border border-sertex-cyan/25 flex flex-col h-full relative group${selected ? " ring-2 ring-violet-400 shadow-[0_0_16px_rgba(167,139,250,0.5)]" : ""}`}
+      className={`glass-panel rounded-xl p-3.5 border border-sertex-cyan/25 flex flex-col h-full relative group cursor-pointer${selected ? " ring-2 ring-violet-400 shadow-[0_0_16px_rgba(167,139,250,0.5)]" : ""}`}
       data-testid={`kolay-card-${task.id}`}
+      onClick={() => (selectMode ? onSelectToggle?.() : onOpen?.(task))}
       style={overdue ? { borderColor: "rgba(244,63,94,0.45)" } : undefined}
     >
       {/* Üst şerit: sol = sürükle + tamamla kutucuğu · sağ = küçült/büyüt + ⋮ */}
@@ -233,6 +241,12 @@ const KolayCardBody = ({ task, number, catName, onComplete, onMenu, collapsed, o
                 {tag && cat && <span className="text-sertex-textMuted/50 truncate">· {cat}</span>}
               </div>
             )}
+            {subs.length > 0 && (
+              <div className="flex items-center gap-1.5 text-[11px] font-mono" data-testid={`kolay-sub-badge-${task.id}`}>
+                <ListChecks className="h-3.5 w-3.5 text-sertex-cyan/70 shrink-0" />
+                <span className={subDone === subs.length ? "text-emerald-300" : "text-sertex-textMuted"}>Alt görev: {subDone}/{subs.length}</span>
+              </div>
+            )}
           </div>
         </>
       )}
@@ -241,7 +255,7 @@ const KolayCardBody = ({ task, number, catName, onComplete, onMenu, collapsed, o
 };
 
 // dnd-kit sürüklenebilir sarmalayıcı (2 yönlü ızgara sıralaması).
-const KolaySortableCard = ({ task, number, catName, onComplete, onMenu, collapsed, onToggleCollapse, selectMode, selected, onSelectToggle }) => {
+const KolaySortableCard = ({ task, number, catName, onComplete, onMenu, collapsed, onToggleCollapse, selectMode, selected, onSelectToggle, onOpen }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -263,6 +277,7 @@ const KolaySortableCard = ({ task, number, catName, onComplete, onMenu, collapse
         selectMode={selectMode}
         selected={selected}
         onSelectToggle={onSelectToggle}
+        onOpen={onOpen}
       />
     </div>
   );
@@ -558,6 +573,7 @@ const KolayArchive = ({ catName, flatCats = [] }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [byCat, setByCat] = useState(false);
+  const [mode, setMode] = useState("archived"); // archived | trash
   const [catQuery, setCatQuery] = useState("");
   const [groupQuery, setGroupQuery] = useState({});
   const [collapsed, setCollapsed] = useState(() => new Set());
@@ -570,35 +586,62 @@ const KolayArchive = ({ catName, flatCats = [] }) => {
   const load = () => {
     setLoading(true);
     tasksApi
-      .list(true, "mine", "archived")
+      .list(true, "mine", mode === "trash" ? "trash" : "archived")
       .then((t) => setItems(Array.isArray(t) ? t : []))
       .catch(() => {})
       .finally(() => setLoading(false));
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [mode]);
   const restore = async (id) => {
-    try { await tasksApi.setArchived(id, false); toast.success("Görev aktife alındı"); load(); }
-    catch { toast.error("Geri yüklenemedi"); }
+    try {
+      if (mode === "trash") { await tasksApi.restore(id); } else { await tasksApi.setArchived(id, false); }
+      toast.success("Görev aktife alındı"); load();
+    } catch { toast.error("Geri yüklenemedi"); }
+  };
+  const permanentDelete = async (id, title) => {
+    const ok = await confirmDialog({ title: "KALICI SİL", message: `"${title || "Görev"}" KALICI olarak silinsin mi? Bu işlem geri alınamaz.`, confirmText: "KALICI SİL", cancelText: "VAZGEÇ", danger: true });
+    if (!ok) return;
+    try { await tasksApi.permanentDelete(id); toast.success("Kalıcı olarak silindi"); load(); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Silinemedi"); }
+  };
+  const doEmptyTrash = async () => {
+    const ok = await confirmDialog({ title: "ÇÖPÜ BOŞALT", message: "Çöp kutusundaki tüm görevler KALICI silinsin mi? Bu işlem geri alınamaz.", confirmText: "BOŞALT", cancelText: "VAZGEÇ", danger: true });
+    if (!ok) return;
+    try { const r = await tasksApi.emptyTrash("mine"); toast.success(`${r?.deleted ?? 0} görev kalıcı silindi`); load(); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Boşaltılamadı"); }
   };
   const card = (t) => (
     <div key={t.id} data-testid={`kolay-arch-card-${t.id}`} className="glass-panel rounded-xl p-3.5 border border-sertex-cyan/15 flex flex-col gap-2">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
-          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+          {mode === "trash" ? <Trash2 className="h-4 w-4 text-rose-400 shrink-0" /> : <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />}
           <span className="text-sertex-text text-sm font-semibold line-through decoration-sertex-textMuted/50 truncate">{t.title}</span>
         </div>
-        <button
-          type="button"
-          onClick={() => restore(t.id)}
-          data-testid={`kolay-arch-restore-${t.id}`}
-          title="Aktif görevlere geri al"
-          className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-md border border-sertex-cyan/30 text-sertex-cyan hover:bg-sertex-cyan/15 hover:border-sertex-cyan text-[11px] font-mono transition-colors"
-        >
-          <RotateCcw className="h-3.5 w-3.5" /> AKTİFE AL
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => restore(t.id)}
+            data-testid={`kolay-arch-restore-${t.id}`}
+            title="Aktif görevlere geri al"
+            className="flex items-center gap-1 px-2 py-1 rounded-md border border-sertex-cyan/30 text-sertex-cyan hover:bg-sertex-cyan/15 hover:border-sertex-cyan text-[11px] font-mono transition-colors"
+          >
+            <RotateCcw className="h-3.5 w-3.5" /> {mode === "trash" ? "GERİ YÜKLE" : "AKTİFE AL"}
+          </button>
+          {mode === "trash" && (
+            <button
+              type="button"
+              onClick={() => permanentDelete(t.id, t.title)}
+              data-testid={`kolay-arch-permdelete-${t.id}`}
+              title="Kalıcı sil"
+              className="flex items-center gap-1 px-2 py-1 rounded-md border border-rose-500/40 text-rose-300 hover:bg-rose-500/15 text-[11px] font-mono transition-colors"
+            >
+              <Trash2 className="h-3.5 w-3.5" /> KALICI SİL
+            </button>
+          )}
+        </div>
       </div>
       <div className="flex items-center gap-3 text-[11px] font-mono text-sertex-textMuted flex-wrap">
-        <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {fmtDateTime(t.archived_at || t.updated_at) || "—"}</span>
+        <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {fmtDateTime(t.archived_at || t.deleted_at || t.updated_at) || "—"}</span>
         {catName(t.category_id) && (
           <span className="flex items-center gap-1"><Tag className="h-3 w-3 text-sertex-cyan/70" /> {catName(t.category_id)}</span>
         )}
@@ -634,29 +677,58 @@ const KolayArchive = ({ catName, flatCats = [] }) => {
   return (
     <div data-testid="kolay-archive">
       <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
-        <div className="hud-text text-sertex-textMuted">{items.length} biten görev</div>
-        {items.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setByCat((v) => !v)}
-            data-testid="kolay-archive-groupby"
-            title={byCat ? "İş kolu gruplamayı kaldır (düz liste)" : "Biten görevleri iş koluna göre grupla"}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border font-mono text-xs transition-colors ${
-              byCat
-                ? "border-sertex-cyan bg-sertex-cyan/15 text-sertex-cyan"
-                : "border-sertex-cyan/30 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/60"
-            }`}
-          >
-            <Tag className="h-4 w-4" /> {byCat ? "GRUPLAMAYI KALDIR" : "İŞ KOLUNA GÖRE GRUPLA"}
-          </button>
-        )}
+        <div className="flex items-center gap-1.5">
+          {[{ k: "archived", label: "Biten", icon: CheckCircle2 }, { k: "trash", label: "Çöp", icon: Trash2 }].map((m) => {
+            const Icon = m.icon;
+            const on = mode === m.k;
+            return (
+              <button
+                key={m.k}
+                type="button"
+                onClick={() => { setMode(m.k); setByCat(false); }}
+                data-testid={`kolay-archive-mode-${m.k}`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border font-mono text-xs transition-colors ${on ? "border-sertex-cyan bg-sertex-cyan/15 text-sertex-cyan" : "border-sertex-cyan/25 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/50"}`}
+              >
+                <Icon className="h-3.5 w-3.5" /> {m.label}
+              </button>
+            );
+          })}
+          <div className="hud-text text-sertex-textMuted ml-2">{items.length} {mode === "trash" ? "çöp görevi" : "biten görev"}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          {mode === "trash" && items.length > 0 && (
+            <button
+              type="button"
+              onClick={doEmptyTrash}
+              data-testid="kolay-archive-empty-trash"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-rose-500/40 text-rose-300 hover:bg-rose-500/15 font-mono text-xs transition-colors"
+            >
+              <Trash2 className="h-4 w-4" /> ÇÖPÜ BOŞALT
+            </button>
+          )}
+          {items.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setByCat((v) => !v)}
+              data-testid="kolay-archive-groupby"
+              title={byCat ? "İş kolu gruplamayı kaldır (düz liste)" : "Görevleri iş koluna göre grupla"}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border font-mono text-xs transition-colors ${
+                byCat
+                  ? "border-sertex-cyan bg-sertex-cyan/15 text-sertex-cyan"
+                  : "border-sertex-cyan/30 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/60"
+              }`}
+            >
+              <Tag className="h-4 w-4" /> {byCat ? "GRUPLAMAYI KALDIR" : "İŞ KOLUNA GÖRE GRUPLA"}
+            </button>
+          )}
+        </div>
       </div>
       {loading ? (
         <div className="hud-text text-sertex-textMuted py-10 text-center">YÜKLENİYOR...</div>
       ) : items.length === 0 ? (
         <div className="glass-panel corner-bracket rounded-xl p-8 text-center" data-testid="kolay-archive-empty">
-          <div className="text-sertex-text mb-1">Arşiv boş</div>
-          <div className="hud-text text-sertex-textMuted normal-case">Tamamladığın görevler burada listelenir.</div>
+          <div className="text-sertex-text mb-1">{mode === "trash" ? "Çöp kutusu boş" : "Arşiv boş"}</div>
+          <div className="hud-text text-sertex-textMuted normal-case">{mode === "trash" ? "Sildiğin görevler burada listelenir." : "Tamamladığın görevler burada listelenir."}</div>
         </div>
       ) : byCat ? (
         (() => {
@@ -849,6 +921,15 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
 
   const canReorder = !q.trim() && !catFilter;
   const closeMenu = () => setCtxMenu(null);
+
+  // Karta tıklayınca açılan tam görev kartı (iç içe alt görev, promote, Dürt, tüm aksiyonlar).
+  const [openId, setOpenId] = useState(null);
+  const [showCats, setShowCats] = useState(false);
+  const cardActions = useTaskActions({ tasks, setTasks, cats, groups, user, load, numberFor: (id) => numberOf[id], highlight: q });
+  const openTask = tasks.find((t) => t.id === openId) || null;
+  useEffect(() => {
+    if (openId && (!openTask || openTask.status === "done" || openTask.archived || openTask.deleted)) setOpenId(null);
+  }, [openId, openTask]);
 
   // Ana Sayfa özet istatistikleri + yaklaşan son tarihler.
   const stats = useMemo(() => {
@@ -1212,6 +1293,15 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
                 </div>
                 <button
                   type="button"
+                  onClick={() => setShowCats(true)}
+                  data-testid="kolay-manage-cats"
+                  title="İş Kollarını Yönet"
+                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-sertex-cyan/30 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/60 transition-colors font-mono text-sm"
+                >
+                  <Tag className="h-4 w-4" /> <span className="hidden sm:inline">İş Kolları</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setShowAdd(true)}
                   data-testid="kolay-add-task"
                   className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-sertex-cyan/15 border border-sertex-cyan text-sertex-cyan hover:bg-sertex-cyan/25 transition-colors font-mono text-sm neon-glow"
@@ -1334,7 +1424,7 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
                       data-testid="kolay-task-grid"
                     >
                       {activeTasks.map((t) => (
-                        <KolaySortableCard key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} selectMode={kolayBulk.selectMode} selected={kolayBulk.has(t.id)} onSelectToggle={() => kolayBulk.toggle(t.id)} />
+                        <KolaySortableCard key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} selectMode={kolayBulk.selectMode} selected={kolayBulk.has(t.id)} onSelectToggle={() => kolayBulk.toggle(t.id)} onOpen={(tt) => setOpenId(tt.id)} />
                       ))}
                     </div>
                   </SortableContext>
@@ -1342,7 +1432,7 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
               ) : (
                 <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }} data-testid="kolay-task-grid">
                   {activeTasks.map((t) => (
-                    <KolayCardBody key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} selectMode={kolayBulk.selectMode} selected={kolayBulk.has(t.id)} onSelectToggle={() => kolayBulk.toggle(t.id)} />
+                    <KolayCardBody key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} selectMode={kolayBulk.selectMode} selected={kolayBulk.has(t.id)} onSelectToggle={() => kolayBulk.toggle(t.id)} onOpen={(tt) => setOpenId(tt.id)} />
                   ))}
                 </div>
               )}
@@ -1441,6 +1531,23 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
       )}
       {showAdd && (
         <KolayAddModal cats={cats} onClose={() => setShowAdd(false)} onCreated={load} />
+      )}
+
+      {openTask && (
+        <TaskCardModal cardProps={cardActions.cardPropsFor(openTask)} onClose={() => setOpenId(null)} />
+      )}
+      {cardActions.modalsElement}
+
+      {showCats && (
+        <div className="fixed inset-0 z-[110] flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm p-4 sm:p-8" onClick={() => { setShowCats(false); load(); }} data-testid="kolay-cats-modal">
+          <div className="relative w-full max-w-3xl my-auto glass-panel corner-bracket border border-sertex-cyan/30 rounded-xl p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="hud-text text-sertex-cyan flex items-center gap-1.5"><Tag className="h-3.5 w-3.5" /> İŞ KOLLARINI YÖNET</div>
+              <button type="button" onClick={() => { setShowCats(false); load(); }} data-testid="kolay-cats-close" className="h-7 w-7 flex items-center justify-center rounded-full border border-sertex-cyan/40 text-sertex-cyan hover:bg-sertex-cyan/10"><X className="h-4 w-4" /></button>
+            </div>
+            <TaskCategoriesManagement />
+          </div>
+        </div>
       )}
     </div>
   );

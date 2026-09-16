@@ -21,6 +21,7 @@ export function useTaskActions({ tasks = [], setTasks, cats = [], groups = [], u
   const [linkModal, setLinkModal] = useState(null);
   const [reminderConfig, setReminderConfig] = useState(null);
   const [collapsedIds, setCollapsedIds] = useState(() => new Set());
+  const [nudgeCounts, setNudgeCounts] = useState({});
 
   useEffect(() => {
     reminderConfigApi.get().then(setReminderConfig).catch(() => setReminderConfig(null));
@@ -153,8 +154,16 @@ export function useTaskActions({ tasks = [], setTasks, cats = [], groups = [], u
   };
 
   const nudge = async (id, message = "") => {
-    try { await tasksApi.nudge(id, message); toast.success("Dürtme gönderildi"); }
-    catch (e) { toast.error(e?.response?.data?.detail || "Dürtülemedi"); }
+    try {
+      const r = await tasksApi.nudge(id, message);
+      const n = r?.count_today || 0;
+      if (n > 0) setNudgeCounts((m) => ({ ...m, [id]: n }));
+      toast.success(n > 1 ? `Hatırlatma gönderildi · bugün ${n}. kez` : "Dürtme gönderildi");
+    } catch (e) {
+      const s = e?.response?.status;
+      if (s === 429) toast.warning(e?.response?.data?.detail || "Çok sık — biraz sonra tekrar deneyin");
+      else toast.error(e?.response?.data?.detail || "Dürtülemedi");
+    }
   };
   const uncancelTask = async (id) => {
     try { await tasksApi.uncancel(id); toast.success("İptal geri alındı"); refresh(); }
@@ -254,6 +263,8 @@ export function useTaskActions({ tasks = [], setTasks, cats = [], groups = [], u
     onLinkTasks: () => setLinkModal({ mode: "create", taskId: t.id }),
     onEditGroup: () => t.group_id && setLinkModal({ mode: "edit", groupId: t.group_id }),
     onRemoveFromGroup: () => t.group_id && removeFromGroup(t.group_id, t.id),
+    onNudge: () => nudge(t.id),
+    nudgeCount: nudgeCounts[t.id] || 0,
     archiveGroup: null,
     canPermanentDelete: false,
     onCancel: () => cancelTask(t.id),

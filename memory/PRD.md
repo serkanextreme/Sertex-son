@@ -1,5 +1,15 @@
 # Sertex — Kişisel AI Asistan · PRD
 
+## ✅ TAMAMLANDI (2026-06, "YAP"): TEKNİK arayüzü — Detaylı ile TAM özellik paritesi (Faz 3)
+- **İstek**: `Detaylı` (TasksPanel) arayüzündeki tüm özellik ve fonksiyonlar `Teknik` temasına da BİREBİR yansıtılsın; görsel kimlik (konsol/terminal havası) korunsun. (Faz 1=Profesyonel, Faz 2=Kolay zaten bitti; bu Faz 3.)
+- **Uygulama** (`TeknikInterface.jsx` yeniden yazıldı, paylaşılan `useTaskActions`+`useTaskBulk` kancaları): üst komut çubuğu — arama, **SEÇ** (çoklu seçim → `TaskBulkBar`), **YAPIŞTIR** (pano doluysa), **NEW_TASK** (`AddTaskModal`), **İŞ_KOLLARI** (`TaskCategoriesManagement`), **ŞABLON** (`TemplatesModal`+`TemplateBar`), **EXPORT** (`ExportSelectModal`), SETTINGS, DETAYLI'ya dön. Görünüm sekmeleri **AKTİF / ARŞİV / ÇÖP** + ÇÖPÜ_BOŞALT. Durum filtre çipleri (AKTİF/GEÇTİ/BEKLİYOR/BİTTİ). Tabloda satıra tıkla → tam **`TaskCardModal`** (alt görev/dosya/hatırlatıcı/kilit — Detaylı ile aynı). Arşiv satırında AKTİFE_AL, çöp satırında GERİ + KALICI SİL. Sağ detay panelinde seçili görev özeti + TAM KARTI AÇ/TAMAMLA.
+- **Test (ana ajan, Playwright + canlı API)**: `ZZTEST_` sahte görevler (aktif/geçti/arşiv/çöp) oluşturuldu → Teknik'te tüm araç çubuğu öğeleri (search/new-task/manage-cats/templates/export/view-active/archived/trash/template-bar/status-filters/bulk-select) render (11/11 present); aktif ZZTEST=2 satır; [AÇ] → tam TaskCardModal açıldı (SÜRESİ GEÇTİ + alt görev/dosya bölümleri); ARŞİV=1+AKTİFE_AL; ÇÖP=1+KALICI SİL+ÇÖPÜ_BOŞALT. Sonra 4 test görevi de **kalıcı silindi** (deleted:1 x4), tüm view'lar boş doğrulandı → **CANLI DB TEMİZ**. Derleme temiz (yalnız mevcut eslint react-hooks uyarıları).
+- **Bozulmayan**: Detaylı/Kolay/Profesyonel'e DOKUNULMADI; Teknik'in konsol görseli aynen korundu.
+- **Bekleyen (kullanıcı onayına göre)**: Faz 4 — `Aydınlık` + `Pano` aynı parite ("aydınlık pano sonra"); Mobil arşiv gruplama + Mobil Hata Radarı paritesi.
+- **Yayın**: preview'de; canlıya (sertex-ai.com) için Deploy gerekir.
+
+
+
 ## ✅ TAMAMLANDI (2026-06, "YAP"): Alt görevlerde ÇOKLU SEÇİM + toplu işlem
 - **İstek**: Görev kartındaki alt görevleri tek tek işlemek zor → 3-nokta menüsüne "Seç", seçili sayısını göster, seçilenlere tek tıkla toplu işlem.
 - **Çözüm (paylaşılan bileşenler → Detaylı+Kolay+Profesyonel hepsinde)**: `SubtaskMenu`'ye "Seç" (violet, `sub-ctx-select`) eklendi. `TaskCard`'a `subSelectMode` + `selectedSubIds` (id bazlı) durumları + toplu yardımcılar (`applyBulkSub`/`bulkStatus`/`bulkDelete`/`bulkSetDate`/`bulkPin`/`bulkUnpin`, hepsi `onSetSubtasks` tek yazımıyla). Toplu çubuk: "N seçildi" + Tümünü Seç/Temizle/Vazgeç + Tamamla/Beklet/Aktif/Tarihi geçti/Tarih ekle(datetime)/**⚓ Sabitle**/**⚓ Sabiti kaldır**/Sil. Toplu Sabitle, seçili bitmemiş alt görevleri MEVCUT sıra numaralarına sabitler (çakışmasız); Sabiti kaldır seçilenlerin sabitini kaldırır. `SubtaskRow`'a `selectMode/selected/onSelectToggle` — seçim göstergesi SAĞDA **yuvarlak mor** (soldaki kare yeşil "bitti" kutusuyla karışmaz), seçili satır violet ring+bg, satır yazısına tıklamak da seçer.
