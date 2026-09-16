@@ -2825,3 +2825,24 @@ Kullanıcı isteği: Trend grafiğinin altına en çok hata üreten ilk 3 kayna�
 - **Backend** (`GET /admin/client-logs`): yanıta `top_sources` eklendi — son 7 günde kaynağa (`source`) göre gruplayıp count desc ilk 3; her biri `{source, count, errors, warnings}` (Hata/Uyarı kırılımı). Boş kaynak `""` döner.
 - **Frontend** (`ClientErrorRadar.jsx`): trend grafiğinin hemen altına yeni `TopSourcesMini` kartı — "EN ÇOK HATA ÜRETEN KAYNAKLAR · 7G". Her satır: kaynak etiketi (yoksa "(kaynak yok)") + yatay **yığılmış mini çubuk** (Hata kırmızı + Uyarı turuncu, max'a orantılı) + sayı. Satıra tıklama `groupMode="source"` yapar (kaynağa göre gruplu görünüme drill-down). Kaynak yoksa/0 ise kart gizlenir.
 - **Test:** `top_sources` API doğrulandı (app.js/TaskCard.jsx/api.js ×4, errors/warnings kırılımlı). UI: 3 mini çubuk render oldu, kırmızı+turuncu oranları veriye uydu; satır tıklaması Kaynak gruplamasına geçti (screenshot + doğrulama). İzole `client_logs`e 15 sahte kayıt eklenip `e2e` işaretiyle KALICI silindi; üretim verisine dokunulmadı. CRA build temiz.
+
+## 🚧 TEMA PARİTESİ PROJESİ — Detaylı'nın tüm fonksiyonları diğer temalara (2026-06 · fork)
+Karar: Profesyonel/Teknik/Kolay temaları Detaylı ile FONKSİYON olarak birebir eşitlenecek; görünüm temaya özel kalır; DnB temaya uyarlanır; tema-tema ilerlenir; Aydınlık/Pano sonra. Her faz ZZTEST dummy ile test edilip kalıcı temizlenir.
+
+### ✅ FAZ 1 — PROFESYONEL TAMAMLANDI
+`useTaskActions.jsx` genişletildi: `nudge`, `uncancelTask`, `restoreTask`, `permanentDeleteTask`, `emptyTrash`, `dissolveGroup`, `handlePaste`, `handleUseTemplate`, `setEditing` eklendi/expose edildi.
+`ProfesyonelInterface.jsx` (dashboard görünümü korunarak) eklenenler:
+- Karta tıkla → tam koyu **TaskCardModal** (düzenle, iç içe alt görev/promote/katla/rozet, hatırlatıcı, kilit/OTP, paylaş/ata/devret, iş kolu, sabitle, kopyala, bağla). `useTaskActions`+`TaskCardModal`.
+- Kart hızlı aksiyonları: **Tamamla + Dürt (nudge) + Aç (Detaylı'da)**.
+- **Durum filtre çipleri** (Aktif/Süresi Geçti/Beklemede/Tamamlandı) + iş kolu filtresi.
+- **Görünüm sekmeleri: Aktif / Arşiv / Çöp** — arşivden çıkar, geri yükle, kalıcı sil, Çöpü Boşalt.
+- **İş Kolları** butonu → `TaskCategoriesManagement` modalı (oluştur/renk/sil/export).
+- **Şablonlar**: `TemplateBar` + `TemplatesModal`.
+- **Kopyala-Yapıştır**: karttan kopyala → `TaskPasteMenu` ile seçili iş koluna yapıştır.
+- **Dışa Aktar**: `ExportSelectModal`.
+- Çoklu seçim + toplu işlem (mevcut korundu).
+Test: ZZTEST dummy (biri iç içe alt görevli) ile — toolbar/sekmeler/çipler, kart modalı (nested 1/2 rozeti+katla), bulk Beklet (4 görev), kategori yönetim modalı, Çöp görünümü doğrulandı (screenshot). 4 ZZTEST görevi `/permanent` ile kalıcı silindi; kullanıcının kendi çöp verisine DOKUNULMADI. CRA build temiz.
+
+### ⏳ SONRAKI: FAZ 2 — KOLAY, FAZ 3 — TEKNİK
+Kolay eksikleri: satır-içi iç içe alt görev arayüzü (TaskCard/SubtaskTree), iş kolu yönetimi, arşiv/çöp görünümleri, dürt, dışa aktar tamlığı.
+Teknik eksikleri: satır-içi görev ekleme, iş kolu yönetimi, durum filtre çipleri, şablonlar, kopyala-yapıştır, arşiv/çöp, dürt, dışa aktar.

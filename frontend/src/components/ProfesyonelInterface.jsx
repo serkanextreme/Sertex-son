@@ -21,6 +21,15 @@ import {
   ListChecks,
   Circle,
   CheckCircle2,
+  Check,
+  Send,
+  Download,
+  Tag,
+  FileText,
+  ClipboardPaste,
+  Archive,
+  Trash2,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { tasksApi, taskCategoriesApi } from "../lib/api";
@@ -29,12 +38,27 @@ import { setInterfaceMode } from "../lib/appearance";
 import { AddTaskModal } from "./tasks/AddTaskModal";
 import { taskSerialLabel } from "../lib/taskSerial";
 import { useTaskBulk } from "../lib/useTaskBulk";
+import { useTaskActions } from "../lib/useTaskActions";
 import { TaskBulkBar } from "./tasks/TaskBulkBar";
+import { TaskCardModal } from "./tasks/TaskCardModal";
+import TaskCategoriesManagement from "./TaskCategoriesManagement";
+import { TemplateBar } from "./tasks/TemplateBar";
+import { TemplatesModal } from "./tasks/TemplatesModal";
+import { TaskPasteMenu } from "./tasks/TaskPasteMenu";
+import ExportSelectModal from "./ExportSelectModal";
 import { computeTaskNumbers } from "../lib/taskBulkActions";
 import { flattenSubs } from "../lib/subtaskTree";
 import {
   BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+
+const STATUS_FILTERS = [
+  { key: "aktif", label: "Aktif", color: "accent" },
+  { key: "gecti", label: "Süresi Geçti", color: "#f43f5e" },
+  { key: "bekliyor", label: "Beklemede", color: "#f59e0b" },
+  { key: "bitti", label: "Tamamlandı", color: "#10b981" },
+];
+const bucketKey = (t) => (t.status === "done" ? "bitti" : t.status === "paused" ? "bekliyor" : (t.due_date && new Date(t.due_date).getTime() < Date.now()) ? "gecti" : "aktif");
 
 const isActive = (t) => t.status !== "done" && !t.archived && !t.deleted;
 const isOverdue = (t) => isActive(t) && t.due_date && new Date(t.due_date).getTime() < Date.now();
@@ -73,11 +97,21 @@ const initials = (name) => (name || "").trim().split(/\s+/).map((w) => w[0]).joi
 const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
   const { user, teamFeaturesVisible } = useAuth();
   const [tasks, setTasks] = useState([]);
+  const [archiveTasks, setArchiveTasks] = useState([]);
   const [cats, setCats] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [adding, setAdding] = useState(false);
   const [catFilter, setCatFilter] = useState("");
+  const [view, setView] = useState("active"); // active | archived | trash
+  const [statusFilters, setStatusFilters] = useState(["aktif", "gecti", "bekliyor", "bitti"]);
+  const [openId, setOpenId] = useState(null);
+  const [showCats, setShowCats] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [showExport, setShowExport] = useState(false);
+  const [pasteMenu, setPasteMenu] = useState(null);
+  const [templateRefresh, setTemplateRefresh] = useState(0);
 
   // Göreve tıklayınca: Neural Link panelini aç, GÖREVLER sekmesine geç ve
   // o görevi bulup parlat ("görev burada"). Mekanizma bildirim zili ile aynı.
@@ -91,16 +125,25 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
   }, [onOpenSection]);
 
   const load = useCallback(async () => {
-    const [ts, cs] = await Promise.all([
+    const [ts, cs, gs] = await Promise.all([
       tasksApi.list(false, "mine").catch(() => []),
       taskCategoriesApi.list("my_tasks").catch(() => []),
+      tasksApi.listGroups().catch(() => []),
     ]);
     setTasks(Array.isArray(ts) ? ts : []);
     setCats(Array.isArray(cs) ? cs : []);
+    setGroups(Array.isArray(gs) ? gs : []);
     setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Arşiv / Çöp görünümü — ayrı yükleme (dashboard istatistikleri aktif veriden gelir).
+  useEffect(() => {
+    if (view === "active") return;
+    const av = view === "trash" ? "trash" : "archived";
+    tasksApi.list(true, "mine", av).then((r) => setArchiveTasks(Array.isArray(r) ? r : [])).catch(() => setArchiveTasks([]));
+  }, [view, templateRefresh]);
 
   const catName = (id) => cats.find((c) => c.id === id)?.name || null;
 
@@ -114,24 +157,51 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
     };
   }, [tasks]);
 
-  const visibleTasks = useMemo(() => {
-    let base = tasks.filter(isActive);
-    if (catFilter) {
-      base = base.filter((t) => (catFilter === "__none__" ? !t.category_id : t.category_id === catFilter));
-    }
-    const query = q.trim().toLocaleLowerCase("tr");
-    if (!query) return base;
-    return base.filter((t) =>
-      [t.title, t.description, t.assignee_name, t.company_name, catName(t.category_id), t.serial != null ? String(t.serial) : null]
-        .filter(Boolean).join(" ").toLocaleLowerCase("tr").includes(query)
-    );
-  }, [tasks, cats, q, catFilter]);
+  const reloadAll = useCallback(() => { load(); setTemplateRefresh((n) => n + 1); }, [load]);
 
-  // Ana görev ÇOKLU SEÇİM + toplu işlem (Sabitle için çakışmasız sıra numarası).
+  const matchQuery = useCallback((t) => {
+    const query = q.trim().toLocaleLowerCase("tr");
+    if (!query) return true;
+    return [t.title, t.description, t.assignee_name, t.company_name, catName(t.category_id), t.serial != null ? String(t.serial) : null]
+      .filter(Boolean).join(" ").toLocaleLowerCase("tr").includes(query);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, cats]);
+
+  const visibleTasks = useMemo(() => {
+    let base = tasks.filter((t) => !t.archived && !t.deleted);
+    base = base.filter((t) => statusFilters.includes(bucketKey(t)));
+    if (catFilter) base = base.filter((t) => (catFilter === "__none__" ? !t.category_id : t.category_id === catFilter));
+    return base.filter(matchQuery);
+  }, [tasks, statusFilters, catFilter, matchQuery]);
+
+  const archiveVisible = useMemo(
+    () => archiveTasks.filter(matchQuery),
+    [archiveTasks, matchQuery]
+  );
+  const gridTasks = view === "active" ? visibleTasks : archiveVisible;
+  const numById = useMemo(() => computeTaskNumbers(visibleTasks), [visibleTasks]);
+
+  const actions = useTaskActions({ tasks, setTasks, cats, groups, user, load: reloadAll, numberFor: (id) => numById[id], highlight: q });
+  const openTask = tasks.find((t) => t.id === openId) || null;
+
+  useEffect(() => {
+    if (openId && (!openTask || openTask.status === "done" || openTask.archived || openTask.deleted)) setOpenId(null);
+  }, [openId, openTask]);
+
+  // Ana görev ÇOKLU SEÇİM + toplu işlem.
   const profBulk = useTaskBulk({
-    numberFor: (id) => computeTaskNumbers(visibleTasks)[id],
-    refresh: load,
+    numberFor: (id) => numById[id],
+    refresh: reloadAll,
   });
+
+  const toggleStatus = (key) =>
+    setStatusFilters((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+
+  const cardClick = (t) => {
+    if (view !== "active") return;
+    if (profBulk.selectMode) { profBulk.toggle(t.id); return; }
+    setOpenId(t.id);
+  };
 
   const upcoming = useMemo(() =>
     tasks.filter((t) => isActive(t) && t.due_date && new Date(t.due_date).getTime() >= Date.now())
@@ -271,14 +341,43 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                   {new Date().toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setAdding(true)}
-                data-testid="prof-add-task"
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-sertex-cyan text-sertex-bg hover:opacity-90 transition-opacity text-sm font-semibold shrink-0"
-              >
-                <Plus className="h-4 w-4" /> Yeni Görev
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowCats(true)}
+                  data-testid="prof-manage-cats"
+                  title="İş Kollarını Yönet"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/40 transition-colors text-sm"
+                >
+                  <Tag className="h-4 w-4" /> <span className="hidden md:inline">İş Kolları</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTemplates(true)}
+                  data-testid="prof-templates"
+                  title="Şablonlar"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/40 transition-colors text-sm"
+                >
+                  <FileText className="h-4 w-4" /> <span className="hidden md:inline">Şablonlar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExport(true)}
+                  data-testid="prof-export"
+                  title="Dışa Aktar"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/40 transition-colors text-sm"
+                >
+                  <Download className="h-4 w-4" /> <span className="hidden md:inline">Dışa Aktar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdding(true)}
+                  data-testid="prof-add-task"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-sertex-cyan text-sertex-bg hover:opacity-90 transition-opacity text-sm font-semibold"
+                >
+                  <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Yeni Görev</span>
+                </button>
+              </div>
             </div>
 
             {/* İstatistik kartları */}
@@ -341,9 +440,67 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
               {/* Görev ızgarası */}
               <div className="xl:col-span-2">
+                {/* Görünüm sekmeleri: Aktif / Arşiv / Çöp */}
+                <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                  {[{ k: "active", label: "Aktif", icon: ListTodo }, { k: "archived", label: "Arşiv", icon: Archive }, { k: "trash", label: "Çöp", icon: Trash2 }].map((v) => {
+                    const Icon = v.icon;
+                    const on = view === v.k;
+                    return (
+                      <button
+                        key={v.k}
+                        type="button"
+                        onClick={() => { setView(v.k); profBulk.exit(); }}
+                        data-testid={`prof-view-${v.k}`}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${on ? "border-sertex-cyan text-sertex-cyan bg-sertex-cyan/10" : "border-white/10 text-sertex-textMuted hover:text-sertex-text hover:bg-white/5"}`}
+                      >
+                        <Icon className="h-3.5 w-3.5" /> {v.label}
+                      </button>
+                    );
+                  })}
+                  {view === "trash" && archiveVisible.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => actions.emptyTrash("mine")}
+                      data-testid="prof-empty-trash"
+                      className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-rose-500/40 text-rose-300 hover:bg-rose-500/15 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Çöpü Boşalt
+                    </button>
+                  )}
+                </div>
+
+                {/* Durum filtre çipleri */}
+                {view === "active" && (
+                  <div className="flex items-center gap-1.5 mb-2 flex-wrap" data-testid="prof-status-filters">
+                    {STATUS_FILTERS.map((s) => {
+                      const on = statusFilters.includes(s.key);
+                      const color = s.color === "accent" ? "rgb(var(--sx-accent-rgb))" : s.color;
+                      return (
+                        <button
+                          key={s.key}
+                          type="button"
+                          onClick={() => toggleStatus(s.key)}
+                          data-testid={`prof-status-${s.key}`}
+                          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-mono border transition-colors"
+                          style={on ? { borderColor: color, color, background: `${s.color === "accent" ? "rgb(var(--sx-accent-rgb) / 0.12)" : color + "1f"}` } : { borderColor: "rgba(255,255,255,0.12)", color: "#9aa4b2" }}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full" style={{ background: on ? color : "#6b7280" }} /> {s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Şablon çubuğu */}
+                {view === "active" && (
+                  <div className="mb-3">
+                    <TemplateBar refreshKey={templateRefresh} onUse={actions.handleUseTemplate} onManage={() => setShowTemplates(true)} />
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2 mb-2">
-                  <div className="hud-text text-sertex-textMuted normal-case tracking-normal">GÖREVLER</div>
-                  {catFilter && (
+                  <div className="hud-text text-sertex-textMuted normal-case tracking-normal">{view === "archived" ? "ARŞİV" : view === "trash" ? "ÇÖP KUTUSU" : "GÖREVLER"}</div>
+                  {catFilter && view === "active" && (
                     <button
                       type="button"
                       onClick={() => setCatFilter("")}
@@ -357,9 +514,20 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                   {!loading && (
                     <div className="ml-auto flex items-center gap-2">
                       <span className="hud-text text-sertex-cyan normal-case tracking-normal" data-testid="prof-result-count">
-                        {visibleTasks.length} {q.trim() ? "sonuç" : "görev"}
+                        {gridTasks.length} {q.trim() ? "sonuç" : "görev"}
                       </span>
-                      {visibleTasks.length > 0 && !profBulk.selectMode && (
+                      {view === "active" && actions.clipboard?.sourceId && (
+                        <button
+                          type="button"
+                          onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setPasteMenu({ x: r.left, y: r.bottom + 4 }); }}
+                          data-testid="prof-paste"
+                          title={`Panodaki görevi ${catFilter ? (catName(catFilter) || "iş koluna") : "Kolsuz'a"} yapıştır`}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded-md border border-sertex-cyan/40 text-sertex-cyan hover:bg-sertex-cyan/10 text-xs font-mono transition-colors"
+                        >
+                          <ClipboardPaste className="h-3.5 w-3.5" /> Yapıştır
+                        </button>
+                      )}
+                      {view === "active" && gridTasks.length > 0 && !profBulk.selectMode && (
                         <button
                           type="button"
                           onClick={() => profBulk.start()}
@@ -373,7 +541,7 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                     </div>
                   )}
                 </div>
-                {profBulk.selectMode && (
+                {view === "active" && profBulk.selectMode && (
                   <TaskBulkBar
                     count={profBulk.ids.length}
                     testPrefix="prof-bulk"
@@ -386,33 +554,34 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                 )}
                 {loading ? (
                   <div className="hud-text text-sertex-textMuted py-10 text-center" data-testid="prof-loading">YÜKLENİYOR...</div>
-                ) : visibleTasks.length === 0 ? (
+                ) : gridTasks.length === 0 ? (
                   <div className="rounded-xl border border-white/10 bg-sertex-surface/60 p-8 text-center" data-testid="prof-empty">
-                    <div className="text-sertex-text mb-1">Aktif görev yok</div>
-                    <div className="hud-text text-sertex-textMuted normal-case">{(q || catFilter) ? "Eşleşme bulunamadı." : "Yeni görev ekleyerek başla."}</div>
+                    <div className="text-sertex-text mb-1">{view === "trash" ? "Çöp kutusu boş" : view === "archived" ? "Arşiv boş" : "Görev yok"}</div>
+                    <div className="hud-text text-sertex-textMuted normal-case">{(q || catFilter) ? "Eşleşme bulunamadı." : view === "active" ? "Yeni görev ekleyerek başla." : ""}</div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3" data-testid="prof-task-grid">
-                    {visibleTasks.map((t, i) => {
+                    {gridTasks.map((t, i) => {
                       const b = bucketOf(t);
                       const badgeColor = b.color === "accent" ? "rgb(var(--sx-accent-rgb))" : b.color;
                       const prog = progressOf(t);
                       const due = fmtDate(t.due_date);
                       const selected = profBulk.has(t.id);
+                      const num = numById[t.id];
                       return (
                         <motion.div
                           key={t.id}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: Math.min(i * 0.03, 0.3) }}
-                          onClick={() => (profBulk.selectMode ? profBulk.toggle(t.id) : jumpToTask(t.id))}
+                          onClick={() => cardClick(t)}
                           role="button"
-                          className={`rounded-xl border bg-sertex-surface/60 p-4 transition-colors cursor-pointer ${selected ? "border-violet-400 ring-2 ring-violet-400 shadow-[0_0_16px_rgba(167,139,250,0.5)]" : "border-white/10 hover:border-sertex-cyan/40"}`}
+                          className={`rounded-xl border bg-sertex-surface/60 p-4 transition-colors ${view === "active" ? "cursor-pointer" : ""} ${selected ? "border-violet-400 ring-2 ring-violet-400 shadow-[0_0_16px_rgba(167,139,250,0.5)]" : "border-white/10 hover:border-sertex-cyan/40"}`}
                           data-testid={`prof-card-${t.id}`}
                         >
                           <div className="flex items-start justify-between gap-2 mb-1">
                             <div className="flex items-start gap-2 min-w-0">
-                              {profBulk.selectMode && (
+                              {view === "active" && profBulk.selectMode && (
                                 <button
                                   type="button"
                                   onClick={(e) => { e.stopPropagation(); profBulk.toggle(t.id); }}
@@ -424,7 +593,10 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                                   {selected ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3 w-3" />}
                                 </button>
                               )}
-                              <div className="text-sertex-text font-semibold leading-snug line-clamp-2">{t.title}</div>
+                              <div className="text-sertex-text font-semibold leading-snug line-clamp-2">
+                                {view === "active" && num != null && <span className="text-sertex-cyan tabular-nums font-mono mr-1">{num}.</span>}
+                                {t.title}
+                              </div>
                             </div>
                             {t.assignee_name && (
                               <div className="h-6 w-6 shrink-0 rounded-full bg-white/10 flex items-center justify-center text-[10px] text-sertex-textSecondary" title={t.assignee_name}>
@@ -456,6 +628,26 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                             <div className="h-full rounded-full" style={{ width: `${prog}%`, background: "rgb(var(--sx-accent-rgb))" }} />
                           </div>
                           <div className="text-right hud-text text-sertex-textMuted normal-case tracking-normal mt-1">%{prog}</div>
+
+                          {/* Hızlı aksiyonlar */}
+                          {view === "active" && !profBulk.selectMode && (
+                            <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-white/5" onClick={(e) => e.stopPropagation()}>
+                              <button type="button" onClick={() => actions.setStatus(t.id, "done")} data-testid={`prof-complete-${t.id}`} className="flex items-center gap-1 px-2 py-1 rounded-md border border-emerald-400/40 text-emerald-300 hover:bg-emerald-400/10 text-[11px] transition-colors"><Check className="h-3 w-3" /> Tamamla</button>
+                              <button type="button" onClick={() => actions.nudge(t.id)} data-testid={`prof-nudge-${t.id}`} title="Dürt" className="flex items-center gap-1 px-2 py-1 rounded-md border border-white/10 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/40 text-[11px] transition-colors"><Send className="h-3 w-3" /> Dürt</button>
+                              <button type="button" onClick={() => jumpToTask(t.id)} data-testid={`prof-jump-${t.id}`} title="Detaylı görünümde aç" className="ml-auto flex items-center gap-1 px-2 py-1 rounded-md border border-white/10 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/40 text-[11px] transition-colors"><Layers className="h-3 w-3" /> Aç</button>
+                            </div>
+                          )}
+                          {view === "archived" && (
+                            <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-white/5" onClick={(e) => e.stopPropagation()}>
+                              <button type="button" onClick={() => actions.setArchived(t.id, false)} data-testid={`prof-restore-${t.id}`} className="flex items-center gap-1 px-2 py-1 rounded-md border border-sertex-cyan/40 text-sertex-cyan hover:bg-sertex-cyan/10 text-[11px] transition-colors"><RotateCcw className="h-3 w-3" /> Arşivden Çıkar</button>
+                            </div>
+                          )}
+                          {view === "trash" && (
+                            <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-white/5" onClick={(e) => e.stopPropagation()}>
+                              <button type="button" onClick={() => actions.restoreTask(t.id)} data-testid={`prof-restore-${t.id}`} className="flex items-center gap-1 px-2 py-1 rounded-md border border-sertex-cyan/40 text-sertex-cyan hover:bg-sertex-cyan/10 text-[11px] transition-colors"><RotateCcw className="h-3 w-3" /> Geri Yükle</button>
+                              <button type="button" onClick={() => actions.permanentDeleteTask(t.id)} data-testid={`prof-permdelete-${t.id}`} className="flex items-center gap-1 px-2 py-1 rounded-md border border-rose-500/40 text-rose-300 hover:bg-rose-500/15 text-[11px] transition-colors"><Trash2 className="h-3 w-3" /> Kalıcı Sil</button>
+                            </div>
+                          )}
                         </motion.div>
                       );
                     })}
@@ -515,7 +707,53 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
           testPrefix="prof-add"
           cats={cats}
           onClose={() => setAdding(false)}
-          onCreated={load}
+          onCreated={reloadAll}
+        />
+      )}
+
+      {openTask && (
+        <TaskCardModal cardProps={actions.cardPropsFor(openTask)} onClose={() => setOpenId(null)} />
+      )}
+      {actions.modalsElement}
+
+      {showCats && (
+        <div className="fixed inset-0 z-[110] flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm p-4 sm:p-8" onClick={() => { setShowCats(false); reloadAll(); }} data-testid="prof-cats-modal">
+          <div className="relative w-full max-w-3xl my-auto glass-panel corner-bracket border border-sertex-cyan/30 rounded-xl p-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="hud-text text-sertex-cyan flex items-center gap-1.5"><Tag className="h-3.5 w-3.5" /> İŞ KOLLARINI YÖNET</div>
+              <button type="button" onClick={() => { setShowCats(false); reloadAll(); }} data-testid="prof-cats-close" className="h-7 w-7 flex items-center justify-center rounded-full border border-sertex-cyan/40 text-sertex-cyan hover:bg-sertex-cyan/10"><X className="h-4 w-4" /></button>
+            </div>
+            <TaskCategoriesManagement />
+          </div>
+        </div>
+      )}
+
+      {showTemplates && (
+        <TemplatesModal
+          categories={cats}
+          currentUser={user}
+          onClose={() => { setShowTemplates(false); setTemplateRefresh((n) => n + 1); }}
+          onUse={actions.handleUseTemplate}
+        />
+      )}
+
+      {pasteMenu && actions.clipboard?.sourceId && (
+        <TaskPasteMenu
+          x={pasteMenu.x}
+          y={pasteMenu.y}
+          title={actions.clipboard.title}
+          targetName={catFilter ? (catFilter === "__none__" ? "Kolsuz" : (catName(catFilter) || "İş Kolu")) : "Kolsuz"}
+          onPaste={() => actions.handlePaste(catFilter && catFilter !== "__none__" ? catFilter : null, catFilter && catFilter !== "__none__" ? catName(catFilter) : "Kolsuz")}
+          onClear={() => actions.clearTaskClipboard()}
+          onClose={() => setPasteMenu(null)}
+        />
+      )}
+
+      {showExport && (
+        <ExportSelectModal
+          tasks={gridTasks}
+          categories={cats}
+          onClose={() => setShowExport(false)}
         />
       )}
     </div>

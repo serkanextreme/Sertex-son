@@ -149,8 +149,53 @@ export function useTaskActions({ tasks = [], setTasks, cats = [], groups = [], u
   };
   const copyTaskToClipboard = (t) => {
     setTaskClipboard({ sourceId: t.id, title: t.title, includeSubtasks: (t.subtasks || []).length > 0, includeAttachments: true });
-    toast.success(`Panoya kopyalandı: ${t.title} — Detaylı/Kolay görünümde bir iş koluna Yapıştır'ı seçin.`);
+    toast.success(`Panoya kopyalandı: ${t.title} — bir iş koluna Yapıştır'ı seçin.`);
   };
+
+  const nudge = async (id, message = "") => {
+    try { await tasksApi.nudge(id, message); toast.success("Dürtme gönderildi"); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Dürtülemedi"); }
+  };
+  const uncancelTask = async (id) => {
+    try { await tasksApi.uncancel(id); toast.success("İptal geri alındı"); refresh(); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Geri alınamadı"); }
+  };
+  const restoreTask = async (id) => {
+    try { await tasksApi.restore(id); toast.success("Görev geri yüklendi"); refresh(); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Geri yüklenemedi"); }
+  };
+  const permanentDeleteTask = async (id) => {
+    const t = tasks.find((x) => x.id === id);
+    const ok = await confirmDialog({ title: "KALICI SİL", message: `"${t?.title || "Görev"}" KALICI olarak silinsin mi? Bu işlem geri alınamaz.`, confirmText: "KALICI SİL", cancelText: "VAZGEÇ", danger: true });
+    if (!ok) return;
+    try { await tasksApi.permanentDelete(id); toast.success("Kalıcı olarak silindi"); refresh(); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Silinemedi"); }
+  };
+  const emptyTrash = async (scope = "mine") => {
+    const ok = await confirmDialog({ title: "ÇÖPÜ BOŞALT", message: "Çöp kutusundaki tüm görevler KALICI silinsin mi? Bu işlem geri alınamaz.", confirmText: "BOŞALT", cancelText: "VAZGEÇ", danger: true });
+    if (!ok) return;
+    try { const r = await tasksApi.emptyTrash(scope); toast.success(`${r?.deleted ?? 0} görev kalıcı silindi`); refresh(); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Boşaltılamadı"); }
+  };
+  const dissolveGroup = async (group) => {
+    const gid = group?.id || group;
+    const ok = await confirmDialog({ title: "GRUBU DAĞIT", message: "Bu grup dağıtılsın mı? Görevler bağımsız kalır.", confirmText: "DAĞIT", cancelText: "VAZGEÇ" });
+    if (!ok) return;
+    try { await tasksApi.deleteGroup(gid); toast.success("Grup dağıtıldı"); refresh(); }
+    catch (e) { toast.error(e?.response?.data?.detail || "Dağıtılamadı"); }
+  };
+  const handlePaste = async (categoryId, categoryName) => {
+    if (!clipboard?.sourceId) return;
+    try {
+      await tasksApi.duplicate(clipboard.sourceId, {
+        include_subtasks: !!clipboard.includeSubtasks,
+        include_attachments: !!clipboard.includeAttachments,
+        category_id: categoryId || null,
+      });
+      toast.success(`Yapıştırıldı → ${categoryName || "Kolsuz"}`); refresh();
+    } catch (e) { toast.error(e?.response?.data?.detail || "Yapıştırılamadı"); }
+  };
+  const handleUseTemplate = (task) => { refresh(); if (task) setEditing(task); };
 
   // İç içe promote için görsel liste (promoted_from_task_id ile).
   const promotedChildrenMap = useMemo(() => {
@@ -225,5 +270,5 @@ export function useTaskActions({ tasks = [], setTasks, cats = [], groups = [], u
     </>
   );
 
-  return { cardPropsFor, modalsElement, collapsedIds, toggleCollapse, reminderConfig, clipboard, clearTaskClipboard, setStatus, setArchived, removeTask, setTaskCategory };
+  return { cardPropsFor, modalsElement, collapsedIds, toggleCollapse, reminderConfig, clipboard, clearTaskClipboard, setStatus, setArchived, removeTask, setTaskCategory, setEditing, nudge, cancelTask, uncancelTask, restoreTask, permanentDeleteTask, emptyTrash, dissolveGroup, handlePaste, handleUseTemplate };
 }
