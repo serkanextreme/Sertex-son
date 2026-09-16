@@ -157,8 +157,10 @@ export const tasksApi = {
   reassign: (id, new_owner_user_id) =>
     api.post(`/tasks/${id}/reassign`, { new_owner_user_id }).then((r) => r.data),
   // Alt görevi tam bir göreve dönüştür (promote).
-  promoteSubtask: (id, subId) =>
-    api.post(`/tasks/${id}/subtasks/${subId}/promote`).then((r) => r.data),
+  promoteSubtask: (id, subId, moveChildIds = null) =>
+    api
+      .post(`/tasks/${id}/subtasks/${subId}/promote`, { move_child_ids: moveChildIds })
+      .then((r) => r.data),
   // Görevi geri ana görevin alt görevine dönüştür (promote'u geri al).
   demoteToSubtask: (id) =>
     api.post(`/tasks/${id}/demote-to-subtask`).then((r) => r.data),

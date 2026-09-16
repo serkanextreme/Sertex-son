@@ -114,6 +114,9 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
   const [newSub, setNewSub] = useState("");
   const [showSubInput, setShowSubInput] = useState(false);
   const [subCtx, setSubCtx] = useState(null); // { id, x, y }
+  // Göreve dönüştür — çocuklu alt görevde seçim penceresi.
+  const [promoteTarget, setPromoteTarget] = useState(null); // { id, text, children }
+  const [promoteChecked, setPromoteChecked] = useState(new Set());
   // İç içe alt görev ekleme — hangi alt görevin altına ekleniyor (id) + metin.
   const [addChildParent, setAddChildParent] = useState(null);
   const [newChildText, setNewChildText] = useState("");
@@ -196,7 +199,16 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
       return;
     }
     if (action === "promote") {
-      if (id && onPromoteSubtask) onPromoteSubtask(id);
+      if (!id || !onPromoteSubtask) return;
+      const node = findSubById(subtasks, id);
+      const kids = (node && node.children) || [];
+      if (kids.length) {
+        // Çocuğu var → seçim penceresi aç (varsayılan: hepsi işaretli = hepsi taşınır).
+        setPromoteTarget({ id, text: node.text, children: kids });
+        setPromoteChecked(new Set(kids.map((c) => c.id)));
+      } else {
+        onPromoteSubtask(id, []); // çocuk yok → anında dönüştür
+      }
       return;
     }
     if (action === "pin-number") {
@@ -1285,6 +1297,93 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
           />
         )}
       </AnimatePresence>
+        {promoteTarget &&
+          createPortal(
+            <div
+              className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+              onClick={() => setPromoteTarget(null)}
+              data-testid="promote-dialog"
+            >
+              <div
+                className="w-[min(420px,92vw)] max-h-[80vh] overflow-y-auto scrollbar-sertex rounded-lg border border-sertex-cyan/40 bg-sertex-surface p-4 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-2 mb-1 text-sertex-cyan font-mono">
+                  <CornerLeftUp className="h-4 w-4" /> GÖREVE DÖNÜŞTÜR
+                </div>
+                <div className="text-xs text-sertex-textMuted mb-3">
+                  <span className="text-sertex-text font-semibold">"{promoteTarget.text}"</span> ayrı bir göreve dönüşecek. Hangi alt görevleri de yanında taşısın?
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="hud-text text-sertex-textMuted">
+                    {promoteChecked.size}/{promoteTarget.children.length} seçili
+                  </span>
+                  <button
+                    onClick={() =>
+                      setPromoteChecked((prev) =>
+                        prev.size === promoteTarget.children.length
+                          ? new Set()
+                          : new Set(promoteTarget.children.map((c) => c.id)),
+                      )
+                    }
+                    data-testid="promote-toggle-all"
+                    className="hud-text px-2 py-0.5 rounded border border-sertex-cyan/30 text-sertex-cyan hover:bg-sertex-cyan/10"
+                  >
+                    Tümünü Seç/Kaldır
+                  </button>
+                </div>
+                <div className="space-y-1 mb-4">
+                  {promoteTarget.children.map((c) => {
+                    const checked = promoteChecked.has(c.id);
+                    const deep = flattenSubs(c.children || []).length;
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() =>
+                          setPromoteChecked((prev) => {
+                            const n = new Set(prev);
+                            if (n.has(c.id)) n.delete(c.id);
+                            else n.add(c.id);
+                            return n;
+                          })
+                        }
+                        data-testid={`promote-opt-${c.id}`}
+                        className={`w-full flex items-center gap-2 text-left px-2 py-1.5 rounded border transition-colors ${checked ? "border-violet-400 bg-violet-500/15" : "border-white/10 hover:border-sertex-cyan/30"}`}
+                      >
+                        <span className={`h-4 w-4 rounded-sm border flex items-center justify-center shrink-0 ${checked ? "border-violet-400 bg-violet-500/50" : "border-sertex-cyan/40"}`}>
+                          {checked && <Check className="h-3 w-3 text-white" />}
+                        </span>
+                        <span className="flex-1 min-w-0 text-xs font-mono text-sertex-text truncate">{c.text}</span>
+                        {deep > 0 && (
+                          <span className="hud-text text-violet-300/70 shrink-0" title="Bu alt görevin iç görevleri de birlikte taşınır">↳ {deep} iç görev</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => setPromoteTarget(null)}
+                    data-testid="promote-cancel"
+                    className="hud-text px-3 py-1 rounded border border-white/15 text-sertex-textMuted hover:text-sertex-text"
+                  >
+                    Vazgeç
+                  </button>
+                  <button
+                    onClick={() => {
+                      onPromoteSubtask(promoteTarget.id, Array.from(promoteChecked));
+                      setPromoteTarget(null);
+                    }}
+                    data-testid="promote-confirm"
+                    className="hud-text px-3 py-1 rounded border border-sertex-cyan/50 bg-sertex-cyan/15 text-sertex-cyan hover:bg-sertex-cyan/25"
+                  >
+                    Dönüştür
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body,
+          )}
       {childCtx && createPortal(
         <div
           className="fixed inset-0 z-[100]"

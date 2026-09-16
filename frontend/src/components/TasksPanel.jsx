@@ -1061,9 +1061,9 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
 
   // Alt görevi tam bir göreve dönüştür (promote) → sunucuda oluştur + listeyi
   // yenile. Ana görevden alt görev çıkar; yeni görev "alt unsuru" rozetli gelir.
-  const promoteSubtask = async (taskId, subId) => {
+  const promoteSubtask = async (taskId, subId, moveChildIds = null) => {
     try {
-      const created = await tasksApi.promoteSubtask(taskId, subId);
+      const created = await tasksApi.promoteSubtask(taskId, subId, moveChildIds);
       toast.success(`Alt görev göreve dönüştürüldü: ${created?.title || ""}`);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Göreve dönüştürülemedi");
@@ -1480,7 +1480,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
     onSetArchived: (v) => setArchived(t.id, v),
     onReassign: (uid) => reassignTask(t.id, uid),
     onTransferCompany: (cid) => transferTaskToCompany(t.id, cid),
-    onPromoteSubtask: (subId) => promoteSubtask(t.id, subId),
+    onPromoteSubtask: (subId, moveChildIds) => promoteSubtask(t.id, subId, moveChildIds),
     onDemoteToSubtask: () => demoteToSubtask(t.id),
     onDemoteChild: (childId) => demoteToSubtask(childId),
     onPinNumber: (number) => setTaskPin(t.id, true, number),
@@ -2914,7 +2914,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
                   onSetArchived={(v) => setArchived(t.id, v)}
                   onReassign={(uid) => reassignTask(t.id, uid)}
                   onTransferCompany={(cid) => transferTaskToCompany(t.id, cid)}
-                  onPromoteSubtask={(subId) => promoteSubtask(t.id, subId)}
+                  onPromoteSubtask={(subId, moveChildIds) => promoteSubtask(t.id, subId, moveChildIds)}
                   onDemoteToSubtask={() => demoteToSubtask(t.id)}
                   onDemoteChild={(childId) => demoteToSubtask(childId)}
                   onPinNumber={(number) => setTaskPin(t.id, true, number)}
@@ -3023,7 +3023,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
               onSetArchived={(v) => setArchived(t.id, v)}
               onReassign={(uid) => reassignTask(t.id, uid)}
               onTransferCompany={(cid) => transferTaskToCompany(t.id, cid)}
-              onPromoteSubtask={(subId) => promoteSubtask(t.id, subId)}
+              onPromoteSubtask={(subId, moveChildIds) => promoteSubtask(t.id, subId, moveChildIds)}
               onDemoteToSubtask={() => demoteToSubtask(t.id)}
               onDemoteChild={(childId) => demoteToSubtask(childId)}
               onPinNumber={(number) => setTaskPin(t.id, true, number)}

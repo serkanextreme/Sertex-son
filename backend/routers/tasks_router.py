@@ -1519,20 +1519,69 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
 
 
     @router.post("/tasks/{tid}/subtasks/{sub_id}/promote", response_model=Task)
-    async def promote_subtask_to_task(tid: str, sub_id: str, user: dict = Depends(licensed_user_dep)):
-        """Alt görevi tam bir GÖREVE dönüştür. Metin/tarih/durum korunur; ana
-        görevin sahibi/şirketi/iş kolu miras alınır; `promoted_from_task_*` ile
-        ana göreve bağ kurulur ('‹Ana görev› görevinin alt unsuru' rozeti).
-        Alt görev, ana görevden çıkarılır."""
+    async def promote_subtask_to_task(
+        tid: str,
+        sub_id: str,
+        move_child_ids: Optional[List[str]] = Body(default=None, embed=True),
+        user: dict = Depends(licensed_user_dep),
+    ):
+        """Alt görevi tam bir GÖREVE dönüştür (HER DERİNLİKTE / iç içe destekli).
+        Metin/tarih/durum korunur; ana görevin sahibi/şirketi/iş kolu miras alınır;
+        `promoted_from_task_*` ile ana göreve bağ kurulur. Alt görev ana görevden
+        çıkarılır. `move_child_ids`: yeni göreve TAŞINACAK doğrudan çocukların id'leri
+        (her biri kendi alt ağacıyla taşınır); None → tüm çocuklar taşınır; [] → hiçbiri.
+        Seçilmeyen çocuklar alt görevin ESKİ yerine (üst düğümün altına) geri biner."""
         doc = await db.tasks.find_one({"id": tid}, {"_id": 0})
         if not doc or not await _can_view_task(doc, user):
             raise HTTPException(status_code=404, detail="Görev bulunamadı")
         # Alt görev listesi değişiyor → düzenleme kilidi kontrolü.
         await _check_task_lock(doc, user, ["lock_edit"])
         subs = doc.get("subtasks") or []
-        sub = next((s for s in subs if s.get("id") == sub_id), None)
+
+        # Hedef alt görevi ağaçta özyinelemeli bul (metin/durum/tarih için).
+        def _find(nodes):
+            for n in nodes:
+                if n.get("id") == sub_id:
+                    return n
+                kids = n.get("children")
+                if isinstance(kids, list) and kids:
+                    r = _find(kids)
+                    if r:
+                        return r
+            return None
+
+        sub = _find(subs)
         if not sub:
             raise HTTPException(status_code=404, detail="Alt görev bulunamadı")
+
+        # Hedefi çıkar + çocukları taşınan/kalan olarak ayır (özyinelemeli).
+        move_set = None if move_child_ids is None else set(move_child_ids)
+
+        def _split(nodes):
+            new_nodes = []
+            moved = None
+            found = False
+            for n in nodes:
+                if n.get("id") == sub_id:
+                    found = True
+                    children = n.get("children") or []
+                    moved = [c for c in children if (move_set is None or c.get("id") in move_set)]
+                    stay = [c for c in children if not (move_set is None or c.get("id") in move_set)]
+                    new_nodes.extend(stay)  # seçilmeyen çocuklar eski yere biner
+                else:
+                    kids = n.get("children")
+                    if isinstance(kids, list) and kids:
+                        sub_new, sub_moved, sub_found = _split(kids)
+                        if sub_found:
+                            found = True
+                            moved = sub_moved
+                            n = {**n, "children": sub_new}
+                    new_nodes.append(n)
+            return new_nodes, moved, found
+
+        remaining, moved_children, _found = _split(subs)
+        moved_children = moved_children or []
+
         now = _now_iso()
         status = sub.get("status") or ("done" if sub.get("done") else "pending")
         if status not in ("pending", "paused", "overdue", "done"):
@@ -1549,16 +1598,17 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
             created_by=user["id"],
             promoted_from_task_id=tid,
             promoted_from_task_title=doc.get("title"),
+            subtasks=[Subtask(**c) for c in moved_children],  # seçilen çocuklar yeni göreve taşınır
         )
         if status == "done":
             t.completed_at = now
         td = t.model_dump()
         td["user_id"] = owner_id
         await db.tasks.insert_one(td)
-        # Alt görevi ana görevden kaldır.
+        # Alt görevi ana görevden kaldır (seçilmeyen çocuklar 'remaining' içinde kaldı).
         await db.tasks.update_one(
             {"id": tid},
-            {"$set": {"subtasks": [s for s in subs if s.get("id") != sub_id], "updated_at": now}},
+            {"$set": {"subtasks": remaining, "updated_at": now}},
         )
         return Task(**td)
 

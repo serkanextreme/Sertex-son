@@ -2757,3 +2757,16 @@ Kullanıcı isteği: Alt görevin altına da alt görev (sınırsız iç içe), 
 **⚠️ ÖNEMLİ DERS — CRA/babel sonsuz döngü:** Aynı DOSYADA karşılıklı/kendine JSX-referanslı iki bileşen (SubtaskRow ↔ SubtaskTree) webpack babel-loader'da `RangeError: Maximum call stack size exceeded` verdi (izole babel geçse de). ÇÖZÜM: özyinelemeyi İKİ AYRI DOSYAYA böl (SubtaskRow.jsx + SubtaskTree.jsx birbirini import eder). Gelecekte iç içe/recursive bileşenleri ayrı dosyalara koy.
 **E2E (canlı, güvenli):** ZZTEST_NESTED (3 seviye) API round-trip ✓; UI'da girintili render + menüden "Alt görev ekle" (kalıcı) ✓; ZZTEST_NESTED2'de "Tümünü Seç"=4 + toplu Tamamla → 4/4 done (API teyit) ✓. Tüm test görevleri kalıcı silindi (404).
 **Bilinen küçük sınır:** İç içe bir alt görevde "Göreve dönüştür" (promote) backend'de top-level id aradığı için nested'te çalışmayabilir (edge-case; ana CRUD etkilenmez).
+
+## ✅ NESTED PROMOTE — seçmeli "Göreve Dönüştür" (2026-06 · fork) TAMAMLANDI
+Kullanıcı isteği: İç içe (her derinlikteki) alt görevi de "Göreve dönüştür" ile tam göreve çevirebilme; çocuklu ise SEÇİM penceresi çıksın — işaretlenen çocuklar yeni göreve taşınsın, işaretlenmeyenler eski görevde kalsın.
+**Backend** (`tasks_router.py` promote endpoint):
+- Hedef alt görevi ağaçta ÖZYİNELEMELİ bulur (`_find`), her derinlikte çalışır.
+- Body: `move_child_ids: Optional[List[str]]` (Body embed). None→tüm çocuklar taşınır; []→hiçbiri; [...]→seçilenler.
+- `_split`: hedefi ağaçtan çıkarır; seçilen çocuklar yeni görevin `subtasks`'ine (alt ağaçlarıyla) taşınır; seçilmeyenler hedefin ESKİ yerine (üst düğümün altına) splice edilir.
+**Frontend**:
+- `api.js promoteSubtask(id, subId, moveChildIds)` body gönderir. TasksPanel 3 çağrı yeri + `onPromoteSubtask(subId, moveChildIds)` güncellendi.
+- `TaskCard`: promote → çocuğu varsa SEÇİM MODALI (varsayılan hepsi işaretli, Tümünü Seç/Kaldır, her çocukta "↳ N iç görev" ipucu, Vazgeç/Dönüştür); çocuğu yoksa anında dönüşür. Granülerlik = DOĞRUDAN çocuklar (her biri alt ağacıyla taşınır) — orphan/yetim düğüm oluşmaz.
+**⚠️ ÖNEMLİ DERS — AnimatePresence + createPortal:** Promote dialog başta `<AnimatePresence>` İÇİNDE doğrudan `createPortal(...)` çocuğu olarak konmuştu → AnimatePresence portal çocuğunu render ETMEDİ (handler çalışıp state set oluyordu ama DOM'da yoktu, hata da vermiyordu). ÇÖZÜM: portal/dialog'ları `</AnimatePresence>` DIŞINA koy (childCtx portalı gibi). Gelecekte: createPortal/modal'ları AnimatePresence dışına yerleştir.
+**E2E (canlı, güvenli):** API — üst düzey promote sadece 1 çocukla (seçmeli) ✓; iç içe (2 seviye derin) düğüm promote özyinelemeli bulundu+taşındı ✓. UI — seçim modalı açıldı, Cocuk2 kaldırıldı → yeni görevde sadece Cocuk1, orijinalde Cocuk2 kaldı, "BU GÖREVDEN ÇIKANLAR" bağı kuruldu (API teyit) ✓. Tüm test görevleri kalıcı silindi (0 kaldı).
+**Sıradaki (kullanıcının seçtiği kalan işler):** Alt Görev Katla (collapse/expand), Teknik Arayüz, Aydınlık Arayüz.
