@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef } from "react";
 import { Reorder, useDragControls } from "framer-motion";
-import { Check, Pause, MoreVertical, Clock, AlertTriangle, Bell, GripVertical, Anchor, Circle, CheckCircle2, CornerDownRight } from "lucide-react";
+import { Check, Pause, MoreVertical, Clock, AlertTriangle, Bell, GripVertical, Anchor, Circle, CheckCircle2, CornerDownRight, ChevronRight, ChevronDown } from "lucide-react";
 import { Highlight } from "./tasks/Highlight";
 import { SubtaskTree } from "./SubtaskTree";
+import { flattenSubs } from "../lib/subtaskTree";
 
 const subIsOverdue = (s) => {
   if (s.done || s.status === "done" || s.status === "paused") return false;
@@ -25,6 +26,7 @@ const subtaskStyle = (s) => {
 };
 
 export const SUBTASK_SIZE_KEY_PREFIX = "sertex_subtask_size_";
+export const SUBTASK_COLLAPSE_KEY_PREFIX = "sertex_subtask_collapsed_";
 
 // ============ SUBTASK ROW (id-based, recursive, drag-and-drop) ============
 // Her satır: kendi içeriği + (varsa) iç içe çocukları (SubtaskTree ile).
@@ -41,6 +43,31 @@ export function SubtaskRow({ sub, depth = 0, ctx }) {
   const number = numbers[sub.id];
   const selected = selectedIds.has(sub.id);
   const hasChildren = Array.isArray(sub.children) && sub.children.length > 0;
+  // İç görev istatistiği (rozet) + katla/aç durumu (localStorage'da kalıcı).
+  const childStats = hasChildren
+    ? (() => {
+        const flat = flattenSubs(sub.children);
+        return { done: flat.filter((s) => s.done || s.status === "done").length, total: flat.length };
+      })()
+    : { done: 0, total: 0 };
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(SUBTASK_COLLAPSE_KEY_PREFIX + sub.id) === "1";
+    } catch (e) {
+      return false;
+    }
+  });
+  const toggleCollapse = (e) => {
+    if (e) e.stopPropagation();
+    setCollapsed((v) => {
+      const nv = !v;
+      try {
+        if (nv) localStorage.setItem(SUBTASK_COLLAPSE_KEY_PREFIX + sub.id, "1");
+        else localStorage.removeItem(SUBTASK_COLLAPSE_KEY_PREFIX + sub.id);
+      } catch (er) { console.warn("[SubtaskRow] collapse save failed:", er); }
+      return nv;
+    });
+  };
   const rowRef = useRef(null);
   const persistTimer = useRef(null);
   const longPress = useRef(null);
@@ -117,6 +144,19 @@ export function SubtaskRow({ sub, depth = 0, ctx }) {
         onTouchMove={() => clearTimeout(longPress.current)}
         data-testid={`subtask-row-${taskId}-${sub.id}`}
       >
+        {hasChildren ? (
+          <button
+            onClick={toggleCollapse}
+            data-testid={`subtask-collapse-${taskId}-${sub.id}`}
+            title={collapsed ? "Genişlet" : "Katla"}
+            aria-label={collapsed ? "Genişlet" : "Katla"}
+            className="shrink-0 mt-0.5 h-4 w-3 flex items-center justify-center text-violet-300 hover:text-violet-100 transition-colors"
+          >
+            {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </button>
+        ) : (
+          <span className="shrink-0 w-3" aria-hidden="true" />
+        )}
         <button
           onPointerDown={(e) => { e.preventDefault(); controls.start(e); }}
           data-testid={`subtask-drag-${taskId}-${sub.id}`}
@@ -175,8 +215,13 @@ export function SubtaskRow({ sub, depth = 0, ctx }) {
             )}
             <Highlight text={sub.text} query={highlight} />
             {hasChildren && (
-              <span className="ml-1.5 text-[9px] text-violet-300/70 font-mono" title="İç içe alt görev sayısı">
-                ↳ {sub.children.length}
+              <span
+                className={`ml-1.5 text-[9px] font-mono px-1 rounded ${childStats.done === childStats.total ? "text-emerald-300 bg-emerald-500/15" : "text-violet-200 bg-violet-500/15"}`}
+                data-testid={`subtask-childbadge-${taskId}-${sub.id}`}
+                title={`${childStats.done}/${childStats.total} iç görev tamamlandı${collapsed ? " (katlı)" : ""}`}
+              >
+                ↳ {childStats.done}/{childStats.total}
+                {collapsed && " ▸"}
               </span>
             )}
           </span>
@@ -242,8 +287,8 @@ export function SubtaskRow({ sub, depth = 0, ctx }) {
         </div>
       )}
 
-      {/* Çocuklar — özyinelemeli, girintili (SubtaskTree ayrı dosyada) */}
-      {hasChildren && (
+      {/* Çocuklar — özyinelemeli, girintili (katlıysa gizli) */}
+      {hasChildren && !collapsed && (
         <div className="ml-4 pl-1.5 border-l border-sertex-cyan/15">
           <SubtaskTree nodes={sub.children} parentId={sub.id} depth={depth + 1} ctx={ctx} />
         </div>

@@ -2,32 +2,50 @@ import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   LayoutDashboard, ListTodo, StickyNote, FolderOpen, Settings as SettingsIcon,
-  Users, Plus, Search, Check, Layers, Bell,
+  Users, Plus, Search, Check, Layers, Bell, ListChecks, CheckCircle2, Circle, ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { tasksApi, taskCategoriesApi } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { setInterfaceMode } from "../lib/appearance";
 import { isActive, bucketOf, fmtDate, matchesQuery, initials } from "../lib/interfaceHelpers";
+import { useTaskBulk } from "../lib/useTaskBulk";
+import { useTaskActions } from "../lib/useTaskActions";
+import { computeTaskNumbers } from "../lib/taskBulkActions";
+import { TaskBulkBar } from "./tasks/TaskBulkBar";
+import { TaskCardModal } from "./tasks/TaskCardModal";
+import { flattenSubs } from "../lib/subtaskTree";
 
 // AYDINLIK — açık tema. Tüm uygulama koyu; bu arayüz ferah beyaz zemin sunar.
-// Renkler bilinçli olarak açık paletle sabittir; vurgu (accent) değişkenden gelir.
+// Beyaz liste korunur; bir göreve tıklayınca KOYU tam görev kartı bir modal
+// içinde açılır (tüm gelişmiş özellikler: alt görevler, promote, kilit, menü).
 const C = { bg: "#eef2f7", card: "#ffffff", text: "#0f172a", muted: "#64748b", line: "#e2e8f0", sidebar: "#f8fafc" };
+
+const subCount = (t) => {
+  const subs = flattenSubs(Array.isArray(t.subtasks) ? t.subtasks : []);
+  if (!subs.length) return null;
+  const done = subs.filter((s) => s.done || s.status === "done").length;
+  return `${done}/${subs.length}`;
+};
 
 const AydinlikInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }) => {
   const { user, teamFeaturesVisible } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [cats, setCats] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [openId, setOpenId] = useState(null);
 
   const load = () => {
     Promise.all([
       tasksApi.list(false, "mine").catch(() => []),
       taskCategoriesApi.list("my_tasks").catch(() => []),
-    ]).then(([ts, cs]) => {
+      tasksApi.listGroups().catch(() => []),
+    ]).then(([ts, cs, gs]) => {
       setTasks(Array.isArray(ts) ? ts : []);
       setCats(Array.isArray(cs) ? cs : []);
+      setGroups(Array.isArray(gs) ? gs : []);
     }).finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, []);
@@ -37,13 +55,21 @@ const AydinlikInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobil
     () => tasks.filter(isActive).filter((t) => matchesQuery(t, q, catName)),
     [tasks, cats, q]
   );
+  const numById = useMemo(() => computeTaskNumbers(rows), [rows]);
+  const openTask = tasks.find((t) => t.id === openId) || null;
 
-  const complete = async (id) => {
-    try {
-      await tasksApi.setStatus(id, "done");
-      setTasks((p) => p.map((t) => (t.id === id ? { ...t, status: "done" } : t)));
-      toast.success("Görev tamamlandı");
-    } catch { toast.error("Hata"); }
+  const actions = useTaskActions({ tasks, setTasks, cats, groups, user, load, numberFor: (id) => numById[id], highlight: q });
+  const bulk = useTaskBulk({ numberFor: (id) => numById[id], refresh: load });
+
+  useEffect(() => {
+    if (openId && (!openTask || openTask.status === "done" || openTask.archived || openTask.deleted)) {
+      setOpenId(null);
+    }
+  }, [openId, openTask]);
+
+  const cardClick = (t) => {
+    if (bulk.selectMode) { bulk.toggle(t.id); return; }
+    setOpenId(t.id);
   };
 
   const NAV = [
@@ -113,20 +139,46 @@ const AydinlikInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobil
           </div>
 
           <div className="flex-1 overflow-y-auto p-6">
-            <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
               <div>
                 <div className="text-xs" style={{ color: C.muted }}>{new Date().toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" })}</div>
                 <h1 className="text-2xl font-bold mt-0.5">Görevlerin</h1>
               </div>
-              <button
-                onClick={() => onOpenSection?.("tasks")}
-                data-testid="aydinlik-add-task"
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white"
-                style={{ background: "rgb(var(--sx-accent-rgb))" }}
-              >
-                <Plus className="h-4 w-4" /> Yeni Görev
-              </button>
+              <div className="flex items-center gap-2">
+                {!bulk.selectMode && rows.length > 0 && (
+                  <button
+                    onClick={() => bulk.start()}
+                    data-testid="aydinlik-bulk-select"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold"
+                    style={{ border: "1px solid rgb(139 92 246 / 0.5)", color: "#7c3aed", background: "rgb(139 92 246 / 0.08)" }}
+                  >
+                    <ListChecks className="h-4 w-4" /> Seç
+                  </button>
+                )}
+                <button
+                  onClick={() => onOpenSection?.("tasks")}
+                  data-testid="aydinlik-add-task"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white"
+                  style={{ background: "rgb(var(--sx-accent-rgb))" }}
+                >
+                  <Plus className="h-4 w-4" /> Yeni Görev
+                </button>
+              </div>
             </div>
+
+            {bulk.selectMode && (
+              <div className="mb-3">
+                <TaskBulkBar
+                  count={bulk.ids.length}
+                  testPrefix="aydinlik-bulk"
+                  categories={cats}
+                  onSelectAll={() => bulk.selectAll(rows.map((t) => t.id))}
+                  onClear={bulk.clear}
+                  onCancel={bulk.exit}
+                  onAction={bulk.runAction}
+                />
+              </div>
+            )}
 
             {loading ? (
               <div className="py-10 text-center text-sm" style={{ color: C.muted }} data-testid="aydinlik-loading">Yükleniyor...</div>
@@ -141,36 +193,57 @@ const AydinlikInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobil
                   const b = bucketOf(t);
                   const bc = b.color === "accent" ? "rgb(var(--sx-accent-rgb))" : b.color;
                   const due = fmtDate(t.due_date);
+                  const selected = bulk.has(t.id);
+                  const sc = subCount(t);
                   return (
                     <motion.div
                       key={t.id}
                       initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: Math.min(i * 0.03, 0.3) }}
-                      className="rounded-xl p-4 flex items-center gap-3"
-                      style={{ background: C.card, border: `1px solid ${C.line}`, boxShadow: "0 1px 3px rgba(15,23,42,0.06)" }}
+                      onClick={() => cardClick(t)}
+                      role="button"
+                      className="rounded-xl p-4 flex items-center gap-3 cursor-pointer transition-shadow"
+                      style={{ background: C.card, border: selected ? "1px solid #7c3aed" : `1px solid ${C.line}`, boxShadow: selected ? "0 0 0 3px rgba(124,58,237,0.25)" : "0 1px 3px rgba(15,23,42,0.06)" }}
                       data-testid={`aydinlik-card-${t.id}`}
                     >
-                      <button
-                        onClick={() => complete(t.id)}
-                        data-testid={`aydinlik-complete-${t.id}`}
-                        title="Tamamla"
-                        className="h-6 w-6 rounded-md shrink-0 flex items-center justify-center transition-colors"
-                        style={{ border: `2px solid ${C.muted}` }}
-                      >
-                        <Check className="h-3.5 w-3.5" style={{ color: C.muted }} />
-                      </button>
+                      {bulk.selectMode ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); bulk.toggle(t.id); }}
+                          data-testid={`aydinlik-select-${t.id}`}
+                          aria-label="Seç"
+                          className="h-6 w-6 rounded-full shrink-0 flex items-center justify-center"
+                          style={selected ? { background: "#7c3aed", color: "#fff" } : { border: `2px solid ${C.muted}`, color: C.muted }}
+                        >
+                          {selected ? <CheckCircle2 className="h-4 w-4" /> : <Circle className="h-3 w-3" />}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); actions.setStatus(t.id, "done"); }}
+                          data-testid={`aydinlik-complete-${t.id}`}
+                          title="Tamamla"
+                          className="h-6 w-6 rounded-md shrink-0 flex items-center justify-center transition-colors"
+                          style={{ border: `2px solid ${C.muted}` }}
+                        >
+                          <Check className="h-3.5 w-3.5" style={{ color: C.muted }} />
+                        </button>
+                      )}
                       <div className="flex-1 min-w-0">
-                        <div className="font-semibold truncate">{t.title}</div>
+                        <div className="font-semibold truncate">
+                          <span className="tabular-nums mr-1" style={{ color: "rgb(var(--sx-accent-rgb))" }}>{numById[t.id]}.</span>
+                          {t.title}
+                        </div>
                         <div className="flex items-center gap-2 mt-1 text-xs" style={{ color: C.muted }}>
                           {due && <span>Son tarih: {due}</span>}
                           {catName(t.category_id) && <span>· {catName(t.category_id)}</span>}
+                          {sc && <span>· Alt: {sc}</span>}
                         </div>
                       </div>
                       <span className="shrink-0 text-xs font-medium px-2 py-1 rounded-full" style={{ color: bc, background: `${b.color === "accent" ? "rgb(var(--sx-accent-rgb) / 0.12)" : bc + "22"}` }}>{b.label}</span>
                       {t.assignee_name && (
                         <div className="h-7 w-7 shrink-0 rounded-full flex items-center justify-center text-[10px] font-semibold" style={{ background: C.bg, color: C.muted }} title={t.assignee_name}>{initials(t.assignee_name)}</div>
                       )}
+                      {!bulk.selectMode && <ChevronRight className="h-4 w-4 shrink-0" style={{ color: C.muted }} />}
                     </motion.div>
                   );
                 })}
@@ -179,6 +252,11 @@ const AydinlikInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobil
           </div>
         </div>
       </div>
+
+      {openTask && (
+        <TaskCardModal cardProps={actions.cardPropsFor(openTask)} onClose={() => setOpenId(null)} />
+      )}
+      {actions.modalsElement}
     </div>
   );
 };
