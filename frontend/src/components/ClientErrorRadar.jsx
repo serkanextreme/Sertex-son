@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   AlertTriangle, RefreshCw, Trash2, Bug, Server, BellRing,
-  ChevronDown, ChevronRight, CheckCircle2, RotateCcw, Layers, List,
+  ChevronDown, ChevronRight, CheckCircle2, RotateCcw, Layers, List, BarChart3,
 } from "lucide-react";
 import { clientLogsApi } from "../lib/api";
 import { toast } from "sonner";
@@ -54,6 +54,55 @@ const StatCard = ({ label, value, sub, accent, testid }) => (
     {sub && <div className="text-[10px] font-mono text-sertex-textMuted mt-0.5 normal-case">{sub}</div>}
   </div>
 );
+
+// Son 7 gün günlük hata trendi — küçük çubuk grafik (HUD estetiği, ek bağımlılık yok).
+const ErrorTrendChart = ({ daily }) => {
+  const days = Array.isArray(daily) ? daily : [];
+  const weekTotal = days.reduce((s, d) => s + (d.count || 0), 0);
+  const max = Math.max(1, ...days.map((d) => d.count || 0));
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const wd = (iso) => {
+    try { return new Date(iso + "T00:00:00Z").toLocaleDateString("tr-TR", { weekday: "short", timeZone: "UTC" }); }
+    catch { return ""; }
+  };
+  return (
+    <div className="glass-panel corner-bracket p-3 border-orange-400/25" data-testid="error-radar-trend">
+      <div className="flex items-center justify-between mb-2">
+        <div className="hud-text text-orange-300 flex items-center gap-1.5">
+          <BarChart3 className="h-3 w-3" /> SON 7 GÜN · GÜNLÜK HATA
+        </div>
+        <span className="text-[10px] font-mono text-sertex-textMuted normal-case" data-testid="error-radar-trend-total">
+          {weekTotal} toplam
+        </span>
+      </div>
+      {days.length === 0 ? (
+        <div className="py-3 text-center text-[11px] font-mono text-sertex-textMuted normal-case">Veri yok</div>
+      ) : weekTotal === 0 ? (
+        <div className="py-3 text-center text-[11px] font-mono text-emerald-300 normal-case" data-testid="error-radar-trend-empty">Son 7 günde hata yok ✓</div>
+      ) : (
+        <div className="flex items-end justify-between gap-1.5 h-[68px]" data-testid="error-radar-trend-bars">
+          {days.map((d) => {
+            const isToday = d.date === todayStr;
+            const h = d.count > 0 ? Math.max(4, Math.round((d.count / max) * 48)) : 0;
+            return (
+              <div key={d.date} className="flex-1 flex flex-col items-center justify-end gap-1 min-w-0" data-testid={`error-radar-trend-day-${d.date}`}>
+                <span className={`text-[10px] font-mono tabular-nums leading-none ${d.count > 0 ? "text-orange-300" : "text-sertex-textMuted/40"}`}>{d.count}</span>
+                <div className="w-full flex items-end justify-center" style={{ height: 48 }}>
+                  <div
+                    className={`w-full max-w-[22px] rounded-t transition-all ${isToday ? "bg-sertex-cyan/70 border border-sertex-cyan" : "bg-orange-400/60"}`}
+                    style={{ height: `${h}px`, minHeight: d.count > 0 ? 4 : 0 }}
+                    title={`${wd(d.date)} · ${d.count} hata`}
+                  />
+                </div>
+                <span className={`hud-text leading-none ${isToday ? "text-sertex-cyan" : "text-sertex-textMuted"}`}>{wd(d.date)}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Chip = ({ active, onClick, children, testid }) => (
   <button
@@ -196,6 +245,9 @@ const ClientErrorRadar = () => {
           sub={`${total} toplam kayıt`}
         />
       </div>
+
+      {/* Son 7 gün günlük hata trendi */}
+      <ErrorTrendChart daily={data?.daily} />
 
       {/* Bildirim ayarı — ayarlanabilir cooldown */}
       <div className="glass-panel corner-bracket p-3 border-sertex-cyan/25 space-y-2.5" data-testid="error-radar-notify">

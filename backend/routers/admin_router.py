@@ -834,9 +834,24 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
         ).sort("created_at", -1).to_list(length=limit)
         total = await db.client_logs.count_documents({})
         active = await db.client_logs.count_documents({"resolved": {"$ne": True}})
-        cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        now = datetime.now(timezone.utc)
+        cutoff = (now - timedelta(hours=24)).isoformat()
         last_24h = await db.client_logs.count_documents({"created_at": {"$gte": cutoff}})
-        return {"logs": docs, "total": total, "active": active, "last_24h": last_24h}
+        # Son 7 gün günlük hata sayısı (UTC gününe göre) — Hata Radarı trend grafiği.
+        today = now.date()
+        days = [today - timedelta(days=i) for i in range(6, -1, -1)]
+        week_cutoff = (now - timedelta(days=7)).isoformat()
+        counts: Dict[str, int] = {}
+        try:
+            agg = await db.client_logs.aggregate([
+                {"$match": {"created_at": {"$gte": week_cutoff}}},
+                {"$group": {"_id": {"$substrCP": ["$created_at", 0, 10]}, "count": {"$sum": 1}}},
+            ]).to_list(length=32)
+            counts = {row["_id"]: int(row.get("count", 0)) for row in agg if row.get("_id")}
+        except Exception:
+            counts = {}
+        daily = [{"date": d.isoformat(), "count": counts.get(d.isoformat(), 0)} for d in days]
+        return {"logs": docs, "total": total, "active": active, "last_24h": last_24h, "daily": daily}
 
     @router.delete("/admin/client-logs")
     async def admin_clear_client_logs(user: dict = Depends(current_user_dep)):

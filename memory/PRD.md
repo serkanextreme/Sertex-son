@@ -2795,3 +2795,9 @@ Kullanıcı isteği: `TeknikInterface` ve `AydinlikInterface` (şimdiye kadar sa
 - **Pano:** ZZTEST süz → Tümünü Seç → Beklet; 5 kart YAPILACAK→BEKLEMEDE sütununa taşındı; nested kart modalı Pano'da da render oldu ✓
 - **Temizlik:** 5 ZZTEST görevi `/api/tasks/{id}/permanent` ile KALICI silindi; kalan ZZTEST = YOK. Gerçek üretim verisine dokunulmadı (arama süzgeci + yalnız ZZTEST seçimi ile izole edildi).
 - CRA build temiz. Test yöntemi: screenshot_tool (UI) + API doğrulaması; testing_agent kasıtlı çağrılmadı (canlı DB koruması).
+
+## ✅ HATA RADARI — 7 GÜNLÜK TREND GRAFİĞİ (2026-06 · fork) TAMAMLANDI
+Kullanıcı isteği: Error Radar'a (Hata Radarı) son 7 günün günlük hata sayısını gösteren küçük bir grafik.
+- **Backend** (`admin_router.py` · `GET /admin/client-logs`): yanıta `daily` alanı eklendi — son 7 gün (UTC), `created_at` string'i üzerinde `$substrCP` ile günlük gruplama; eksik günler 0 doldurulur; eskiden yeniye sıralı `[{date, count}]`. Mevcut `logs/total/active/last_24h` korundu.
+- **Frontend** (`ClientErrorRadar.jsx`): yeni `ErrorTrendChart` bileşeni — ek bağımlılık YOK, saf div-bar HUD çubuk grafik. Sayaç kartlarının hemen altında "SON 7 GÜN · GÜNLÜK HATA" kartı; 7 çubuk (yükseklik max'a orantılı), çubuk üstünde sayı, altında TR gün kısaltması; bugün cyan vurgulu, diğerleri turuncu; sağ üstte "N toplam". Boş durum: "Son 7 günde hata yok ✓". 30 sn otomatik yenileme ile güncellenir (aynı list çağrısından beslenir).
+- **Test:** `daily` API'si doğrulandı (7 gün). İzole `client_logs` koleksiyonuna `source:'e2e-seed'` ile 7 güne dağıtılmış 15 sahte kayıt eklendi → grafik doğru render oldu (PER0/CUM4/CMT1/PAZ3/PZT0/SAL2/ÇAR5, bugün cyan, "15 toplam"). Ardından 15 kayıt KALICI silindi; daily=[0×7], total=0. Görev/üretim verisine dokunulmadı. CRA build temiz.
