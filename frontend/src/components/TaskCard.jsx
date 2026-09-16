@@ -183,8 +183,8 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
       const node = findSubById(subtasks, id);
       const kids = (node && node.children) || [];
       if (!kids.length) {
-        // Çocuğu yok → doğrudan sil.
-        onSetSubtasks(removeSubById(subtasks, id));
+        // Çocuğu yok → doğrudan sil (Geri Al ile).
+        deleteSubsWithUndo(removeSubById(subtasks, id), 1);
         return;
       }
       // Çocuğu var → nasıl silineceğini sor.
@@ -267,6 +267,16 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
   const toggleSubSelect = (id) =>
     setSelectedSubIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const exitSubSelect = () => { setSubSelectMode(false); setSelectedSubIds([]); setBulkDateOpen(false); setBulkDate(""); };
+  // Alt görev silme + kısa süreli "Geri Al" (silmeden önceki alt görev ağacını geri yükler).
+  const deleteSubsWithUndo = (nextSubtasks, count) => {
+    const snapshot = subtasks;
+    onSetSubtasks(nextSubtasks);
+    toast.success(`${count} alt görev silindi`, {
+      description: "Yanlışlıkla mı? Geri alabilirsin.",
+      duration: 10000,
+      action: { label: "Geri Al", onClick: () => { onSetSubtasks(snapshot); toast.success("Geri alındı"); } },
+    });
+  };
   const applyBulkSub = (mutator) => {
     const sel = new Set(selectedSubIds);
     onSetSubtasks(mutateSelectedSubs(subtasks, sel, mutator));
@@ -280,10 +290,21 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
   };
   const bulkDelete = () => {
     if (!selectedSubIds.length) return;
-    const n = selectedSubIds.length;
-    applyBulkSub(() => null);
-    toast.success(`${n} alt görev silindi`);
-    exitSubSelect();
+    const ids = [...selectedSubIds];
+    const anyKids = ids.some((id) => { const n = findSubById(subtasks, id); return n && n.children && n.children.length; });
+    if (!anyKids) {
+      // Seçilenlerin hiçbirinin iç görevi yok → doğrudan sil (Geri Al ile).
+      deleteSubsWithUndo(mutateSelectedSubs(subtasks, new Set(ids), () => null), ids.length);
+      exitSubSelect();
+      return;
+    }
+    // En az birinin iç görevi var → nasıl silineceğini sor (tekil diyaloğun toplu sürümü).
+    const nodes = ids.map((id) => findSubById(subtasks, id)).filter(Boolean);
+    const subtree = []; const seen = new Set();
+    for (const n of nodes) for (const item of flattenSubsDepth([n])) { if (!seen.has(item.node.id)) { seen.add(item.node.id); subtree.push(item); } }
+    setDeleteTarget({ bulk: true, ids, count: ids.length, kidCount: Math.max(0, subtree.length - nodes.length), subtree });
+    setDeleteMode("ask");
+    setDeleteChecked(new Set());
   };
   const bulkSetDate = () => {
     if (!selectedSubIds.length || !bulkDate) { toast.error("Bir zaman seçin"); return; }
@@ -1412,29 +1433,43 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center gap-2 mb-1 text-rose-300 font-mono">
-                  <Trash2 className="h-4 w-4" /> ALT GÖREVİ SİL
+                  <Trash2 className="h-4 w-4" /> {deleteTarget.bulk ? "ALT GÖREVLERİ SİL" : "ALT GÖREVİ SİL"}
                 </div>
                 {deleteMode === "ask" ? (
                   <>
                     <div className="text-xs text-sertex-textMuted mb-4">
-                      <span className="text-sertex-text font-semibold">"{deleteTarget.text}"</span> alt görevinin <span className="text-rose-300 font-semibold">{deleteTarget.kidCount}</span> iç görevi var. Nasıl silinsin?
+                      {deleteTarget.bulk ? (
+                        <>Seçilen <span className="text-sertex-text font-semibold">{deleteTarget.count}</span> görevin <span className="text-rose-300 font-semibold">{deleteTarget.kidCount}</span> iç görevi var. Nasıl silinsin?</>
+                      ) : (
+                        <><span className="text-sertex-text font-semibold">"{deleteTarget.text}"</span> alt görevinin <span className="text-rose-300 font-semibold">{deleteTarget.kidCount}</span> iç görevi var. Nasıl silinsin?</>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <button
-                        onClick={() => { onSetSubtasks(removeSubById(subtasks, deleteTarget.id)); setDeleteTarget(null); }}
+                        onClick={() => {
+                          const t = deleteTarget;
+                          const next = t.bulk ? mutateSelectedSubs(subtasks, new Set(t.ids), () => null) : removeSubById(subtasks, t.id);
+                          deleteSubsWithUndo(next, (t.bulk ? t.count : 1) + t.kidCount);
+                          setDeleteTarget(null); if (t.bulk) exitSubSelect();
+                        }}
                         data-testid="subtask-delete-all"
                         className="w-full flex items-center gap-2 text-left px-3 py-2 rounded-md border border-rose-400/60 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25 transition-colors"
                       >
                         <Trash2 className="h-4 w-4 shrink-0" />
-                        <span className="flex-1 min-w-0"><span className="hud-text block">Hepsini Sil</span><span className="text-[10px] font-mono text-rose-200/70 normal-case">Bu alt görev + {deleteTarget.kidCount} iç görev</span></span>
+                        <span className="flex-1 min-w-0"><span className="hud-text block">Hepsini Sil</span><span className="text-[10px] font-mono text-rose-200/70 normal-case">{deleteTarget.bulk ? "Seçilenler" : "Bu alt görev"} + {deleteTarget.kidCount} iç görev</span></span>
                       </button>
                       <button
-                        onClick={() => { onSetSubtasks(removeNodeKeepChildren(subtasks, deleteTarget.id)); setDeleteTarget(null); }}
+                        onClick={() => {
+                          const t = deleteTarget;
+                          const next = t.bulk ? t.ids.reduce((acc, id) => removeNodeKeepChildren(acc, id), subtasks) : removeNodeKeepChildren(subtasks, t.id);
+                          deleteSubsWithUndo(next, t.bulk ? t.count : 1);
+                          setDeleteTarget(null); if (t.bulk) exitSubSelect();
+                        }}
                         data-testid="subtask-delete-keep-children"
                         className="w-full flex items-center gap-2 text-left px-3 py-2 rounded-md border border-sertex-cyan/50 bg-sertex-cyan/10 text-sertex-cyan hover:bg-sertex-cyan/20 transition-colors"
                       >
                         <CornerLeftUp className="h-4 w-4 shrink-0" />
-                        <span className="flex-1 min-w-0"><span className="hud-text block">Sadece Bunu Sil</span><span className="text-[10px] font-mono text-sertex-cyan/70 normal-case">İç görevler bir üst seviyeye taşınır, kaybolmaz</span></span>
+                        <span className="flex-1 min-w-0"><span className="hud-text block">{deleteTarget.bulk ? "Sadece Seçilenleri Sil" : "Sadece Bunu Sil"}</span><span className="text-[10px] font-mono text-sertex-cyan/70 normal-case">İç görevler bir üst seviyeye taşınır, kaybolmaz</span></span>
                       </button>
                       <button
                         onClick={() => { setDeleteMode("select"); setDeleteChecked(new Set()); }}
@@ -1499,7 +1534,11 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
                       <button onClick={() => setDeleteMode("ask")} data-testid="subtask-delete-back" className="hud-text px-3 py-1 rounded border border-white/15 text-sertex-textMuted hover:text-sertex-text">← Geri</button>
                       <button
                         disabled={deleteChecked.size === 0}
-                        onClick={() => { onSetSubtasks(mutateSelectedSubs(subtasks, deleteChecked, () => null)); setDeleteTarget(null); }}
+                        onClick={() => {
+                          const t = deleteTarget;
+                          deleteSubsWithUndo(mutateSelectedSubs(subtasks, deleteChecked, () => null), deleteChecked.size);
+                          setDeleteTarget(null); if (t?.bulk) exitSubSelect();
+                        }}
                         data-testid="subtask-delete-selected"
                         className={`hud-text px-3 py-1 rounded border transition-colors ${deleteChecked.size === 0 ? "border-white/10 text-sertex-textMuted/40 cursor-not-allowed" : "border-rose-400/60 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25"}`}
                       >
@@ -1514,7 +1553,7 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
           )}
       {childCtx && createPortal(
         <div
-          className="fixed inset-0 z-[100]"
+          className="fixed inset-0 z-[130]"
           onClick={() => setChildCtx(null)}
           onContextMenu={(e) => { e.preventDefault(); setChildCtx(null); }}
           data-testid="task-child-ctx-overlay"

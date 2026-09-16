@@ -1,5 +1,12 @@
 # Sertex — Kişisel AI Asistan · PRD
 
+## ✅ TAMAMLANDI (2026-06, "YAP"): Toplu alt görev silme (sor/seç) + her silmede "Geri Al"
+- **Toplu alt görev silme** (`TaskCard.bulkDelete`): Çoklu seçimde "Sil"e basınca — seçilenlerin hiçbirinin iç görevi yoksa doğrudan siler; en az birinin iç görevi varsa tekil diyaloğun TOPLU sürümü açılır: **HEPSİNİ SİL** (`mutateSelectedSubs`→null), **SADECE SEÇİLENLERİ SİL** (her seçilene `removeNodeKeepChildren`, çocuklar üst seviyeye taşınır), **SEÇEREK SİL** (seçili düğümlerin birleşik alt ağacı, girintili işaretlemeli liste). Diyalog `deleteTarget.bulk` bayrağıyla genelleştirildi.
+- **Silmede Geri Al** (`deleteSubsWithUndo`): Tekil ve toplu tüm alt görev silmelerinde 10 sn "Geri Al" toast'u; silmeden önceki alt görev ağacı snapshot'ı `onSetSubtasks` ile geri yüklenir.
+- Paylaşılan `TaskCard` → **4 temada** geçerli. E2E doğrulandı (Teknik modal): toplu diyalog "ALT GÖREVLERİ SİL / Seçilen N görev" + doğru butonlar; tekil sil → "Geri Al" tıkla → B_SOLO geri geldi ("Geri alındı"). Test görevi kalıcı silindi → **CANLI DB TEMİZ**. Derleme temiz. Mobil değişiklik yok.
+
+
+
 ## ✅ TAMAMLANDI (2026-06, "YAP"): Alt görev silme (sor/seç) + Detaylı iki-modlu Çöz + menü z-index düzeltmesi
 ### 1) Alt görev silme — çocuk varsa sor / seçerek sil (4 temada ortak `TaskCard`)
 - **Sorun**: Bir alt görevi silince altındaki TÜM alt görevler sessizce siliniyordu.
