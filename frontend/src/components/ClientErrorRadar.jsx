@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   AlertTriangle, RefreshCw, Trash2, Bug, Server, BellRing,
-  ChevronDown, ChevronRight, CheckCircle2, RotateCcw, Layers, List, BarChart3, X,
+  ChevronDown, ChevronRight, CheckCircle2, RotateCcw, Layers, List, BarChart3, X, FileCode2,
 } from "lucide-react";
 import { clientLogsApi } from "../lib/api";
 import { toast } from "sonner";
@@ -40,12 +40,19 @@ const dayLabel = (iso) => {
   catch { return iso; }
 };
 
-const groupLogs = (logs) => {
+const groupLogs = (logs, mode = "message") => {
   const map = new Map();
   for (const l of logs) {
-    const k = (l.message || "").trim() || "(boş)";
-    if (!map.has(k)) map.set(k, { message: k, count: 0, level: l.level, last: l.created_at, items: [] });
-    const g = map.get(k);
+    let key, label;
+    if (mode === "source") {
+      key = (l.source || "").trim();
+      label = key || "(kaynak yok)";
+    } else {
+      key = (l.message || "").trim() || "(boş)";
+      label = key;
+    }
+    if (!map.has(key)) map.set(key, { key, label, count: 0, level: l.level, last: l.created_at, items: [] });
+    const g = map.get(key);
     g.count += 1;
     g.items.push(l);
     if (l.created_at && (!g.last || l.created_at > g.last)) { g.last = l.created_at; g.level = l.level; }
@@ -159,7 +166,7 @@ const ClientErrorRadar = () => {
   const [savingCfg, setSavingCfg] = useState(false);
   const [level, setLevel] = useState("all");
   const [status, setStatus] = useState("active");
-  const [grouped, setGrouped] = useState(false);
+  const [groupMode, setGroupMode] = useState("none");
   const [expanded, setExpanded] = useState({});
   const [day, setDay] = useState("");
 
@@ -227,7 +234,11 @@ const ClientErrorRadar = () => {
   const resolveGroup = async (g) => {
     const target = status !== "resolved"; // aktif/tümü → çöz; çözüldü görünümü → geri al
     try {
-      const r = await clientLogsApi.resolveBulk(g.message, target);
+      const r = await clientLogsApi.resolveBulk(
+        groupMode === "source"
+          ? { by: "source", source: g.key, resolved: target }
+          : { by: "message", message: g.key, resolved: target }
+      );
       await refresh(true);
       toast.success(`${r?.updated ?? 0} kayıt ${target ? "çözüldü" : "geri alındı"}`);
     } catch {
@@ -239,7 +250,7 @@ const ClientErrorRadar = () => {
   const active = data?.active ?? 0;
   const last24h = data?.last_24h ?? 0;
   const total = data?.total ?? 0;
-  const groups = grouped ? groupLogs(logs) : [];
+  const groups = groupMode !== "none" ? groupLogs(logs, groupMode) : [];
 
   return (
     <div className="space-y-4" data-testid="error-radar-panel">
@@ -333,11 +344,14 @@ const ClientErrorRadar = () => {
             <Chip key={o.key} testid={`error-radar-status-${o.key}`} active={status === o.key} onClick={() => setStatus(o.key)}>{o.label}</Chip>
           ))}
           <div className="ml-auto flex items-center gap-1.5">
-            <Chip testid="error-radar-view-list" active={!grouped} onClick={() => setGrouped(false)}>
+            <Chip testid="error-radar-view-list" active={groupMode === "none"} onClick={() => setGroupMode("none")}>
               <span className="flex items-center gap-1"><List className="h-3 w-3" /> Liste</span>
             </Chip>
-            <Chip testid="error-radar-view-group" active={grouped} onClick={() => setGrouped(true)}>
-              <span className="flex items-center gap-1"><Layers className="h-3 w-3" /> Grupla</span>
+            <Chip testid="error-radar-view-message" active={groupMode === "message"} onClick={() => setGroupMode("message")}>
+              <span className="flex items-center gap-1"><Layers className="h-3 w-3" /> Mesaj</span>
+            </Chip>
+            <Chip testid="error-radar-view-source" active={groupMode === "source"} onClick={() => setGroupMode("source")}>
+              <span className="flex items-center gap-1"><FileCode2 className="h-3 w-3" /> Kaynak</span>
             </Chip>
           </div>
         </div>
@@ -347,7 +361,7 @@ const ClientErrorRadar = () => {
       <div>
         <div className="flex items-center justify-between mb-2">
           <div className="hud-text text-orange-300 flex items-center gap-1.5">
-            <Server className="h-3 w-3" /> {grouped ? "HATA GRUPLARI (SIK → SEYREK)" : "HATA KAYITLARI"}
+            <Server className="h-3 w-3" /> {groupMode === "source" ? "KAYNAĞA GÖRE (SIK → SEYREK)" : groupMode === "message" ? "MESAJA GÖRE (SIK → SEYREK)" : "HATA KAYITLARI"}
           </div>
           <div className="flex items-center gap-1.5">
             {day && (
@@ -378,14 +392,14 @@ const ClientErrorRadar = () => {
           <div className="py-6 text-center text-[11px] font-mono text-sertex-textMuted normal-case border border-sertex-cyan/10 rounded" data-testid="error-radar-empty">
             {day ? `${dayLabel(day)} için kayıt yok.` : status === "resolved" ? "Çözülmüş kayıt yok." : "Aktif frontend hatası yok — sistem temiz ✓"}
           </div>
-        ) : grouped ? (
+        ) : groupMode !== "none" ? (
           <div className="space-y-1.5" data-testid="error-radar-groups">
             {groups.map((g, idx) => {
-              const open = !!expanded[`g:${g.message}`];
+              const open = !!expanded[`g:${g.key}`];
               return (
-                <div key={g.message} data-testid={`error-radar-group-${idx}`} className="glass-panel border border-orange-400/20 rounded p-2 text-[11px] font-mono">
+                <div key={g.key} data-testid={`error-radar-group-${idx}`} className="glass-panel border border-orange-400/20 rounded p-2 text-[11px] font-mono">
                   <div className="flex items-start gap-2">
-                    <button onClick={() => setExpanded((p) => ({ ...p, [`g:${g.message}`]: !p[`g:${g.message}`] }))} className="flex-1 text-left flex items-start gap-2 min-w-0">
+                    <button onClick={() => setExpanded((p) => ({ ...p, [`g:${g.key}`]: !p[`g:${g.key}`] }))} className="flex-1 text-left flex items-start gap-2 min-w-0">
                       {open ? <ChevronDown className="h-3 w-3 mt-0.5 shrink-0 text-sertex-textMuted" /> : <ChevronRight className="h-3 w-3 mt-0.5 shrink-0 text-sertex-textMuted" />}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -393,7 +407,10 @@ const ClientErrorRadar = () => {
                           <span className={`px-1 rounded text-[9px] font-semibold uppercase ${levelCls(g.level)} bg-sertex-danger/10`}>{g.level || "error"}</span>
                           <span className="text-sertex-textMuted normal-case ml-auto text-[10px]">{g.last ? new Date(g.last).toLocaleString() : ""}</span>
                         </div>
-                        <div className="text-sertex-text mt-0.5 normal-case break-words">{g.message}</div>
+                        <div className="text-sertex-text mt-0.5 normal-case break-words flex items-start gap-1">
+                          {groupMode === "source" && <FileCode2 className="h-3 w-3 mt-0.5 shrink-0 text-sertex-cyan" />}
+                          <span className="break-words">{g.label}</span>
+                        </div>
                       </div>
                     </button>
                     <button
@@ -411,7 +428,11 @@ const ClientErrorRadar = () => {
                       {g.items.map((l, i) => (
                         <div key={l.id || i} className="text-[10px] text-sertex-textMuted normal-case flex items-center gap-2">
                           <span className="px-1 rounded bg-sertex-cyan/15 text-sertex-cyan">{l.username || "anonim"}</span>
-                          {l.source && <span>◈ {l.source}</span>}
+                          {groupMode === "source" ? (
+                            <span className="text-sertex-textSecondary truncate max-w-[320px]">{l.message}</span>
+                          ) : (
+                            l.source && <span>◈ {l.source}</span>
+                          )}
                           <span className="ml-auto">{l.created_at ? new Date(l.created_at).toLocaleString() : ""}</span>
                         </div>
                       ))}

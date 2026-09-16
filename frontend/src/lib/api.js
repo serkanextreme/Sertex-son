@@ -421,7 +421,8 @@ export const clientLogsApi = {
   },
   clear: () => api.delete("/admin/client-logs").then((r) => r.data),
   resolve: (id, resolved = true) => api.post(`/admin/client-logs/${id}/resolve`, { resolved }).then((r) => r.data),
-  resolveBulk: (message, resolved = true) => api.post(`/admin/client-logs/resolve-bulk`, { message, resolved }).then((r) => r.data),
+  resolveBulk: ({ by = "message", message = "", source = null, resolved = true } = {}) =>
+    api.post(`/admin/client-logs/resolve-bulk`, { by, message, source, resolved }).then((r) => r.data),
   getNotifySettings: () => api.get("/admin/client-logs/notify-settings").then((r) => r.data),
   setNotifySettings: (body) => api.put("/admin/client-logs/notify-settings", body).then((r) => r.data),
 };

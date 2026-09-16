@@ -137,8 +137,10 @@ class ClientLogResolve(BaseModel):
 
 
 class ClientLogResolveBulk(BaseModel):
-    # Aynı mesaja sahip TÜM kayıtları toplu çöz/geri al (grup çözümü).
+    # Aynı mesaja VEYA aynı kaynağa sahip TÜM kayıtları toplu çöz/geri al.
     message: str = Field(default="", max_length=2000)
+    source: Optional[str] = None
+    by: str = "message"  # "message" | "source"
     resolved: bool = True
 
 
@@ -924,15 +926,21 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
     @router.post("/admin/client-logs/resolve-bulk")
     async def resolve_client_logs_bulk(req: ClientLogResolveBulk, user: dict = Depends(current_user_dep)):
         require_super_admin(user)
-        msg = (req.message or "").strip()
-        if not msg:
-            return {"updated": 0, "resolved": bool(req.resolved)}
+        # Kaynağa göre grup çözümü — boş/None kaynak "kaynak yok" grubudur.
+        if req.by == "source":
+            src = (req.source or "").strip()
+            filt: Dict[str, Any] = {"source": src} if src else {"source": {"$in": [None, ""]}}
+        else:
+            msg = (req.message or "").strip()
+            if not msg:
+                return {"updated": 0, "resolved": bool(req.resolved)}
+            filt = {"message": msg}
         now = datetime.now(timezone.utc).isoformat()
         if req.resolved:
             upd = {"$set": {"resolved": True, "resolved_at": now, "resolved_by": user.get("username") or user["id"]}}
         else:
             upd = {"$set": {"resolved": False}, "$unset": {"resolved_at": "", "resolved_by": ""}}
-        res = await db.client_logs.update_many({"message": msg}, upd)
+        res = await db.client_logs.update_many(filt, upd)
         return {"updated": int(getattr(res, "modified_count", 0) or 0), "resolved": bool(req.resolved)}
 
     @router.post("/admin/client-logs/{log_id}/resolve")
