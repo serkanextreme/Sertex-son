@@ -412,10 +412,11 @@ export const teamApi = {
 
 // Frontend Error Radar — admin: tarayıcı hata kayıtlarını görüntüle / temizle.
 export const clientLogsApi = {
-  list: ({ limit = 100, status = "active", level = "" } = {}) => {
+  list: ({ limit = 100, status = "active", level = "", day = "" } = {}) => {
     const p = new URLSearchParams({ limit: String(limit) });
     if (status) p.set("status", status);
     if (level) p.set("level", level);
+    if (day) p.set("day", day);
     return api.get(`/admin/client-logs?${p.toString()}`).then((r) => r.data);
   },
   clear: () => api.delete("/admin/client-logs").then((r) => r.data),

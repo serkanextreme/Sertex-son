@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   AlertTriangle, RefreshCw, Trash2, Bug, Server, BellRing,
-  ChevronDown, ChevronRight, CheckCircle2, RotateCcw, Layers, List, BarChart3,
+  ChevronDown, ChevronRight, CheckCircle2, RotateCcw, Layers, List, BarChart3, X,
 } from "lucide-react";
 import { clientLogsApi } from "../lib/api";
 import { toast } from "sonner";
@@ -34,6 +34,12 @@ const levelCls = (lvl) => {
   return "text-sertex-textMuted";
 };
 
+// "YYYY-MM-DD" → "16 Eyl" (TR, UTC) — gün filtresi etiketi.
+const dayLabel = (iso) => {
+  try { return new Date(iso + "T00:00:00Z").toLocaleDateString("tr-TR", { day: "numeric", month: "short", timeZone: "UTC" }); }
+  catch { return iso; }
+};
+
 const groupLogs = (logs) => {
   const map = new Map();
   for (const l of logs) {
@@ -57,7 +63,7 @@ const StatCard = ({ label, value, sub, accent, testid }) => (
 
 // Son 7 gün günlük hata trendi — küçük yığılmış çubuk grafik (Hata + Uyarı
 // seviye kırılımı, HUD estetiği, ek bağımlılık yok).
-const ErrorTrendChart = ({ daily }) => {
+const ErrorTrendChart = ({ daily, selectedDay, onSelectDay }) => {
   const days = Array.isArray(daily) ? daily : [];
   const weekTotal = days.reduce((s, d) => s + (d.count || 0), 0);
   const max = Math.max(1, ...days.map((d) => d.count || 0));
@@ -86,30 +92,39 @@ const ErrorTrendChart = ({ daily }) => {
           <div className="flex items-end justify-between gap-1.5" style={{ height: H + 20 }} data-testid="error-radar-trend-bars">
             {days.map((d) => {
               const isToday = d.date === todayStr;
+              const isSel = selectedDay === d.date;
               const count = d.count || 0;
               const errors = d.errors || 0;
               const warnings = d.warnings || 0;
-              const other = Math.max(0, count - errors - warnings);
               const barH = count > 0 ? Math.max(4, Math.round((count / max) * H)) : 0;
               const seg = (n) => (count > 0 ? Math.round((n / count) * barH) : 0);
               const eH = seg(errors), wH = seg(warnings);
               const oH = Math.max(0, barH - eH - wH);
+              const clickable = count > 0;
               return (
-                <div key={d.date} className="flex-1 flex flex-col items-center justify-end gap-1 min-w-0" data-testid={`error-radar-trend-day-${d.date}`}>
-                  <span className="text-[10px] font-mono tabular-nums leading-none text-sertex-textMuted/70">{count || ""}</span>
+                <button
+                  type="button"
+                  key={d.date}
+                  onClick={clickable ? () => onSelectDay?.(d.date) : undefined}
+                  disabled={!clickable}
+                  aria-pressed={isSel}
+                  className={`flex-1 flex flex-col items-center justify-end gap-1 min-w-0 rounded transition-colors ${clickable ? "cursor-pointer hover:bg-sertex-cyan/5" : "cursor-default"} ${isSel ? "bg-sertex-cyan/10" : ""}`}
+                  data-testid={`error-radar-trend-day-${d.date}`}
+                  title={clickable ? `${wd(d.date)} · ${errors} hata · ${warnings} uyarı — süzmek için tıkla` : `${wd(d.date)} · hata yok`}
+                >
+                  <span className={`text-[10px] font-mono tabular-nums leading-none ${isSel ? "text-sertex-cyan" : "text-sertex-textMuted/70"}`}>{count || ""}</span>
                   <div className="w-full flex items-end justify-center" style={{ height: H }}>
                     <div
-                      className={`w-full max-w-[22px] rounded-t overflow-hidden flex flex-col-reverse ${isToday ? "ring-1 ring-sertex-cyan" : ""}`}
+                      className={`w-full max-w-[22px] rounded-t overflow-hidden flex flex-col-reverse ${isSel ? "ring-2 ring-sertex-cyan" : isToday ? "ring-1 ring-sertex-cyan/60" : ""}`}
                       style={{ height: `${barH}px` }}
-                      title={`${wd(d.date)} · ${errors} hata · ${warnings} uyarı`}
                     >
                       {eH > 0 && <div className="w-full bg-sertex-danger/80" style={{ height: `${eH}px` }} data-testid={`error-radar-trend-err-${d.date}`} />}
                       {wH > 0 && <div className="w-full bg-orange-400/70" style={{ height: `${wH}px` }} data-testid={`error-radar-trend-warn-${d.date}`} />}
                       {oH > 0 && <div className="w-full bg-sertex-textMuted/30" style={{ height: `${oH}px` }} />}
                     </div>
                   </div>
-                  <span className={`hud-text leading-none ${isToday ? "text-sertex-cyan" : "text-sertex-textMuted"}`}>{wd(d.date)}</span>
-                </div>
+                  <span className={`hud-text leading-none ${isSel || isToday ? "text-sertex-cyan" : "text-sertex-textMuted"}`}>{wd(d.date)}</span>
+                </button>
               );
             })}
           </div>
@@ -146,19 +161,20 @@ const ClientErrorRadar = () => {
   const [status, setStatus] = useState("active");
   const [grouped, setGrouped] = useState(false);
   const [expanded, setExpanded] = useState({});
+  const [day, setDay] = useState("");
 
   const refresh = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
       const levelParam = (LEVEL_OPTS.find((o) => o.key === level) || {}).param || "";
-      const d = await clientLogsApi.list({ limit: 200, status, level: levelParam });
+      const d = await clientLogsApi.list({ limit: 200, status, level: levelParam, day });
       setData(d);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Hata kayıtları alınamadı");
     } finally {
       setLoading(false);
     }
-  }, [status, level]);
+  }, [status, level, day]);
 
   const loadCfg = useCallback(async () => {
     try { setCfg(await clientLogsApi.getNotifySettings()); } catch { /* silent */ }
@@ -266,7 +282,11 @@ const ClientErrorRadar = () => {
       </div>
 
       {/* Son 7 gün günlük hata trendi */}
-      <ErrorTrendChart daily={data?.daily} />
+      <ErrorTrendChart
+        daily={data?.daily}
+        selectedDay={day}
+        onSelectDay={(dstr) => setDay((prev) => (prev === dstr ? "" : dstr))}
+      />
 
       {/* Bildirim ayarı — ayarlanabilir cooldown */}
       <div className="glass-panel corner-bracket p-3 border-sertex-cyan/25 space-y-2.5" data-testid="error-radar-notify">
@@ -329,22 +349,34 @@ const ClientErrorRadar = () => {
           <div className="hud-text text-orange-300 flex items-center gap-1.5">
             <Server className="h-3 w-3" /> {grouped ? "HATA GRUPLARI (SIK → SEYREK)" : "HATA KAYITLARI"}
           </div>
-          {logs.length > 0 && (
-            <button
-              onClick={clearAll}
-              data-testid="error-radar-clear"
-              className="inline-flex items-center gap-1 px-2 py-0.5 border border-rose-500/40 text-rose-300 hover:bg-rose-500/15 rounded hud-text transition-colors"
-            >
-              <Trash2 className="h-3 w-3" /> TEMİZLE
-            </button>
-          )}
+          <div className="flex items-center gap-1.5">
+            {day && (
+              <button
+                onClick={() => setDay("")}
+                data-testid="error-radar-day-clear"
+                title="Gün filtresini kaldır"
+                className="inline-flex items-center gap-1 px-2 py-0.5 border border-sertex-cyan/50 text-sertex-cyan bg-sertex-cyan/10 rounded hud-text transition-colors hover:bg-sertex-cyan/20"
+              >
+                {dayLabel(day)} <X className="h-3 w-3" />
+              </button>
+            )}
+            {logs.length > 0 && (
+              <button
+                onClick={clearAll}
+                data-testid="error-radar-clear"
+                className="inline-flex items-center gap-1 px-2 py-0.5 border border-rose-500/40 text-rose-300 hover:bg-rose-500/15 rounded hud-text transition-colors"
+              >
+                <Trash2 className="h-3 w-3" /> TEMİZLE
+              </button>
+            )}
+          </div>
         </div>
 
         {loading && !data ? (
           <div className="py-6 text-center hud-text text-sertex-textMuted" data-testid="error-radar-loading">YÜKLENİYOR...</div>
         ) : logs.length === 0 ? (
           <div className="py-6 text-center text-[11px] font-mono text-sertex-textMuted normal-case border border-sertex-cyan/10 rounded" data-testid="error-radar-empty">
-            {status === "resolved" ? "Çözülmüş kayıt yok." : "Aktif frontend hatası yok — sistem temiz ✓"}
+            {day ? `${dayLabel(day)} için kayıt yok.` : status === "resolved" ? "Çözülmüş kayıt yok." : "Aktif frontend hatası yok — sistem temiz ✓"}
           </div>
         ) : grouped ? (
           <div className="space-y-1.5" data-testid="error-radar-groups">

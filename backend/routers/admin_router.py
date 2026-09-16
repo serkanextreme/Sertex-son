@@ -815,6 +815,7 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
         limit: int = 100,
         status: str = "active",
         level: Optional[str] = None,
+        day: Optional[str] = None,
         user: dict = Depends(current_user_dep),
     ):
         require_super_admin(user)
@@ -829,6 +830,14 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
             levels = [lv.strip().lower() for lv in level.split(",") if lv.strip()]
             if levels:
                 q["level"] = {"$in": levels}
+        # Trend grafiğinden gün süzme — created_at ISO string'i o UTC gününe daralt.
+        if day:
+            try:
+                d0 = datetime.strptime(day, "%Y-%m-%d").date()
+                d1 = d0 + timedelta(days=1)
+                q["created_at"] = {"$gte": f"{d0.isoformat()}T00:00:00", "$lt": f"{d1.isoformat()}T00:00:00"}
+            except Exception:
+                pass
         docs = await db.client_logs.find(
             q, {"_id": 0, "ts": 0},
         ).sort("created_at", -1).to_list(length=limit)
