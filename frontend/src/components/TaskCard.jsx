@@ -24,6 +24,8 @@ import {
   flattenSubs,
   updateSubById,
   removeSubById,
+  removeNodeKeepChildren,
+  flattenSubsDepth,
   addChildById,
   replaceChildrenById,
   findSubById,
@@ -117,6 +119,10 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
   // Göreve dönüştür — çocuklu alt görevde seçim penceresi.
   const [promoteTarget, setPromoteTarget] = useState(null); // { id, text, children }
   const [promoteChecked, setPromoteChecked] = useState(new Set());
+  // Alt görev silme — çocuğu varsa sor: hepsi / sadece bunu / seçerek.
+  const [deleteTarget, setDeleteTarget] = useState(null); // { id, text, kidCount, subtree:[{node,depth}] }
+  const [deleteMode, setDeleteMode] = useState("ask");     // "ask" | "select"
+  const [deleteChecked, setDeleteChecked] = useState(new Set());
   // İç içe alt görev ekleme — hangi alt görevin altına ekleniyor (id) + metin.
   const [addChildParent, setAddChildParent] = useState(null);
   const [newChildText, setNewChildText] = useState("");
@@ -174,7 +180,17 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
       return;
     }
     if (action === "delete") {
-      onSetSubtasks(removeSubById(subtasks, id));
+      const node = findSubById(subtasks, id);
+      const kids = (node && node.children) || [];
+      if (!kids.length) {
+        // Çocuğu yok → doğrudan sil.
+        onSetSubtasks(removeSubById(subtasks, id));
+        return;
+      }
+      // Çocuğu var → nasıl silineceğini sor.
+      setDeleteTarget({ id, text: node.text, kidCount: flattenSubs(kids).length, subtree: flattenSubsDepth([node]) });
+      setDeleteMode("ask");
+      setDeleteChecked(new Set());
       return;
     }
     if (action === "reset-size") {
@@ -1380,6 +1396,118 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
                     Dönüştür
                   </button>
                 </div>
+              </div>
+            </div>,
+            document.body,
+          )}
+        {deleteTarget &&
+          createPortal(
+            <div
+              className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+              onClick={() => setDeleteTarget(null)}
+              data-testid="subtask-delete-dialog"
+            >
+              <div
+                className="w-[min(440px,92vw)] max-h-[80vh] overflow-y-auto scrollbar-sertex rounded-lg border border-rose-400/40 bg-sertex-surface p-4 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-2 mb-1 text-rose-300 font-mono">
+                  <Trash2 className="h-4 w-4" /> ALT GÖREVİ SİL
+                </div>
+                {deleteMode === "ask" ? (
+                  <>
+                    <div className="text-xs text-sertex-textMuted mb-4">
+                      <span className="text-sertex-text font-semibold">"{deleteTarget.text}"</span> alt görevinin <span className="text-rose-300 font-semibold">{deleteTarget.kidCount}</span> iç görevi var. Nasıl silinsin?
+                    </div>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => { onSetSubtasks(removeSubById(subtasks, deleteTarget.id)); setDeleteTarget(null); }}
+                        data-testid="subtask-delete-all"
+                        className="w-full flex items-center gap-2 text-left px-3 py-2 rounded-md border border-rose-400/60 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25 transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4 shrink-0" />
+                        <span className="flex-1 min-w-0"><span className="hud-text block">Hepsini Sil</span><span className="text-[10px] font-mono text-rose-200/70 normal-case">Bu alt görev + {deleteTarget.kidCount} iç görev</span></span>
+                      </button>
+                      <button
+                        onClick={() => { onSetSubtasks(removeNodeKeepChildren(subtasks, deleteTarget.id)); setDeleteTarget(null); }}
+                        data-testid="subtask-delete-keep-children"
+                        className="w-full flex items-center gap-2 text-left px-3 py-2 rounded-md border border-sertex-cyan/50 bg-sertex-cyan/10 text-sertex-cyan hover:bg-sertex-cyan/20 transition-colors"
+                      >
+                        <CornerLeftUp className="h-4 w-4 shrink-0" />
+                        <span className="flex-1 min-w-0"><span className="hud-text block">Sadece Bunu Sil</span><span className="text-[10px] font-mono text-sertex-cyan/70 normal-case">İç görevler bir üst seviyeye taşınır, kaybolmaz</span></span>
+                      </button>
+                      <button
+                        onClick={() => { setDeleteMode("select"); setDeleteChecked(new Set()); }}
+                        data-testid="subtask-delete-select-open"
+                        className="w-full flex items-center gap-2 text-left px-3 py-2 rounded-md border border-white/15 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/40 transition-colors"
+                      >
+                        <ListChecks className="h-4 w-4 shrink-0" />
+                        <span className="flex-1 min-w-0"><span className="hud-text block">Seçerek Sil…</span><span className="text-[10px] font-mono text-sertex-textMuted normal-case">Hangi görevlerin silineceğini sen seç</span></span>
+                        <ChevronRight className="h-4 w-4 opacity-60 shrink-0" />
+                      </button>
+                    </div>
+                    <div className="flex justify-end mt-4">
+                      <button onClick={() => setDeleteTarget(null)} data-testid="subtask-delete-cancel" className="hud-text px-3 py-1 rounded border border-white/15 text-sertex-textMuted hover:text-sertex-text">Vazgeç</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-xs text-sertex-textMuted mb-2">Silinecek görevleri işaretle. Bir görevi seçince onun iç görevleri de silinir.</div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="hud-text text-sertex-textMuted">{deleteChecked.size} seçili</span>
+                      <button
+                        onClick={() =>
+                          setDeleteChecked((prev) =>
+                            prev.size === deleteTarget.subtree.length
+                              ? new Set()
+                              : new Set(deleteTarget.subtree.map((x) => x.node.id)),
+                          )
+                        }
+                        data-testid="subtask-delete-toggle-all"
+                        className="hud-text px-2 py-0.5 rounded border border-rose-400/30 text-rose-300 hover:bg-rose-500/10"
+                      >
+                        Tümünü Seç/Kaldır
+                      </button>
+                    </div>
+                    <div className="space-y-1 mb-4">
+                      {deleteTarget.subtree.map(({ node, depth }) => {
+                        const checked = deleteChecked.has(node.id);
+                        return (
+                          <button
+                            key={node.id}
+                            onClick={() =>
+                              setDeleteChecked((prev) => {
+                                const n = new Set(prev);
+                                if (n.has(node.id)) n.delete(node.id); else n.add(node.id);
+                                return n;
+                              })
+                            }
+                            data-testid={`subtask-delete-opt-${node.id}`}
+                            style={{ paddingLeft: 8 + depth * 16 }}
+                            className={`w-full flex items-center gap-2 text-left pr-2 py-1.5 rounded border transition-colors ${checked ? "border-rose-400 bg-rose-500/15" : "border-white/10 hover:border-rose-400/30"}`}
+                          >
+                            <span className={`h-4 w-4 rounded-sm border flex items-center justify-center shrink-0 ${checked ? "border-rose-400 bg-rose-500/50" : "border-rose-400/40"}`}>
+                              {checked && <Check className="h-3 w-3 text-white" />}
+                            </span>
+                            {depth > 0 && <CornerDownRight className="h-3 w-3 text-sertex-textMuted shrink-0" />}
+                            <span className="flex-1 min-w-0 text-xs font-mono text-sertex-text truncate">{node.text}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <button onClick={() => setDeleteMode("ask")} data-testid="subtask-delete-back" className="hud-text px-3 py-1 rounded border border-white/15 text-sertex-textMuted hover:text-sertex-text">← Geri</button>
+                      <button
+                        disabled={deleteChecked.size === 0}
+                        onClick={() => { onSetSubtasks(mutateSelectedSubs(subtasks, deleteChecked, () => null)); setDeleteTarget(null); }}
+                        data-testid="subtask-delete-selected"
+                        className={`hud-text px-3 py-1 rounded border transition-colors ${deleteChecked.size === 0 ? "border-white/10 text-sertex-textMuted/40 cursor-not-allowed" : "border-rose-400/60 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25"}`}
+                      >
+                        Seçilenleri Sil ({deleteChecked.size})
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>,
             document.body,

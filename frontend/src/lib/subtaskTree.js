@@ -30,6 +30,33 @@ export const removeSubById = (nodes = [], id) =>
         : s,
     );
 
+// Düğümü sil ama ÇOCUKLARINI bir üst seviyeye (aynı konuma) taşı — kaybolmasınlar.
+export const removeNodeKeepChildren = (nodes = [], id) => {
+  const out = [];
+  for (const s of nodes) {
+    if (s.id === id) {
+      for (const c of s.children || []) out.push(c);
+      continue;
+    }
+    out.push(
+      Array.isArray(s.children) && s.children.length
+        ? { ...s, children: removeNodeKeepChildren(s.children, id) }
+        : s,
+    );
+  }
+  return out;
+};
+
+// Derinlik bilgisiyle düzleştir — seçerek-sil listesinde girinti için.
+export const flattenSubsDepth = (nodes = [], depth = 0) => {
+  const out = [];
+  for (const s of nodes || []) {
+    out.push({ node: s, depth });
+    if (Array.isArray(s.children) && s.children.length) out.push(...flattenSubsDepth(s.children, depth + 1));
+  }
+  return out;
+};
+
 // parentId null/undefined → köke ekle.
 export const addChildById = (nodes = [], parentId, child) => {
   if (parentId == null) return [...nodes, child];

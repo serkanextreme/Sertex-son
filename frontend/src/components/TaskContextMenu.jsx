@@ -348,7 +348,7 @@ export const ContextMenu = ({ x, y, task, onAction, onClose, isTeamView, onReass
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.12 }}
-      className="fixed z-[100] glass-panel border border-sertex-cyan/40 rounded-md py-1 shadow-lg min-w-[220px]"
+      className="fixed z-[130] glass-panel border border-sertex-cyan/40 rounded-md py-1 shadow-lg min-w-[220px]"
       style={{
         left: pos.left,
         top: pos.top,

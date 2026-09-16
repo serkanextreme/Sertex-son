@@ -61,7 +61,7 @@ import { LinkTasksModal } from "./tasks/LinkTasksModal";
 import { RecurringReminderFields } from "./tasks/RecurringReminderFields";
 import { defaultRecurringValue, resolveRecurringReminder } from "../lib/reminderUtils";
 import { showReminderToast } from "../lib/reminderToast";
-import { confirmDialog, promptDialog } from "../lib/confirm";
+import { confirmDialog, promptDialog, choiceDialog } from "../lib/confirm";
 import { printTasks, exportTasksExcel, exportTasksWord } from "../lib/taskExport";
 import ExportSelectModal from "./ExportSelectModal";
 import { TaskPasteMenu } from "./tasks/TaskPasteMenu";
@@ -1566,22 +1566,41 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
   };
 
   const dissolveGroup = async (group) => {
-    const ok = await confirmDialog({
-      title: "BAĞLANTIYI ÇÖZ",
-      message: `"${group.name || "Bağlı Görevler"}" grubunun bağlantısını çözmek istiyor musunuz?\nGörevler silinmez, sadece bağlantıları kaldırılır.`,
-      confirmText: "ÇÖZ",
-      danger: true,
+    const gid = group?.id || group;
+    if (!gid) return;
+    const memberIds = sorted.filter((t) => t.group_id === gid).map((t) => t.id);
+    const mode = await choiceDialog({
+      title: "GRUBU ÇÖZ",
+      message: `"${group.name || "Bağlı Görevler"}" grubu nasıl çözülsün?\nGörevler silinmez; yalnızca bağlantıları kaldırılır.`,
+      choices: [
+        { value: "temporary", label: "ANLIK ÇÖZ (GERİ ALINABİLİR)", testid: "group-dissolve-temporary" },
+        { value: "permanent", label: "KALICI ÇÖZ", danger: true, testid: "group-dissolve-permanent" },
+      ],
+      cancelText: "VAZGEÇ",
     });
-    if (!ok) return;
-    try {
-      await tasksApi.deleteGroup(group.id);
-      toast.success("Grup bağlantısı çözüldü");
-      load();
-      notifyTasksChanged();
-    } catch (e) {
-      console.error("[TasksPanel] grup çözme hatası:", e);
-      toast.error("İşlem başarısız");
+    if (!mode) return;
+    const done = () => { load(); notifyTasksChanged(); };
+    if (mode === "permanent") {
+      try { await tasksApi.deleteGroup(gid); toast.success("Grup kalıcı çözüldü"); done(); }
+      catch (e) { console.error("[TasksPanel] grup çözme hatası:", e); toast.error("İşlem başarısız"); }
+      return;
     }
+    const snapshot = { name: group.name || "", show_progress: group.show_progress !== false, task_ids: memberIds };
+    try {
+      await tasksApi.deleteGroup(gid);
+      done();
+      toast.success("Grup çözüldü", {
+        description: "Yanlışlıkla mı oldu? Geri alabilirsin.",
+        duration: 12000,
+        action: {
+          label: "Geri Al",
+          onClick: async () => {
+            try { await tasksApi.createGroup(snapshot); toast.success("Grup geri yüklendi"); done(); }
+            catch { toast.error("Geri alınamadı"); }
+          },
+        },
+      });
+    } catch (e) { console.error("[TasksPanel] grup çözme hatası:", e); toast.error("İşlem başarısız"); }
   };
 
   // Modal aday görevleri + ön seçim.

@@ -1,5 +1,22 @@
 # Sertex — Kişisel AI Asistan · PRD
 
+## ✅ TAMAMLANDI (2026-06, "YAP"): Alt görev silme (sor/seç) + Detaylı iki-modlu Çöz + menü z-index düzeltmesi
+### 1) Alt görev silme — çocuk varsa sor / seçerek sil (4 temada ortak `TaskCard`)
+- **Sorun**: Bir alt görevi silince altındaki TÜM alt görevler sessizce siliniyordu.
+- **Çözüm** (`TaskCard.jsx` delete handler + `subtaskTree.js`): Çocuğu YOKSA doğrudan sil. Çocuğu VARSA `subtask-delete-dialog` açılır:
+  - **HEPSİNİ SİL** (`removeSubById`): bu + tüm iç görevler.
+  - **SADECE BUNU SİL** (`removeNodeKeepChildren` — yeni helper): düğümü siler, çocuklarını bir üst seviyeye taşır (kaybolmaz).
+  - **SEÇEREK SİL** (`flattenSubsDepth` — yeni helper + `mutateSelectedSubs`): iç içe girintili işaretlemeli liste; seçilenleri (ve alt ağaçlarını) siler.
+- Paylaşılan `TaskCard` olduğu için **4 temada da** geçerli. E2E doğrulandı (Teknik modal): sor diyaloğu 3 seçenek + seçerek modu 4 girintili öğe; "SADECE BUNU SİL" → PARENT silindi, CHILD1(+GRANDCHILD1)/CHILD2 üst seviyeye taşındı.
+### 2) Menü z-index düzeltmesi (latent bug)
+- `TaskContextMenu` ve `SubtaskMenu` `z-[100]` iken `TaskCardModal` overlay `z-[105]` → modal içinde menüler arkada kalıp kullanılamıyordu (Teknik/Profesyonel/Kolay/Aydınlık modal tabanlı). Menüler `z-[130]`e çıkarıldı → modal içinde de tam kullanılabilir.
+### 3) Detaylı'ya da iki-modlu "Grubu Çöz"
+- `TasksPanel.dissolveGroup` artık `choiceDialog` ile **ANLIK ÇÖZ (12 sn Geri Al)** / **KALICI ÇÖZ** sunuyor (önceki tek-modlu "BAĞLANTIYI ÇÖZ" yerine). Böylece Grubu Çöz (Anlık/Kalıcı+Geri Al) **4 temada birebir**. E2E doğrulandı (Detaylı tab-tasks → group-dissolve → diyalog).
+- Test grup+görevleri kalıcı silindi, mevcut `TEST_ITER84_TEAM_GRP` korundu → **CANLI DB TEMİZ**. Derleme temiz. Mobil değişiklik yok.
+### Özet parite durumu (4 tema): menü renkleri ✅ | grup sunum katmanı ✅ | Grubu Çöz Anlık/Kalıcı+Geri Al ✅ | alt görev silme sor/seç ✅
+
+
+
 ## ✅ TAMAMLANDI (2026-06, "YAP"): Grup Sunum Katmanı + "Grubu Çöz" (Anlık/Kalıcı+Geri Al) + Menü Renkleri
 ### 1) Görev menüsü renkleri — işlev tipine göre + kullanıcı-özelleştirmeli
 - **Sorun**: `TaskContextMenu` (sağ tık / ⋯) öğelerinin çoğu tek tip cyan → karışıyordu.
