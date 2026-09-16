@@ -16,6 +16,7 @@ import { EditTaskModal } from "../components/tasks/EditTaskModal";
 import { LinkTasksModal } from "../components/tasks/LinkTasksModal";
 import { Link2, RotateCcw, Trash2 } from "lucide-react";
 import { groupColorOf, hexToRgba } from "./groupColors";
+import { useTaskSmartDelete } from "./taskSmartDelete";
 
 export function useTaskActions({ tasks = [], setTasks, cats = [], groups = [], user, load, numberFor, highlight = "" }) {
   const clipboard = useTaskClipboard();
@@ -38,6 +39,7 @@ export function useTaskActions({ tasks = [], setTasks, cats = [], groups = [], u
   }, []);
 
   const refresh = useCallback(() => { load?.(); }, [load]);
+  const smartDelete = useTaskSmartDelete({ refresh });
   const numberFn = numberFor || (() => null);
   const catName = (id) => cats.find((c) => c.id === id)?.name || null;
   const groupById = useMemo(() => Object.fromEntries((groups || []).map((g) => [g.id, g])), [groups]);
@@ -54,6 +56,7 @@ export function useTaskActions({ tasks = [], setTasks, cats = [], groups = [], u
 
   const removeTask = async (id) => {
     const t = tasks.find((x) => x.id === id);
+    if (smartDelete.requestDelete(t)) return; // alt görevi var → akıllı silme diyaloğu
     const ok = await confirmDialog({ title: "GÖREVİ SİL", message: `"${t?.title || "Görev"}" çöp kutusuna taşınsın mı?`, confirmText: "SİL", cancelText: "VAZGEÇ", danger: true });
     if (!ok) return;
     try { await tasksApi.delete(id); refresh(); toast.success("Çöp kutusuna taşındı"); }
@@ -365,6 +368,7 @@ export function useTaskActions({ tasks = [], setTasks, cats = [], groups = [], u
 
   const modalsElement = (
     <>
+      {smartDelete.dialogElement}
       {editing && (
         <EditTaskModal task={editing} onClose={() => setEditing(null)} onSave={saveEdit} isTeamView={false} categories={cats} teamMembers={[]} currentUser={user} />
       )}

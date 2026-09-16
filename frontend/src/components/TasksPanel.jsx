@@ -71,6 +71,7 @@ import { useTaskClipboard, clearTaskClipboard, setTaskClipboard, updateTaskClipb
 
 // Faz 9 CP6 — TasksPanel bileşenleri ayrı dosyalara taşındı (davranış birebir aynı).
 import { TaskCard } from "./TaskCard";
+import { useTaskSmartDelete } from "../lib/taskSmartDelete";
 import { useTaskBulk } from "../lib/useTaskBulk";
 import { TaskBulkBar } from "./tasks/TaskBulkBar";
 import {
@@ -524,6 +525,8 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
     if (onDataChanged) onDataChanged();
     try { window.dispatchEvent(new Event("sertex:tasks-changed")); } catch (e) { /* ignore */ }
   }, [onDataChanged]);
+
+  const smartDelete = useTaskSmartDelete({ refresh: () => { load(); notifyTasksChanged(); } });
 
   useEffect(() => {
     load();
@@ -1026,6 +1029,8 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
   };
 
   const removeTask = async (id) => {
+    const t = tasks.find((x) => x.id === id);
+    if (smartDelete.requestDelete(t)) return; // alt görevi var → akıllı silme diyaloğu
     const res = await askReason("delete");
     if (!res.ok) return;
     try {
@@ -2010,6 +2015,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
 
   return (
     <div className="space-y-3" data-testid="tasks-panel">
+      {smartDelete.dialogElement}
       {!detached && (
         <div className="flex justify-end -mb-1" data-testid="tasks-panel-detach-bar">
           <button

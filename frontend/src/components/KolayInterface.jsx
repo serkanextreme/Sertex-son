@@ -976,12 +976,7 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
     toast.success(archived ? "Görev arşivlendi" : "Arşivden çıkarıldı");
     try { await tasksApi.setArchived(id, archived); } catch { toast.error("İşlem başarısız — geri alınıyor"); load(); }
   };
-  const removeTask = async (id, title) => {
-    const ok = await confirmDialog({ title: "GÖREVİ SİL", message: `"${title}" çöp kutusuna taşınsın mı?`, confirmText: "SİL", cancelText: "VAZGEÇ", danger: true });
-    if (!ok) return;
-    try { await tasksApi.delete(id); load(); toast.success("Çöp kutusuna taşındı"); }
-    catch (e) { toast.error(e?.response?.status === 423 ? (e.response.data?.detail || "Görev kilitli") : "Silinemedi"); }
-  };
+  const removeTask = (id) => cardActions.removeTask(id); // akıllı silme akışına yönlendir (alt görev varsa 3 seçenekli diyalog)
   const cancelTask = async (id, title) => {
     const ok = await confirmDialog({ title: "GÖREVİ İPTAL ET", message: `"${title}" iptal edilsin mi?\nArşivin İPTAL grubuna taşınır.`, confirmText: "İPTAL ET", cancelText: "VAZGEÇ", danger: true });
     if (!ok) return;

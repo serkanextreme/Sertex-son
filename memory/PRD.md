@@ -2923,3 +2923,29 @@ Teknik eksikleri: satır-içi görev ekleme, iş kolu yönetimi, durum filtre ç
 - Aydınlık + Pano temalarına tam parite (grup katmanı, menü renkleri, akıllı alt görev silme, grup renkleri, grup çöp) — kullanıcı "sonra" dedi.
 - Mobil Arşiv Gruplama · Mobil Hata Radarı paritesi (Çöz/Geri Al/Önem/Gruplama).
 - Yönetici "Gecikmiş Görevler" toplu dürtme paneli · Süreli süper-admin "Sebep/Not" alanı · Kartlarda renkli kategori etiketi.
+
+## ✅ ANA GÖREV AKILLI SİLME (Smart Task Delete) — 4 TEMA (2026-09-16 · fork)
+Alt görev akıllı silmenin (Hepsini/Koru/Seçerek + Geri Al) birebir görev-seviyesi karşılığı eklendi. Alt görevi OLAN bir ana görev silinirken 3 seçenekli diyalog çıkar; alt görevi yoksa eski basit onay/sebep akışı korunur.
+
+### Davranış (kullanıcı onaylı — "aynen böyle, bozmadan")
+1. **Hepsini Sil** → görev + gömülü alt görevler çöpe (mevcut varsayılan). Geri Al = restore.
+2. **Sadece Görevi Sil** → üst-seviye alt görevler bağımsız göreve dönüştürülür (`promote`, iç içe çocuklarıyla korunur), sonra görev çöpe. Geri Al = promote'ları kalıcı sil + görevi restore + orijinal alt görev ağacını setSubtasks ile geri koy (tam geri alma).
+3. **Seçerek Sil** → işaretlenen alt görevler ağaçtan düşürülür (silinir); kalan üst-seviye alt görevler bağımsız göreve dönüştürülür; görev çöpe. Geri Al = aynı tam geri alma.
+- Hepsinde 12 sn "Geri Al".
+
+### Mimari (yeni + DRY)
+- Yeni `frontend/src/lib/taskSmartDelete.jsx` → `useTaskSmartDelete({ refresh })` hook'u: `requestDelete(task)` (alt görev varsa diyalog açar, dönüş true) + `dialogElement` (3 seçenek ask/select modları, mevcut alt görev diyaloğunun görev-seviyesi ikizi). Mevcut uçları kullanır: `promoteSubtask`, `delete`, `restore`, `permanentDelete`, `setSubtasks`.
+- Bağlantı:
+  - `useTaskActions.jsx` (Profesyonel/Kolay/Teknik): `removeTask` başına `if (smartDelete.requestDelete(t)) return;`, `modalsElement`'e `smartDelete.dialogElement`.
+  - `TasksPanel.jsx` (Detaylı): aynı short-circuit `removeTask` başına; `smartDelete.dialogElement` render'a; refresh = `load()+notifyTasksChanged()`.
+  - `KolayInterface.jsx`: satır-içi kart menüsü kendi yerel `removeTask`'ını kullanıyordu (akıllı akışı atlıyordu) → `cardActions.removeTask`'a yönlendirildi (modal yolu zaten akıllıydı).
+- Tetikleyiciler: kart "⋮" menüsü / bağlam menüsü → `ctx-delete` → `onDelete` → `removeTask` → akıllı diyalog. 4 temada da tek ortak diyalog.
+
+### E2E doğrulama (CANLI DB, ZZTEST_ dummy, sonra tam temizlik — 0 kaldı)
+- Profesyonel: 3 seçenek de + Geri Al (tam geri alma API'de doğrulandı: promote'lar temizlendi, ağaç birebir geri geldi) ✅
+- Detaylı / Kolay / Teknik: diyalog + Hepsini Sil ✅ (Kolay satır-içi menü yönlendirmesi dahil)
+- "Sadece Görevi Sil": ZZ_DA (iç içe ZZ_DA1 korunarak) + ZZ_DB + ZZ_DC bağımsız göreve dönüştü, parent çöpte ✅
+- "Seçerek Sil": ZZ_DB silindi, ZZ_DA(+DA1) & ZZ_DC korundu/promote, parent çöpte ✅
+
+### Dokunulan dosyalar
+`frontend/src/lib/taskSmartDelete.jsx` (YENİ), `frontend/src/lib/useTaskActions.jsx`, `frontend/src/components/TasksPanel.jsx`, `frontend/src/components/KolayInterface.jsx`. Sadece WEB; mobil dokunulmadı. CRA build temiz (1 normal uyarı). Testleri main agent kendi yaptı (canlı DB kısıtı).
