@@ -1,5 +1,19 @@
 # Sertex — Kişisel AI Asistan · PRD
 
+## ✅ TAMAMLANDI (2026-06, "YAP"): Grup Sunum Katmanı + "Grubu Çöz" (Anlık/Kalıcı+Geri Al) + Menü Renkleri
+### 1) Görev menüsü renkleri — işlev tipine göre + kullanıcı-özelleştirmeli
+- **Sorun**: `TaskContextMenu` (sağ tık / ⋯) öğelerinin çoğu tek tip cyan → karışıyordu.
+- **Çözüm**: her aksiyon 6 semantik renk grubuna eşlendi (success/neutral/warning/info/special/danger). Renkler `appearance.js`'te (`DEFAULT_ACTION_COLORS`, localStorage) tutulur; `TaskContextMenu` inline `color` + `--sx-ctx-hover` ile render eder (`index.css` `.sx-ctx-item` hover kuralı). Ayarlar → Temalar → **MENÜ RENKLERİ**'ne 6 renk seçici + SIFIRLA eklendi (`AppearancePanel`). Global — tüm arayüzleri etkiler.
+- **Test**: Kolay menüsünde renkler çeşitli (SEÇ mor, TAMAMLANDI yeşil, BEKLEMEYE AL/KİLİT amber, DÜZENLE/KOPYALA cyan, SIRA NO/İŞ KOLU/DIŞA AKTAR/HATIRLAT/BAĞLA mavi, İPTAL/SİL kırmızı), hover tint OK; Ayarlar renk seçicileri render OK.
+
+### 2) Bağlı-görev grup sunum katmanı + "Grubu Çöz" — Profesyonel/Kolay/Teknik
+- **İstek**: Detaylı'daki bağlı-görev grup görünümü + tek-tık "Grubu Çöz" 3 temaya taşınsın; yanlış tıklamaya karşı **Anlık (geri alınabilir) / Kalıcı** seçeneği.
+- **Ortak (`useTaskActions`)**: `dissolveGroupModed(group)` → `choiceDialog` ile ANLIK ÇÖZ (deleteGroup + 12 sn "Geri Al" toast'u → createGroup snapshot ile geri yükler) / KALICI ÇÖZ (onaysız kalıcı) sunar; `editGroup(group)` → LinkTasksModal edit. `confirm.jsx`'e çok-seçenekli `choiceDialog` eklendi.
+- **Teknik** (tablo): grup üyeleri bir arada; tam-genişlik `⛓ grup başlığı satırı` [done/total] + [DÜZENLE]/[ÇÖZ], üyelerde cyan sol-şerit. **Profesyonel** (grid): tam-genişlik grup banner'ı (Link2 + progress + Düzenle/Çöz), üye kartlarda cyan ring. **Kolay** (DnD güvenliği): grid üstünde "BAĞLI GÖREV GRUPLARI" bölümü (grup başına Düzenle/Çöz).
+- **Test**: `ZZTEST_BAGLI_GRUP` (3 üye) ile 3 temada grup sunumu render OK; "Grubu Çöz" → ANLIK/KALICI/VAZGEÇ diyaloğu OK. Test görev+grup **kalıcı silindi**, mevcut `TEST_ITER84_TEAM_GRP` korundu → **CANLI DB TEMİZ**. Derleme temiz. Mobil değişiklik yok.
+
+
+
 ## ✅ TAMAMLANDI (2026-06, "YAP"): TEKNİK arayüzü — Detaylı ile TAM özellik paritesi (Faz 3)
 - **İstek**: `Detaylı` (TasksPanel) arayüzündeki tüm özellik ve fonksiyonlar `Teknik` temasına da BİREBİR yansıtılsın; görsel kimlik (konsol/terminal havası) korunsun. (Faz 1=Profesyonel, Faz 2=Kolay zaten bitti; bu Faz 3.)
 - **Uygulama** (`TeknikInterface.jsx` yeniden yazıldı, paylaşılan `useTaskActions`+`useTaskBulk` kancaları): üst komut çubuğu — arama, **SEÇ** (çoklu seçim → `TaskBulkBar`), **YAPIŞTIR** (pano doluysa), **NEW_TASK** (`AddTaskModal`), **İŞ_KOLLARI** (`TaskCategoriesManagement`), **ŞABLON** (`TemplatesModal`+`TemplateBar`), **EXPORT** (`ExportSelectModal`), SETTINGS, DETAYLI'ya dön. Görünüm sekmeleri **AKTİF / ARŞİV / ÇÖP** + ÇÖPÜ_BOŞALT. Durum filtre çipleri (AKTİF/GEÇTİ/BEKLİYOR/BİTTİ). Tabloda satıra tıkla → tam **`TaskCardModal`** (alt görev/dosya/hatırlatıcı/kilit — Detaylı ile aynı). Arşiv satırında AKTİFE_AL, çöp satırında GERİ + KALICI SİL. Sağ detay panelinde seçili görev özeti + TAM KARTI AÇ/TAMAMLA.

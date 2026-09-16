@@ -32,6 +32,38 @@ export const FONT_SCALES = [
   { key: "xl", label: "Çok Büyük", px: 20 },
 ];
 
+// Görev menüsü (sağ tık / ⋯) aksiyon renkleri — işlev tipine göre gruplanır ki
+// hepsi tek tip cyan görünüp karışmasın. Kullanıcı her grubun rengini
+// Ayarlar → Temalar → MENÜ RENKLERİ'nden değiştirebilir (cihaza özel).
+export const DEFAULT_ACTION_COLORS = {
+  success: "#34D399", // onay / tamamlama
+  neutral: "#00F0FF", // genel / düzenleme
+  warning: "#FBBF24", // uyarı / bekletme
+  info: "#5B8CFF",    // taşıma / organizasyon
+  special: "#B96BFF", // seçim / devir
+  danger: "#FF5C7A",  // silme / iptal
+};
+
+export const ACTION_COLOR_GROUPS = [
+  { key: "success", label: "Onay / Tamamlama", desc: "Tamamlandı · Geri Yükle · Kilidi Aç" },
+  { key: "neutral", label: "Genel / Düzenleme", desc: "Düzenle · Kopyala · Aktif Yap · Arşivle" },
+  { key: "warning", label: "Uyarı / Bekletme", desc: "Beklemeye Al · Tarihi Geçmiş · Yaklaşan Uyarı · Kilit" },
+  { key: "info", label: "Taşıma / Organizasyon", desc: "İş Koluna Taşı · Bağla · Hatırlat · Dışa Aktar" },
+  { key: "special", label: "Seçim / Devir", desc: "Seç · Devret · Paylaş · Gruptan Çıkar" },
+  { key: "danger", label: "Silme / İptal", desc: "Sil · İptal Et · Kalıcı Sil" },
+];
+
+const isHex6 = (v) => typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v.trim());
+const sanitizeActionColors = (p) => {
+  const out = { ...DEFAULT_ACTION_COLORS };
+  if (p && typeof p === "object") {
+    for (const k of Object.keys(DEFAULT_ACTION_COLORS)) {
+      if (isHex6(p[k])) out[k] = p[k].trim();
+    }
+  }
+  return out;
+};
+
 // Arayüz görünümleri — her birine ad + açıklama. `ready` false olanlar
 // sırayla eklenecek (şimdilik yalnızca "Detaylı" aktif = mevcut görünüm).
 export const INTERFACES = [
@@ -72,15 +104,16 @@ const applyAppearance = (s) => {
 const loadAppearance = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { accent: DEFAULT_ACCENT, fontScale: DEFAULT_FONT_SCALE, interface: DEFAULT_INTERFACE };
+    if (!raw) return { accent: DEFAULT_ACCENT, fontScale: DEFAULT_FONT_SCALE, interface: DEFAULT_INTERFACE, actionColors: { ...DEFAULT_ACTION_COLORS } };
     const p = JSON.parse(raw);
     return {
       accent: p.accent || DEFAULT_ACCENT,
       fontScale: ["s", "m", "l", "xl"].includes(p.fontScale) ? p.fontScale : DEFAULT_FONT_SCALE,
       interface: INTERFACES.some((i) => i.key === p.interface) ? p.interface : DEFAULT_INTERFACE,
+      actionColors: sanitizeActionColors(p.actionColors),
     };
   } catch {
-    return { accent: DEFAULT_ACCENT, fontScale: DEFAULT_FONT_SCALE, interface: DEFAULT_INTERFACE };
+    return { accent: DEFAULT_ACCENT, fontScale: DEFAULT_FONT_SCALE, interface: DEFAULT_INTERFACE, actionColors: { ...DEFAULT_ACTION_COLORS } };
   }
 };
 
@@ -125,5 +158,20 @@ export const setInterfaceMode = (key) => {
   current = { ...current, interface: val };
   persist();
   applyAppearance(current);
+  notify();
+};
+
+export const setActionColor = (key, hex) => {
+  if (!(key in DEFAULT_ACTION_COLORS)) return;
+  const base = current.actionColors || DEFAULT_ACTION_COLORS;
+  const val = isHex6(hex) ? hex.trim() : DEFAULT_ACTION_COLORS[key];
+  current = { ...current, actionColors: { ...base, [key]: val } };
+  persist();
+  notify();
+};
+
+export const resetActionColors = () => {
+  current = { ...current, actionColors: { ...DEFAULT_ACTION_COLORS } };
+  persist();
   notify();
 };

@@ -30,6 +30,9 @@ import {
   Archive,
   Trash2,
   RotateCcw,
+  Link2,
+  Unlink,
+  Edit3,
 } from "lucide-react";
 import { toast } from "sonner";
 import { tasksApi, taskCategoriesApi } from "../lib/api";
@@ -180,6 +183,28 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
   );
   const gridTasks = view === "active" ? visibleTasks : archiveVisible;
   const numById = useMemo(() => computeTaskNumbers(visibleTasks), [visibleTasks]);
+  const groupById = useMemo(() => Object.fromEntries((groups || []).map((g) => [g.id, g])), [groups]);
+  // Bağlı görevleri (grup) blok halinde göster: tam-genişlik başlık + üye kartlar.
+  const renderSeq = useMemo(() => {
+    if (view !== "active") return gridTasks.map((t) => ({ kind: "task", task: t }));
+    const counts = {};
+    for (const t of gridTasks) { const g = t.group_id && groupById[t.group_id] ? t.group_id : null; if (g) counts[g] = (counts[g] || 0) + 1; }
+    const seq = []; const seen = new Set();
+    for (const t of gridTasks) {
+      const g = t.group_id && groupById[t.group_id] ? t.group_id : null;
+      if (g && counts[g] >= 2) {
+        if (!seen.has(g)) {
+          seen.add(g);
+          const members = gridTasks.filter((x) => x.group_id === g);
+          seq.push({ kind: "group", gid: g, group: groupById[g], total: members.length, done: members.filter((x) => x.status === "done").length });
+          for (const m of members) seq.push({ kind: "task", task: m, inGroup: true });
+        }
+      } else {
+        seq.push({ kind: "task", task: t });
+      }
+    }
+    return seq;
+  }, [gridTasks, groupById, view]);
 
   const actions = useTaskActions({ tasks, setTasks, cats, groups, user, load: reloadAll, numberFor: (id) => numById[id], highlight: q });
   const openTask = tasks.find((t) => t.id === openId) || null;
@@ -561,7 +586,19 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3" data-testid="prof-task-grid">
-                    {gridTasks.map((t, i) => {
+                    {renderSeq.map((it, i) => {
+                      if (it.kind === "group") {
+                        return (
+                          <div key={`g:${it.gid}`} data-testid={`prof-group-${it.gid}`} className="md:col-span-2 rounded-xl border border-sertex-cyan/40 bg-sertex-cyan/[0.06] px-4 py-2.5 flex items-center gap-2">
+                            <Link2 className="h-4 w-4 text-sertex-cyan shrink-0" />
+                            <span className="text-sertex-text font-semibold truncate flex-1">{it.group.name || "Bağlı Görevler"}</span>
+                            {it.group.show_progress && <span className="hud-text text-sertex-cyan border border-sertex-cyan/40 bg-sertex-cyan/10 rounded px-1.5 py-0.5 tabular-nums whitespace-nowrap">{it.done}/{it.total}</span>}
+                            <button type="button" onClick={() => actions.editGroup(it.group)} data-testid={`prof-group-edit-${it.gid}`} className="flex items-center gap-1 px-2 py-1 rounded-md border border-white/10 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/40 text-[11px] transition-colors"><Edit3 className="h-3 w-3" /> Düzenle</button>
+                            <button type="button" onClick={() => actions.dissolveGroupModed(it.group)} data-testid={`prof-group-dissolve-${it.gid}`} className="flex items-center gap-1 px-2 py-1 rounded-md border border-rose-400/40 text-rose-300 hover:bg-rose-500/15 text-[11px] transition-colors"><Unlink className="h-3 w-3" /> Çöz</button>
+                          </div>
+                        );
+                      }
+                      const t = it.task;
                       const b = bucketOf(t);
                       const badgeColor = b.color === "accent" ? "rgb(var(--sx-accent-rgb))" : b.color;
                       const prog = progressOf(t);
@@ -576,7 +613,7 @@ const ProfesyonelInterface = ({ onOpenSection, onOpenSettings, isMobile }) => {
                           transition={{ delay: Math.min(i * 0.03, 0.3) }}
                           onClick={() => cardClick(t)}
                           role="button"
-                          className={`rounded-xl border bg-sertex-surface/60 p-4 transition-colors ${view === "active" ? "cursor-pointer" : ""} ${selected ? "border-violet-400 ring-2 ring-violet-400 shadow-[0_0_16px_rgba(167,139,250,0.5)]" : "border-white/10 hover:border-sertex-cyan/40"}`}
+                          className={`rounded-xl border bg-sertex-surface/60 p-4 transition-colors ${it.inGroup ? "ring-1 ring-sertex-cyan/40" : ""} ${view === "active" ? "cursor-pointer" : ""} ${selected ? "border-violet-400 ring-2 ring-violet-400 shadow-[0_0_16px_rgba(167,139,250,0.5)]" : "border-white/10 hover:border-sertex-cyan/40"}`}
                           data-testid={`prof-card-${t.id}`}
                         >
                           <div className="flex items-start justify-between gap-2 mb-1">

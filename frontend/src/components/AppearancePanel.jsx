@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { Palette, Type, LayoutGrid, Check, RotateCcw, Lock } from "lucide-react";
+import { Palette, Type, LayoutGrid, Check, RotateCcw, Lock, MousePointerClick } from "lucide-react";
 import { toast } from "sonner";
 import {
   useAppearance,
@@ -7,9 +7,13 @@ import {
   resetAccent,
   setFontScale,
   setInterfaceMode,
+  setActionColor,
+  resetActionColors,
   ACCENT_PRESETS,
   FONT_SCALES,
   INTERFACES,
+  ACTION_COLOR_GROUPS,
+  DEFAULT_ACTION_COLORS,
   DEFAULT_ACCENT,
 } from "../lib/appearance";
 
@@ -21,8 +25,10 @@ import {
  * Seçimler cihaza özeldir (localStorage) ve anında uygulanır.
  */
 const AppearancePanel = () => {
-  const { accent, fontScale, interface: iface } = useAppearance();
+  const { accent, fontScale, interface: iface, actionColors } = useAppearance();
   const colorInputRef = useRef(null);
+  const COL = { ...DEFAULT_ACTION_COLORS, ...(actionColors || {}) };
+  const actionColorsChanged = ACTION_COLOR_GROUPS.some((g) => (COL[g.key] || "").toLowerCase() !== DEFAULT_ACTION_COLORS[g.key].toLowerCase());
   const isCustomAccent = !ACCENT_PRESETS.some((p) => p.value.toLowerCase() === (accent || "").toLowerCase());
 
   const pickInterface = (opt) => {
@@ -153,6 +159,56 @@ const AppearancePanel = () => {
             </button>
           )}
         </div>
+      </div>
+
+      {/* ---- MENÜ RENKLERİ ---- */}
+      <div className="pt-4 border-t border-sertex-cyan/15">
+        <div className="hud-text text-sertex-cyan mb-2 flex items-center gap-1.5">
+          <MousePointerClick className="h-3.5 w-3.5" /> MENÜ RENKLERİ
+        </div>
+        <div className="text-[11px] font-mono text-sertex-textMuted normal-case mb-3 leading-relaxed">
+          Görev menüsündeki (sağ tık / ⋯) işlemler artık türüne göre farklı renkte.
+          İstediğin grubun rengini buradan değiştir — hepsi karışmasın diye.
+        </div>
+        <div className="space-y-1.5" data-testid="action-colors">
+          {ACTION_COLOR_GROUPS.map((g) => {
+            const hex = COL[g.key];
+            return (
+              <label
+                key={g.key}
+                data-testid={`action-color-row-${g.key}`}
+                className="flex items-center gap-3 p-2 rounded-md border border-sertex-cyan/15 hover:border-sertex-cyan/40 cursor-pointer transition-colors"
+              >
+                <span
+                  className="h-6 w-6 rounded-full shrink-0 border border-white/20"
+                  style={{ background: hex, boxShadow: `0 0 8px ${hex}` }}
+                />
+                <span className="flex-1 min-w-0">
+                  <span className="hud-text block" style={{ color: hex }}>{g.label}</span>
+                  <span className="text-[10px] font-mono text-sertex-textMuted normal-case truncate block">{g.desc}</span>
+                </span>
+                <input
+                  type="color"
+                  value={hex}
+                  onChange={(e) => setActionColor(g.key, e.target.value)}
+                  data-testid={`action-color-input-${g.key}`}
+                  className="h-7 w-9 bg-transparent border-0 cursor-pointer p-0"
+                  aria-label={`${g.label} rengi`}
+                />
+              </label>
+            );
+          })}
+        </div>
+        {actionColorsChanged && (
+          <button
+            type="button"
+            onClick={() => { resetActionColors(); toast.success("Menü renkleri varsayılana döndü"); }}
+            data-testid="action-colors-reset"
+            className="mt-2 h-8 px-2 rounded-md border border-sertex-cyan/30 text-sertex-cyan hover:bg-sertex-cyan/10 flex items-center gap-1 hud-text transition-colors"
+          >
+            <RotateCcw className="h-3 w-3" /> RENKLERİ SIFIRLA
+          </button>
+        )}
       </div>
 
       {/* ---- YAZI BOYUTU ---- */}

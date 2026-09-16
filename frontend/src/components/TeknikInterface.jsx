@@ -90,6 +90,28 @@ const TeknikInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile 
   );
   const gridRows = view === "active" ? rows : archiveVisible;
   const numById = useMemo(() => computeTaskNumbers(rows), [rows]);
+  const groupById = useMemo(() => Object.fromEntries((groups || []).map((g) => [g.id, g])), [groups]);
+  // Bağlı görevleri (grup) blok halinde göster: grup başlığı satırı + üyeler.
+  const renderSeq = useMemo(() => {
+    if (view !== "active") return gridRows.map((t) => ({ kind: "task", task: t }));
+    const counts = {};
+    for (const t of gridRows) { const g = t.group_id && groupById[t.group_id] ? t.group_id : null; if (g) counts[g] = (counts[g] || 0) + 1; }
+    const seq = []; const seen = new Set();
+    for (const t of gridRows) {
+      const g = t.group_id && groupById[t.group_id] ? t.group_id : null;
+      if (g && counts[g] >= 2) {
+        if (!seen.has(g)) {
+          seen.add(g);
+          const members = gridRows.filter((x) => x.group_id === g);
+          seq.push({ kind: "group", gid: g, group: groupById[g], total: members.length, done: members.filter((x) => x.status === "done").length });
+          for (const m of members) seq.push({ kind: "task", task: m, inGroup: true });
+        }
+      } else {
+        seq.push({ kind: "task", task: t });
+      }
+    }
+    return seq;
+  }, [gridRows, groupById, view]);
   const sel = tasks.find((t) => t.id === selId) || null;
   const openTask = tasks.find((t) => t.id === openId) || null;
 
@@ -236,7 +258,23 @@ const TeknikInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile 
                   </tr>
                 </thead>
                 <tbody>
-                  {gridRows.map((t) => {
+                  {renderSeq.map((it) => {
+                    if (it.kind === "group") {
+                      return (
+                        <tr key={`g:${it.gid}`} data-testid={`teknik-group-${it.gid}`} className="bg-sertex-cyan/[0.07] border-b border-sertex-cyan/25">
+                          <td colSpan={9} className="px-4 py-1.5">
+                            <div className="flex items-center gap-2 text-[11px]">
+                              <span className="text-sertex-cyan">⛓</span>
+                              <span className="text-sertex-cyan tracking-widest truncate flex-1">{(it.group.name || "BAĞLI GÖREVLER").toUpperCase()}</span>
+                              {it.group.show_progress && <span className="text-sertex-textMuted tabular-nums">[{it.done}/{it.total}]</span>}
+                              <button onClick={() => actions.editGroup(it.group)} data-testid={`teknik-group-edit-${it.gid}`} className="text-sertex-textMuted hover:text-sertex-cyan">[DÜZENLE]</button>
+                              <button onClick={() => actions.dissolveGroupModed(it.group)} data-testid={`teknik-group-dissolve-${it.gid}`} className="text-rose-300 hover:text-rose-200">[ÇÖZ]</button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+                    const t = it.task;
                     const b = bucketOf(t);
                     const bc = b.color === "accent" ? "rgb(var(--sx-accent-rgb))" : b.color;
                     const on = selId === t.id;
@@ -246,7 +284,7 @@ const TeknikInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile 
                         key={t.id}
                         onClick={() => rowClick(t)}
                         data-testid={`teknik-row-${t.id}`}
-                        className={`border-b border-white/5 transition-colors ${view === "active" ? "cursor-pointer" : ""} ${checked ? "bg-violet-500/15" : on ? "bg-sertex-cyan/10" : "hover:bg-white/5"}`}
+                        className={`border-b border-white/5 transition-colors ${it.inGroup ? "border-l-2 border-l-sertex-cyan/40" : ""} ${view === "active" ? "cursor-pointer" : ""} ${checked ? "bg-violet-500/15" : on ? "bg-sertex-cyan/10" : "hover:bg-white/5"}`}
                       >
                         {view === "active" && bulk.selectMode && (
                           <td className="px-2 py-2">

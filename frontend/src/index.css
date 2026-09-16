@@ -426,3 +426,11 @@ html[data-font-scale="s"]  { font-size: 15px; }
 html[data-font-scale="m"]  { font-size: 16px; }
 html[data-font-scale="l"]  { font-size: 18px; }
 html[data-font-scale="xl"] { font-size: 20px; }
+
+/* ============================================================================
+   GÖREV MENÜSÜ AKSİYON RENKLERİ — her satır işlev tipine göre kendi rengini
+   (inline `color`) alır; hover arka planı butonun `--sx-ctx-hover` değişkeninden
+   gelir. Böylece renkler kullanıcı tarafından değiştirilebilir kalır.
+   ============================================================================ */
+.sx-ctx-item { transition: background-color .12s ease, color .12s ease; }
+.sx-ctx-item:hover:not(:disabled) { background-color: var(--sx-ctx-hover, rgba(0, 240, 255, 0.12)); }

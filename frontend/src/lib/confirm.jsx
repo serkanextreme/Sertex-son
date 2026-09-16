@@ -31,6 +31,15 @@ export function promptDialog(options = {}) {
   });
 }
 
+// Çoklu seçim penceresi — kullanıcıya 2+ eylem sun; seçilen `value` döner,
+// iptal edilirse null. Kullanım: const v = await choiceDialog({ choices: [...] });
+export function choiceDialog(options = {}) {
+  return new Promise((resolve) => {
+    if (typeof _show !== "function") { resolve(null); return; }
+    _show({ ...options, choices: options.choices || [], resolve });
+  });
+}
+
 export const ConfirmRoot = () => {
   const [state, setState] = useState(null);
   const [inputVal, setInputVal] = useState("");
@@ -59,8 +68,8 @@ export const ConfirmRoot = () => {
   useEffect(() => {
     if (!state) return;
     const onKey = (e) => {
-      if (e.key === "Escape") close(state.prompt ? null : false);
-      else if (e.key === "Enter" && !state.prompt) close(true);
+      if (e.key === "Escape") close(state.prompt ? null : (state.choices && state.choices.length ? null : false));
+      else if (e.key === "Enter" && !state.prompt && !(state.choices && state.choices.length)) close(true);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -114,6 +123,31 @@ export const ConfirmRoot = () => {
                   className="w-full bg-sertex-surface/60 border border-sertex-cyan/30 focus:border-sertex-cyan rounded-md px-3 py-2 text-sm font-mono text-sertex-text placeholder:text-sertex-textMuted/50 outline-none transition-colors"
                 />
               )}
+              {state.choices && state.choices.length > 0 ? (
+                <div className="flex flex-col gap-2 pt-1">
+                  {state.choices.map((c) => (
+                    <button
+                      key={c.value}
+                      onClick={() => close(c.value)}
+                      data-testid={c.testid || `confirm-choice-${c.value}`}
+                      className={
+                        c.danger
+                          ? "w-full py-2 bg-rose-500/20 border border-rose-400/60 text-rose-200 hover:bg-rose-500 hover:text-white rounded-md hud-text transition-colors"
+                          : "w-full py-2 bg-sertex-cyan/15 border border-sertex-cyan/60 text-sertex-cyan hover:bg-sertex-cyan hover:text-sertex-bg rounded-md hud-text transition-colors"
+                      }
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => close(null)}
+                    data-testid="confirm-cancel"
+                    className="w-full py-2 border border-sertex-cyan/25 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/50 rounded-md hud-text transition-colors"
+                  >
+                    {state.cancelText || "VAZGEÇ"}
+                  </button>
+                </div>
+              ) : (
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={() => close(state.prompt ? null : false)}
@@ -135,6 +169,7 @@ export const ConfirmRoot = () => {
                   {state.confirmText || (state.prompt ? "KAYDET" : "ONAYLA")}
                 </button>
               </div>
+              )}
             </motion.div>
           </div>
         </>

@@ -17,6 +17,29 @@ import {
 import { REMINDER_UNITS, unitToMinutes } from "../lib/reminderUtils";
 import { CustomSnoozeInput } from "./tasks/CustomSnoozeInput";
 import { flattenTree } from "../lib/categoryTree";
+import { useAppearance, DEFAULT_ACTION_COLORS } from "../lib/appearance";
+
+// Görev menüsü aksiyonlarını işlev tipine (renk grubu) eşler. Renkler
+// Ayarlar → Temalar → MENÜ RENKLERİ'nden değiştirilebilir.
+const ACTION_GROUP = {
+  restore: "success", uncancel: "success", "permanent-delete": "danger",
+  select: "special", done: "success", paused: "warning", pending: "neutral",
+  overdue: "warning", edit: "neutral", copy: "neutral", "pin-number": "info",
+  "demote-to-subtask": "special", reassign: "special", share: "special",
+  category: "info", "reset-size": "neutral", export: "info", reminder: "info",
+  "reminder-cancel": "warning", "due-soon": "warning", "digest-mute-toggle": "warning",
+  unarchive: "neutral", archive: "neutral", "group-edit": "info", "link-tasks": "info",
+  "group-remove": "special", "cancel-task": "danger", delete: "danger",
+  "lock-config": "warning", "lock-issue-otp": "success", "lock-enter-otp": "success",
+  "lock-noop": "success",
+};
+const hexToRgba = (hex, a) => {
+  try {
+    const h = String(hex).replace("#", "");
+    const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+  } catch { return `rgba(0,240,255,${a})`; }
+};
 
 export const ContextMenu = ({ x, y, task, onAction, onClose, isTeamView, onReassign, categories, onSetCategory, onSetReminderDays, onSetReminderDisabled, currentUser, onOpenLockConfig, onOpenUnlockOtp, onIssueOtp, displayNumber, onPinNumber, onUnpinNumber, archiveGroup = null, isAdmin = false }) => {
   const menuRef = useRef();
@@ -39,6 +62,10 @@ export const ContextMenu = ({ x, y, task, onAction, onClose, isTeamView, onReass
   // konuma taşınıp görünür yapılır. Böylece uzun menü (kilit vb.) ekranın
   // altına asla taşmaz; sığmıyorsa maxHeight + scroll devreye girer.
   const [pos, setPos] = useState({ left: x, top: y, ready: false });
+
+  const { actionColors } = useAppearance();
+  const COL = { ...DEFAULT_ACTION_COLORS, ...(actionColors || {}) };
+  const colorFor = (action) => COL[ACTION_GROUP[action] || "neutral"] || COL.neutral;
 
   useEffect(() => {
     const onMouseDown = (e) => {
@@ -345,6 +372,7 @@ export const ContextMenu = ({ x, y, task, onAction, onClose, isTeamView, onReass
               key={i}
               disabled={disabled}
               title={title}
+              style={disabled ? undefined : { color: colorFor(it.action), "--sx-ctx-hover": hexToRgba(colorFor(it.action), 0.14) }}
               onClick={() => {
                 if (disabled) return;
                 if (it.action === "reminder") {
@@ -395,7 +423,7 @@ export const ContextMenu = ({ x, y, task, onAction, onClose, isTeamView, onReass
                 onClose();
               }}
               data-testid={`ctx-${it.action}`}
-              className={`w-full text-left px-3 py-1.5 hud-text flex items-center gap-2 transition-colors ${it.color} ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
+              className={`sx-ctx-item w-full text-left px-3 py-1.5 hud-text flex items-center gap-2 ${disabled ? "opacity-40 cursor-not-allowed text-sertex-textMuted" : ""}`}
             >
               <it.icon className="h-3 w-3 shrink-0" />
               <span className="flex-1">{it.label}</span>

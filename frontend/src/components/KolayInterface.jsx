@@ -46,6 +46,9 @@ import {
   RotateCcw,
   ClipboardPaste,
   ListChecks,
+  Link2,
+  Unlink,
+  Edit3,
 } from "lucide-react";
 import { toast } from "sonner";
 import { tasksApi, taskCategoriesApi, taskLockApi, notesApi, teamApi, reminderConfigApi, taskAttachmentsApi } from "../lib/api";
@@ -1398,6 +1401,32 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
                   })}
                 </div>
               )}
+
+              {(() => {
+                const counts = {};
+                for (const t of activeTasks) { const g = t.group_id && groupById[t.group_id] ? t.group_id : null; if (g) counts[g] = (counts[g] || 0) + 1; }
+                const gids = Object.keys(counts).filter((g) => counts[g] >= 2);
+                if (!gids.length) return null;
+                return (
+                  <div className="mb-6 space-y-2" data-testid="kolay-groups">
+                    <div className="hud-text text-sertex-cyan flex items-center gap-1.5"><Link2 className="h-3.5 w-3.5" /> BAĞLI GÖREV GRUPLARI</div>
+                    {gids.map((gid) => {
+                      const g = groupById[gid];
+                      const members = activeTasks.filter((t) => t.group_id === gid);
+                      const done = members.filter((t) => t.status === "done").length;
+                      return (
+                        <div key={gid} data-testid={`kolay-group-${gid}`} className="rounded-xl border border-sertex-cyan/30 bg-sertex-cyan/[0.05] px-4 py-2.5 flex items-center gap-2">
+                          <Link2 className="h-4 w-4 text-sertex-cyan shrink-0" />
+                          <span className="text-sertex-text font-medium truncate flex-1">{g?.name || "Bağlı Görevler"}</span>
+                          {g?.show_progress !== false && <span className="hud-text text-sertex-cyan border border-sertex-cyan/40 bg-sertex-cyan/10 rounded-full px-2 py-0.5 tabular-nums whitespace-nowrap">{done}/{members.length}</span>}
+                          <button type="button" onClick={() => setLinkModal({ mode: "edit", groupId: gid })} data-testid={`kolay-group-edit-${gid}`} className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-white/10 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/40 text-xs font-mono transition-colors"><Edit3 className="h-3 w-3" /> Düzenle</button>
+                          <button type="button" onClick={() => cardActions.dissolveGroupModed(g || gid)} data-testid={`kolay-group-dissolve-${gid}`} className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-rose-400/40 text-rose-300 hover:bg-rose-500/15 text-xs font-mono transition-colors"><Unlink className="h-3 w-3" /> Çöz</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               <div className="hud-text text-sertex-cyan mb-3">BUGÜNKÜ GÖREVLER</div>
 

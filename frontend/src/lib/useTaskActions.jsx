@@ -5,7 +5,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { tasksApi, taskLockApi, reminderConfigApi } from "./api";
-import { confirmDialog } from "./confirm";
+import { confirmDialog, choiceDialog } from "./confirm";
 import { isOverdue } from "./taskHelpers";
 import {
   useTaskClipboard,
@@ -193,6 +193,50 @@ export function useTaskActions({ tasks = [], setTasks, cats = [], groups = [], u
     try { await tasksApi.deleteGroup(gid); toast.success("Grup dağıtıldı"); refresh(); }
     catch (e) { toast.error(e?.response?.data?.detail || "Dağıtılamadı"); }
   };
+  // Grubu düzenle — bağlı görev modalını "edit" modunda aç.
+  const editGroup = (group) => {
+    const gid = group?.id || group;
+    if (gid) setLinkModal({ mode: "edit", groupId: gid });
+  };
+  // Grubu Çöz — kullanıcı "Anlık" (geri alınabilir) veya "Kalıcı" seçer.
+  const dissolveGroupModed = async (group) => {
+    const gid = group?.id || group;
+    if (!gid) return;
+    const g = groupById[gid] || (typeof group === "object" ? group : null);
+    const memberIds = tasks.filter((t) => t.group_id === gid).map((t) => t.id);
+    const mode = await choiceDialog({
+      title: "GRUBU ÇÖZ",
+      message: `"${g?.name || "Bağlı Görevler"}" grubu nasıl çözülsün?\nGörevler silinmez; yalnızca bağlantıları kaldırılır.`,
+      choices: [
+        { value: "temporary", label: "ANLIK ÇÖZ (GERİ ALINABİLİR)", testid: "group-dissolve-temporary" },
+        { value: "permanent", label: "KALICI ÇÖZ", danger: true, testid: "group-dissolve-permanent" },
+      ],
+      cancelText: "VAZGEÇ",
+    });
+    if (!mode) return;
+    if (mode === "permanent") {
+      try { await tasksApi.deleteGroup(gid); toast.success("Grup kalıcı çözüldü"); refresh(); }
+      catch (e) { toast.error(e?.response?.data?.detail || "Çözülemedi"); }
+      return;
+    }
+    // Anlık (geçici) — hemen çöz, 12 sn boyunca "Geri Al" sun.
+    const snapshot = { name: g?.name || "", show_progress: g?.show_progress !== false, task_ids: memberIds };
+    try {
+      await tasksApi.deleteGroup(gid);
+      refresh();
+      toast.success("Grup çözüldü", {
+        description: "Yanlışlıkla mı oldu? Geri alabilirsin.",
+        duration: 12000,
+        action: {
+          label: "Geri Al",
+          onClick: async () => {
+            try { await tasksApi.createGroup(snapshot); toast.success("Grup geri yüklendi"); refresh(); }
+            catch { toast.error("Geri alınamadı"); }
+          },
+        },
+      });
+    } catch (e) { toast.error(e?.response?.data?.detail || "Çözülemedi"); }
+  };
   const handlePaste = async (categoryId, categoryName) => {
     if (!clipboard?.sourceId) return;
     try {
@@ -281,5 +325,5 @@ export function useTaskActions({ tasks = [], setTasks, cats = [], groups = [], u
     </>
   );
 
-  return { cardPropsFor, modalsElement, collapsedIds, toggleCollapse, reminderConfig, clipboard, clearTaskClipboard, setStatus, setArchived, removeTask, setTaskCategory, setEditing, nudge, cancelTask, uncancelTask, restoreTask, permanentDeleteTask, emptyTrash, dissolveGroup, handlePaste, handleUseTemplate };
+  return { cardPropsFor, modalsElement, collapsedIds, toggleCollapse, reminderConfig, clipboard, clearTaskClipboard, setStatus, setArchived, removeTask, setTaskCategory, setEditing, nudge, cancelTask, uncancelTask, restoreTask, permanentDeleteTask, emptyTrash, dissolveGroup, dissolveGroupModed, editGroup, groupById, handlePaste, handleUseTemplate };
 }
