@@ -707,17 +707,20 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         )
         new_sort = (float(top["sort_order"]) + 1.0) if top and top.get("sort_order") is not None else None
         # Alt görevler — istenirse kopyala (yeni id + done=False, temiz başlar).
+        # İç içe (nested) çocukları da özyinelemeli kopyala.
+        def _copy_sub(s: dict) -> dict:
+            return Subtask(
+                text=s.get("text", ""),
+                done=False,
+                status="pending",
+                due_date=s.get("due_date"),
+                children=[_copy_sub(c) for c in (s.get("children") or [])],
+            ).model_dump()
+
         subs: List[dict] = []
         if req.include_subtasks:
             for s in (src.get("subtasks") or []):
-                subs.append(
-                    Subtask(
-                        text=s.get("text", ""),
-                        done=False,
-                        status="pending",
-                        due_date=s.get("due_date"),
-                    ).model_dump()
-                )
+                subs.append(_copy_sub(s))
         # Görev sahibinin şirketini çöz — kopya, kaynağın şirket bağlamını korur
         # (company_id + company_name birlikte kaynaktan alınır → tutarsızlık yok).
         title = f"(Kopya) {src.get('title', '')}".strip()[:500]
@@ -834,11 +837,19 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
             raise HTTPException(status_code=400, detail="Geçersiz durum")
         # Sertleştirme: id'siz gönderilen alt görevlere sunucuda kalıcı id ata
         # (aksi halde id kaybolur, sonraki promote/silme id'yi bulamaz). Mevcut
-        # id'ler korunur → gerçek istemci davranışı değişmez.
+        # id'ler korunur → gerçek istemci davranışı değişmez. İç içe çocuklar da
+        # özyinelemeli işlenir.
+        def _ensure_sub_ids(lst) -> None:
+            for _s in lst or []:
+                if isinstance(_s, dict):
+                    if not _s.get("id"):
+                        _s["id"] = str(uuid.uuid4())
+                    kids = _s.get("children")
+                    if isinstance(kids, list):
+                        _ensure_sub_ids(kids)
+
         if isinstance(update.get("subtasks"), list):
-            for _s in update["subtasks"]:
-                if isinstance(_s, dict) and not _s.get("id"):
-                    _s["id"] = str(uuid.uuid4())
+            _ensure_sub_ids(update["subtasks"])
         # Otomatik tamamlanma tarihi: durum "done" olunca completed_at yazılır;
         # başka bir duruma dönünce temizlenir. Manuel gönderilen completed_at
         # (edit yetkisiyle) korunur ve boş string null'a çevrilir.

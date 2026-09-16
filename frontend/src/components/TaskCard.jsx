@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { motion, AnimatePresence, Reorder } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { createPortal } from "react-dom";
 import {
   Check, Pause, Plus, MoreVertical, BellRing, RotateCcw, Clock, AlertTriangle,
@@ -18,7 +18,20 @@ import { ShareTaskModal } from "./tasks/ShareTaskModal";
 import { printTasks, exportTasksExcel, exportTasksWord } from "../lib/taskExport";
 import { ContextMenu } from "./TaskContextMenu";
 import { SubtaskMenu } from "./SubtaskMenu";
-import { SubtaskRow, SUBTASK_SIZE_KEY_PREFIX } from "./SubtaskRow";
+import { SUBTASK_SIZE_KEY_PREFIX } from "./SubtaskRow";
+import { SubtaskTree } from "./SubtaskTree";
+import {
+  flattenSubs,
+  updateSubById,
+  removeSubById,
+  addChildById,
+  replaceChildrenById,
+  findSubById,
+  mutateSelectedSubs,
+  computeSubNumbers,
+  pinSelectedSubs,
+  subCounts,
+} from "../lib/subtaskTree";
 import { Highlight } from "./tasks/Highlight";
 import { TaskAttachments } from "./tasks/TaskAttachments";
 import { formatIntervalShort } from "../lib/reminderUtils";
@@ -100,34 +113,21 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
   const persistTimer = useRef(null);
   const [newSub, setNewSub] = useState("");
   const [showSubInput, setShowSubInput] = useState(false);
-  const [subCtx, setSubCtx] = useState(null); // { idx, x, y }
+  const [subCtx, setSubCtx] = useState(null); // { id, x, y }
+  // İç içe alt görev ekleme — hangi alt görevin altına ekleniyor (id) + metin.
+  const [addChildParent, setAddChildParent] = useState(null);
+  const [newChildText, setNewChildText] = useState("");
   // Alt görev ÇOKLU SEÇİM modu (id bazlı → sıralama değişse de korunur) + toplu tarih.
   const [subSelectMode, setSubSelectMode] = useState(false);
   const [selectedSubIds, setSelectedSubIds] = useState([]);
   const [bulkDateOpen, setBulkDateOpen] = useState(false);
   const [bulkDate, setBulkDate] = useState("");
   const [childCtx, setChildCtx] = useState(null); // "BU GÖREVDEN ÇIKANLAR" satırına sağ-tık menüsü: { childId, title, x, y }
-  const subLongPressTimer = useRef();
   const subtasks = useMemo(() => (Array.isArray(task.subtasks) ? task.subtasks : []), [task.subtasks]);
-  // Alt görev numaraları — sabitlenenler atlanır (görev listesiyle aynı mantık).
-  const subNumbers = useMemo(() => {
-    const m = {};
-    const reserved = new Set();
-    for (const s of subtasks) {
-      const done = s.done || s.status === "done";
-      if (!done && s.number_pinned && s.pinned_number != null) reserved.add(s.pinned_number);
-    }
-    let c = 0;
-    for (const s of subtasks) {
-      const done = s.done || s.status === "done";
-      if (done) { m[s.id] = null; continue; }
-      if (s.number_pinned && s.pinned_number != null) { m[s.id] = s.pinned_number; continue; }
-      c += 1;
-      while (reserved.has(c)) c += 1;
-      m[s.id] = c;
-    }
-    return m;
-  }, [subtasks]);
+  // Alt görev numaraları — her kardeş grubu kendi içinde, sabitlenenler atlanır.
+  const subNumbers = useMemo(() => computeSubNumbers(subtasks), [subtasks]);
+  // Alt görev sayacı — tüm derinlikler dahil (iç içe çocuklar da sayılır).
+  const subStats = useMemo(() => subCounts(subtasks), [subtasks]);
 
   const openLockConfig = () => setShowLockConfig(true);
   const openUnlockOtp = () => setShowUnlockOtp(true);
@@ -140,92 +140,108 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
     }
   };
 
-  const updateSubtaskAt = (idx, patch) => {
-    onSetSubtasks(
-      subtasks.map((s, i) => (i === idx ? { ...s, ...patch } : s))
-    );
+  const updateSubtaskById = (id, patch) => {
+    onSetSubtasks(updateSubById(subtasks, id, patch));
   };
 
-  const handleSubAction = (idx, action, extra) => {
+  // İç içe alt görev ekleme — commit/cancel (menüden "Alt görev ekle" ile açılır).
+  const commitAddChild = (parentId) => {
+    const t = newChildText.trim();
+    if (t) {
+      onSetSubtasks(
+        addChildById(subtasks, parentId, {
+          id: crypto.randomUUID(), text: t, done: false, status: "pending", children: [],
+        }),
+      );
+    }
+    setNewChildText("");
+    setAddChildParent(null);
+  };
+  const cancelAddChild = () => { setNewChildText(""); setAddChildParent(null); };
+
+  const handleSubAction = (id, action, extra) => {
     if (action === "select") {
-      const s = subtasks[idx];
       setSubSelectMode(true);
-      setSelectedSubIds(s ? [s.id] : []);
+      setSelectedSubIds(id ? [id] : []);
+      return;
+    }
+    if (action === "add-child") {
+      setNewChildText("");
+      setAddChildParent(id);
       return;
     }
     if (action === "delete") {
-      onSetSubtasks(subtasks.filter((_, i) => i !== idx));
+      onSetSubtasks(removeSubById(subtasks, id));
       return;
     }
     if (action === "reset-size") {
-      const sub = subtasks[idx];
-      if (sub) {
-        try {
-          localStorage.removeItem(SUBTASK_SIZE_KEY_PREFIX + sub.id);
-        } catch (e) { console.warn("[TasksPanel.jsx] hata bastırıldı:", e); }
-        // Force re-render: also strip inline size from DOM if present
-        const el = document.querySelector(`[data-testid="subtask-row-${task.id}-${idx}"]`);
-        if (el) { el.style.width = ""; el.style.height = ""; }
-        toast.success("Boyut sıfırlandı");
-      }
+      try {
+        localStorage.removeItem(SUBTASK_SIZE_KEY_PREFIX + id);
+      } catch (e) { console.warn("[TaskCard] size reset failed:", e); }
+      const el = document.querySelector(`[data-testid="subtask-row-${task.id}-${id}"]`);
+      if (el) { el.style.width = ""; el.style.height = ""; }
+      toast.success("Boyut sıfırlandı");
       return;
     }
     if (action === "date-clear") {
-      updateSubtaskAt(idx, { due_date: null, reminder_fired: false });
+      updateSubtaskById(id, { due_date: null, reminder_fired: false });
       return;
     }
     if (action === "date-set") {
-      updateSubtaskAt(idx, { due_date: extra.iso, reminder_fired: false });
+      updateSubtaskById(id, { due_date: extra.iso, reminder_fired: false });
       return;
     }
     if (action === "edit-set") {
-      updateSubtaskAt(idx, { text: extra.text });
+      updateSubtaskById(id, { text: extra.text });
       return;
     }
     if (action === "promote") {
-      const sub = subtasks[idx];
-      if (sub?.id && onPromoteSubtask) onPromoteSubtask(sub.id);
+      if (id && onPromoteSubtask) onPromoteSubtask(id);
       return;
     }
     if (action === "pin-number") {
       const num = extra?.number;
       if (num != null) {
-        const dup = subtasks.some(
-          (s, i) => i !== idx && !(s.done || s.status === "done") && s.number_pinned && s.pinned_number === num,
+        // Çakışma kontrolü AYNI seviye (kardeş grubu) içinde — numaralar grup bazlı.
+        const findSiblings = (arr) => {
+          if (arr.some((s) => s.id === id)) return arr;
+          for (const s of arr) {
+            if (s.children?.length) { const r = findSiblings(s.children); if (r) return r; }
+          }
+          return null;
+        };
+        const group = findSiblings(subtasks) || [];
+        const dup = group.some(
+          (s) => s.id !== id && !(s.done || s.status === "done") && s.number_pinned && s.pinned_number === num,
         );
-        if (dup) { toast.error(`${num} numarası zaten başka bir alt göreve sabit`); return; }
+        if (dup) { toast.error(`${num} numarası aynı seviyede zaten sabit`); return; }
       }
-      updateSubtaskAt(idx, { number_pinned: true, pinned_number: num });
+      updateSubtaskById(id, { number_pinned: true, pinned_number: num });
       return;
     }
     if (action === "unpin-number") {
-      updateSubtaskAt(idx, { number_pinned: false, pinned_number: null });
+      updateSubtaskById(id, { number_pinned: false, pinned_number: null });
       return;
     }
     // status changes: pending / done / paused / overdue
     if (action === "done") {
-      updateSubtaskAt(idx, { status: "done", done: true });
+      updateSubtaskById(id, { status: "done", done: true });
       return;
     }
     if (action === "pending") {
-      updateSubtaskAt(idx, { status: "pending", done: false });
+      updateSubtaskById(id, { status: "pending", done: false });
       return;
     }
-    updateSubtaskAt(idx, { status: action });
+    updateSubtaskById(id, { status: action });
   };
 
-  // ===== Alt görev toplu (çoklu seçim) işlemleri — seçim id bazlı =====
+  // ===== Alt görev toplu (çoklu seçim) işlemleri — id bazlı, iç içe ağaç =====
   const toggleSubSelect = (id) =>
     setSelectedSubIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const exitSubSelect = () => { setSubSelectMode(false); setSelectedSubIds([]); setBulkDateOpen(false); setBulkDate(""); };
   const applyBulkSub = (mutator) => {
     const sel = new Set(selectedSubIds);
-    const next = [];
-    for (const s of subtasks) {
-      if (sel.has(s.id)) { const r = mutator(s); if (r !== null) next.push(r); }
-      else next.push(s);
-    }
-    onSetSubtasks(next);
+    onSetSubtasks(mutateSelectedSubs(subtasks, sel, mutator));
   };
   const bulkStatus = (status) => {
     if (!selectedSubIds.length) return;
@@ -250,20 +266,14 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
     exitSubSelect();
   };
   // Toplu SABİTLE — seçili bitmemiş alt görevleri MEVCUT sıra numaralarına
-  // sabitler. Mevcut numaralar zaten benzersiz olduğundan çakışma olmaz.
+  // sabitler (numaralar grup bazlı benzersiz olduğundan çakışma olmaz).
   const bulkPin = () => {
     if (!selectedSubIds.length) return;
     const sel = new Set(selectedSubIds);
-    let count = 0;
-    const next = subtasks.map((s) => {
-      if (!sel.has(s.id)) return s;
-      if (s.done || s.status === "done") return s; // bitmiş alt görev sabitlenmez
-      const num = subNumbers[s.id];
-      if (num == null) return s;
-      count += 1;
-      return { ...s, number_pinned: true, pinned_number: num };
-    });
-    onSetSubtasks(next);
+    const count = flattenSubs(subtasks).filter(
+      (s) => sel.has(s.id) && !(s.done || s.status === "done") && subNumbers[s.id] != null,
+    ).length;
+    onSetSubtasks(pinSelectedSubs(subtasks, sel, subNumbers));
     toast.success(`${count} alt görevin sıra numarası sabitlendi`);
     exitSubSelect();
   };
@@ -271,7 +281,7 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
     if (!selectedSubIds.length) return;
     const sel = new Set(selectedSubIds);
     const n = selectedSubIds.length;
-    onSetSubtasks(subtasks.map((s) => (sel.has(s.id) ? { ...s, number_pinned: false, pinned_number: null } : s)));
+    onSetSubtasks(mutateSelectedSubs(subtasks, sel, (s) => ({ ...s, number_pinned: false, pinned_number: null })));
     toast.success(`${n} alt görevin sabiti kaldırıldı`);
     exitSubSelect();
   };
@@ -938,7 +948,7 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
                     <span className="hud-text text-violet-200 flex items-center gap-1 mr-1" data-testid={`subtask-bulk-count-${task.id}`}>
                       <ListChecks className="h-3 w-3" /> {selectedSubIds.length} seçildi
                     </span>
-                    <button onClick={() => setSelectedSubIds(subtasks.map((s) => s.id))} data-testid={`subtask-bulk-selectall-${task.id}`} className="hud-text px-1.5 py-0.5 rounded border border-violet-400/40 text-violet-200 hover:bg-violet-500/20">Tümünü Seç</button>
+                    <button onClick={() => setSelectedSubIds(flattenSubs(subtasks).map((s) => s.id))} data-testid={`subtask-bulk-selectall-${task.id}`} className="hud-text px-1.5 py-0.5 rounded border border-violet-400/40 text-violet-200 hover:bg-violet-500/20">Tümünü Seç</button>
                     <button onClick={() => setSelectedSubIds([])} className="hud-text px-1.5 py-0.5 rounded border border-white/15 text-sertex-textMuted hover:text-sertex-text">Temizle</button>
                     <span className="w-px h-4 bg-white/10 mx-0.5" />
                     <button disabled={!selectedSubIds.length} onClick={() => bulkStatus("done")} data-testid={`subtask-bulk-done-${task.id}`} className="hud-text px-1.5 py-0.5 rounded border border-emerald-400/40 text-emerald-300 hover:bg-emerald-500/15 disabled:opacity-40 flex items-center gap-1"><Check className="h-3 w-3" /> Tamamla</button>
@@ -958,42 +968,26 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
                     )}
                   </div>
                 )}
-                <Reorder.Group
-                  axis="y"
-                  values={subtasks}
-                  onReorder={(next) => onSetSubtasks(next)}
-                  className="space-y-1"
-                >
-                  {(() => {
-                    return subtasks.map((s, idx) => {
-                      const isSubDone = s.done || s.status === "done";
-                      const num = subNumbers[s.id];
-                      return (
-                        <SubtaskRow
-                          key={s.id}
-                          sub={s}
-                          idx={idx}
-                          taskId={task.id}
-                          displayNumber={isSubDone ? null : num}
-                          selectMode={subSelectMode}
-                          selected={selectedSubIds.includes(s.id)}
-                          onSelectToggle={() => toggleSubSelect(s.id)}
-                          onToggle={(i, next) => updateSubtaskAt(i, { done: next, status: next ? "done" : "pending" })}
-                          onOpenMenu={(i, x, y) => setSubCtx({ idx: i, x, y })}
-                          onLongPressStart={(i, e) => {
-                            const touch = e.touches[0];
-                            subLongPressTimer.current = setTimeout(() => {
-                              setSubCtx({ idx: i, x: touch.clientX, y: touch.clientY });
-                              if (navigator.vibrate) navigator.vibrate(30);
-                            }, 500);
-                          }}
-                          onLongPressEnd={() => clearTimeout(subLongPressTimer.current)}
-                          highlight={highlight}
-                        />
-                      );
-                    });
-                  })()}
-                </Reorder.Group>
+                <SubtaskTree
+                  nodes={subtasks}
+                  parentId={null}
+                  ctx={{
+                    taskId: task.id,
+                    numbers: subNumbers,
+                    selectMode: subSelectMode,
+                    selectedIds: new Set(selectedSubIds),
+                    highlight,
+                    onToggle: (id, done) => updateSubtaskById(id, { done, status: done ? "done" : "pending" }),
+                    onOpenMenu: (id, x, y) => setSubCtx({ id, x, y }),
+                    onSelectToggle: (id) => toggleSubSelect(id),
+                    onReorderChildren: (parentId, next) => onSetSubtasks(replaceChildrenById(subtasks, parentId, next)),
+                    addChildParentId: addChildParent,
+                    newChildText,
+                    setNewChildText,
+                    commitAddChild,
+                    cancelAddChild,
+                  }}
+                />
                 {showSubInput && (
                   <div className="flex items-center gap-1.5 pt-0.5">
                     <div className={`h-4 w-4 rounded-sm border ${style.border.split(" ")[0]} shrink-0`} />
@@ -1037,9 +1031,9 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
               className={`mt-1.5 hud-text ${style.accent} opacity-60 hover:opacity-100 flex items-center gap-1 transition-opacity`}
             >
               <Plus className="h-3 w-3" /> ALT GÖREV EKLE
-              {subtasks.length > 0 && (
+              {subStats.total > 0 && (
                 <span className="text-sertex-textMuted ml-1">
-                  · {subtasks.filter((s) => s.done || s.status === "done").length}/{subtasks.length}
+                  · {subStats.done}/{subStats.total}
                 </span>
               )}
             </button>
@@ -1183,7 +1177,7 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
                 data-testid={`task-collapsed-hint-${task.id}`}
               >
                 <ChevronsUpDown className="h-3 w-3 text-sertex-cyan/70" />
-                {subtasks.filter((s) => s.done || s.status === "done").length}/{subtasks.length} alt görev · büyütmek için ▸
+                {subStats.done}/{subStats.total} alt görev · büyütmek için ▸
               </div>
             )}
           </div>
@@ -1280,13 +1274,13 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
             isAdmin={canPermanentDelete}
           />
         )}
-        {subCtx && subtasks[subCtx.idx] && (
+        {subCtx && findSubById(subtasks, subCtx.id) && (
           <SubtaskMenu
             x={subCtx.x}
             y={subCtx.y}
-            sub={subtasks[subCtx.idx]}
-            displayNumber={subNumbers[subtasks[subCtx.idx].id]}
-            onAction={(action, extra) => handleSubAction(subCtx.idx, action, extra)}
+            sub={findSubById(subtasks, subCtx.id)}
+            displayNumber={subNumbers[subCtx.id]}
+            onAction={(action, extra) => handleSubAction(subCtx.id, action, extra)}
             onClose={() => setSubCtx(null)}
           />
         )}

@@ -27,6 +27,7 @@ import {
 import { tasksApi, teamApi, taskCategoriesApi, reminderConfigApi, taskAttachmentsApi } from "../lib/api";
 import { openDetachedPanel } from "../lib/detachedPanels";
 import { getDescendantIds, getCategoryPath, flattenTree } from "../lib/categoryTree";
+import { flattenSubs, updateSubById } from "../lib/subtaskTree";
 import { getCatTreeExpandedSet } from "../lib/catTreePrefs";
 import { getCatFilterExpandedSet, setCatFilterExpanded, saveCatFilterExpandedSet } from "../lib/catFilterPrefs";
 import { LOCK_KEY_LABELS, LOCK_KEY_ORDER } from "../lib/taskLocks";
@@ -113,14 +114,14 @@ const useReminderScheduler = (tasks, onFire, onFireSub) => {
             onFire(t);
           }
         }
-        // Subtask due-date reminders
-        const subs = Array.isArray(t.subtasks) ? t.subtasks : [];
-        subs.forEach((s, idx) => {
+        // Subtask due-date reminders (iç içe çocuklar dahil, id bazlı)
+        const subs = flattenSubs(t.subtasks);
+        subs.forEach((s) => {
           if (!s.due_date || s.reminder_fired) return;
           if (s.done || s.status === "done" || s.status === "paused") return;
           const when = new Date(s.due_date).getTime();
           if (when <= now && when > now - 5 * 60 * 1000) {
-            onFireSub(t, idx);
+            onFireSub(t, s);
           }
         });
       });
@@ -861,8 +862,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
 
   // Fire subtask reminders (when its due_date arrives)
   const fireSubReminder = useCallback(
-    async (task, subIdx) => {
-      const sub = task.subtasks?.[subIdx];
+    async (task, sub) => {
       if (!sub) return;
       toast(
         <div>
@@ -882,10 +882,8 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
           });
         } catch (e) { console.warn("[TasksPanel.jsx] hata bastırıldı:", e); }
       }
-      // Persist reminder_fired=true on this subtask
-      const nextSubs = (task.subtasks || []).map((s, i) =>
-        i === subIdx ? { ...s, reminder_fired: true } : s
-      );
+      // Persist reminder_fired=true on this subtask (iç içe olsa da id ile bulunur)
+      const nextSubs = updateSubById(task.subtasks || [], sub.id, { reminder_fired: true });
       // Optimistic update in state
       setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, subtasks: nextSubs } : t)));
       try {

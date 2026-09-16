@@ -1,6 +1,7 @@
 // Alternatif arayüzler (Teknik/Aydınlık/Pano) için ortak küçük yardımcılar.
 // Not: KolayInterface + ProfesyonelInterface kendi kopyalarını kullanır
 // (çalışıyor, dokunulmadı) — burası yeni 3 arayüz içindir.
+import { flattenSubs } from "./subtaskTree";
 
 export const isActive = (t) => t.status !== "done" && !t.archived && !t.deleted;
 export const isOverdue = (t) => isActive(t) && !!t.due_date && new Date(t.due_date).getTime() < Date.now();
@@ -15,7 +16,7 @@ export const bucketOf = (t) => {
 };
 
 export const progressOf = (t) => {
-  const subs = Array.isArray(t.subtasks) ? t.subtasks : [];
+  const subs = flattenSubs(Array.isArray(t.subtasks) ? t.subtasks : []);
   if (subs.length) {
     const done = subs.filter((s) => s.done || s.status === "done").length;
     return Math.round((done / subs.length) * 100);

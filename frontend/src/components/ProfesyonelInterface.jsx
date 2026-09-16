@@ -31,6 +31,7 @@ import { taskSerialLabel } from "../lib/taskSerial";
 import { useTaskBulk } from "../lib/useTaskBulk";
 import { TaskBulkBar } from "./tasks/TaskBulkBar";
 import { computeTaskNumbers } from "../lib/taskBulkActions";
+import { flattenSubs } from "../lib/subtaskTree";
 import {
   BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -48,7 +49,7 @@ const bucketOf = (t) => {
 };
 
 const progressOf = (t) => {
-  const subs = Array.isArray(t.subtasks) ? t.subtasks : [];
+  const subs = flattenSubs(Array.isArray(t.subtasks) ? t.subtasks : []);
   if (subs.length) {
     const done = subs.filter((s) => s.done || s.status === "done").length;
     return Math.round((done / subs.length) * 100);

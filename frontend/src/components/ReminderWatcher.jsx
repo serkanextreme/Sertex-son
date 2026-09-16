@@ -13,6 +13,7 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { tasksApi } from "../lib/api";
+import { flattenSubs, updateSubById } from "../lib/subtaskTree";
 import { playReminderChime } from "../lib/reminderChime";
 import { showReminderToast } from "../lib/reminderToast";
 
@@ -68,8 +69,7 @@ export const ReminderWatcher = ({ enabled }) => {
       }
     };
 
-    const fireSub = async (t, idx) => {
-      const sub = t.subtasks?.[idx];
+    const fireSub = async (t, sub) => {
       if (!sub) return;
       toast(
         <div>
@@ -81,9 +81,7 @@ export const ReminderWatcher = ({ enabled }) => {
       );
       playReminderChime();
       notify("SERTEX · Alt görev", `${t.title}\n↳ ${sub.text}`, `sertex-sub-${sub.id}`);
-      const nextSubs = (t.subtasks || []).map((s, i) =>
-        i === idx ? { ...s, reminder_fired: true } : s
-      );
+      const nextSubs = updateSubById(t.subtasks || [], sub.id, { reminder_fired: true });
       try {
         await tasksApi.setSubtasks(t.id, nextSubs);
       } catch (e) {
@@ -115,15 +113,15 @@ export const ReminderWatcher = ({ enabled }) => {
             await fireTask(t);
           }
         }
-        const subs = Array.isArray(t.subtasks) ? t.subtasks : [];
-        subs.forEach((s, idx) => {
+        const subs = flattenSubs(t.subtasks);
+        subs.forEach((s) => {
           if (!s.due_date || s.reminder_fired) return;
           if (s.done || s.status === "done" || s.status === "paused") return;
           const when = new Date(s.due_date).getTime();
           const key = `sub:${s.id}:${s.due_date}`;
           if (when <= now && when > now - WINDOW_MS && !seen.has(key)) {
             seen.add(key);
-            fireSub(t, idx);
+            fireSub(t, s);
           }
         });
       }

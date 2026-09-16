@@ -2742,3 +2742,18 @@ Toplu işlem çubuğuna (üç arayüzde ortak) **"İş Koluna Taşı"** açılı
 Kullanıcı raporu: Detaylı + "DIŞARI TAŞI" ile açılan yüzen (detached) Neural Link penceresinde bir kartın 3-nokta → SEÇ'ine basınca "hiçbir şey olmuyor, mor çubuk çıkmıyor".
 Kök neden: `TaskBulkBar` panelin EN ÜSTÜNDE (kategori filtresi + görev listesinin üstünde) render oluyordu. Kullanıcı listede aşağı kaydırıp SEÇ'e basınca seçim modu açılıyor ama çubuk yukarıda görüş alanı dışında kalıyordu; karttaki 20px halka da gözden kaçıyordu → "tepki yok" algısı. (Programatik olarak DOM'da bar+halka hep vardı.)
 Çözüm: `TaskBulkBar` kök div'i **`sticky top-0 z-30` + opak `bg-sertex-bg/95 backdrop-blur`** yapıldı; artık kaydırılmış olsa bile çubuk panelin tepesine yapışıp her zaman görünür. Ortak bileşen → Detaylı (ana rail + detached), Kolay, Profesyonel hepsinde geçerli. Detached pencerede kaydırılıp doğrulandı (bar görünür, "1 SEÇILDI").
+
+## ✅ İÇ İÇE (NESTED) ALT GÖREVLER — sınırsız derinlik (2026-06 · fork) TAMAMLANDI
+Kullanıcı isteği: Alt görevin altına da alt görev (sınırsız iç içe), her seviye tam özellikli, tamamlanma BAĞIMSIZ (rollup yok), menüden "Alt görev ekle", toplu Seç her seviyede.
+**Backend** (`routers/tasks_models.py`, `tasks_router.py`):
+- `Subtask` modeline özyinelemeli `children: List["Subtask"]` + `Subtask.model_rebuild()`.
+- Kopyalama (`duplicate`) çocukları özyinelemeli kopyalar (done=False). PATCH id-atama çocuklara da özyinelemeli iner.
+- Ağaç istemciden BÜTÜN olarak `PATCH /tasks/{id} {subtasks}` ile gelir (mevcut setSubtasks yolu). API round-trip 3 seviye doğrulandı.
+**Frontend**:
+- YENİ `lib/subtaskTree.js`: flattenSubs, updateSubById, removeSubById, addChildById, replaceChildrenById, findSubById, mutateSelectedSubs, computeSubNumbers (grup-bazlı), pinSelectedSubs, subCounts.
+- `SubtaskRow.jsx` id/ctx tabanlı + girintili çocuk render; YENİ `SubtaskTree.jsx` (kardeş grubu, Reorder.Group).
+- `TaskCard.jsx` alt görev mantığı index→id özyinelemeli (handleSubAction, bulk, pin, numaralandırma, sayaç). Menüye "Alt görev ekle" (SubtaskMenu action `add-child`) → satır altına inline giriş.
+- Sayaç/ilerleme (interfaceHelpers.progressOf, ProfesyonelInterface.progressOf) + hatırlatıcı tarayıcıları (ReminderWatcher, TasksPanel useReminderScheduler/fireSubReminder) flattenSubs ile tüm derinliği kapsar.
+**⚠️ ÖNEMLİ DERS — CRA/babel sonsuz döngü:** Aynı DOSYADA karşılıklı/kendine JSX-referanslı iki bileşen (SubtaskRow ↔ SubtaskTree) webpack babel-loader'da `RangeError: Maximum call stack size exceeded` verdi (izole babel geçse de). ÇÖZÜM: özyinelemeyi İKİ AYRI DOSYAYA böl (SubtaskRow.jsx + SubtaskTree.jsx birbirini import eder). Gelecekte iç içe/recursive bileşenleri ayrı dosyalara koy.
+**E2E (canlı, güvenli):** ZZTEST_NESTED (3 seviye) API round-trip ✓; UI'da girintili render + menüden "Alt görev ekle" (kalıcı) ✓; ZZTEST_NESTED2'de "Tümünü Seç"=4 + toplu Tamamla → 4/4 done (API teyit) ✓. Tüm test görevleri kalıcı silindi (404).
+**Bilinen küçük sınır:** İç içe bir alt görevde "Göreve dönüştür" (promote) backend'de top-level id aradığı için nested'te çalışmayabilir (edge-case; ana CRUD etkilenmez).

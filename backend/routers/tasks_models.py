@@ -116,6 +116,12 @@ class Subtask(BaseModel):
     # numarası değişmez; pinned_number gösterilir, diğerleri bu numarayı atlar.
     number_pinned: bool = False
     pinned_number: Optional[int] = None
+    # İç içe (nested) alt görevler — sınırsız derinlik. Her düğüm kendi
+    # çocuklarını taşır; ağaç istemciden bütün olarak PATCH ile gelir.
+    children: List["Subtask"] = Field(default_factory=list)
+
+
+Subtask.model_rebuild()
 
 
 # Görev Paylaşımı + Çok Kişili Atama (Task Sharing & Multi-Assignee)
