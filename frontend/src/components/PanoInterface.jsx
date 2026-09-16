@@ -1,10 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Plus, Search, Layers, Check, Pause, Play, RotateCcw } from "lucide-react";
+import { Plus, Search, Layers, Check, Pause, Play, RotateCcw, ListChecks, CheckCircle2, Circle } from "lucide-react";
 import { toast } from "sonner";
 import { tasksApi, taskCategoriesApi } from "../lib/api";
+import { useAuth } from "../lib/auth";
 import { setInterfaceMode } from "../lib/appearance";
 import { bucketOf, fmtDate, matchesQuery } from "../lib/interfaceHelpers";
+import { useTaskBulk } from "../lib/useTaskBulk";
+import { useTaskActions } from "../lib/useTaskActions";
+import { computeTaskNumbers } from "../lib/taskBulkActions";
+import { TaskBulkBar } from "./tasks/TaskBulkBar";
+import { TaskCardModal } from "./tasks/TaskCardModal";
+import { flattenSubs } from "../lib/subtaskTree";
 
 // PANO — Kanban. Sertex durumları (pending/paused/done/overdue) 3 sütuna eşlenir.
 const notTrashed = (t) => !t.archived && !t.deleted;
@@ -14,25 +21,39 @@ const COLUMNS = [
   { key: "done", title: "BİTTİ", match: (t) => t.status === "done" && !t.deleted, accent: "#10b981" },
 ];
 
+const subLabel = (t) => {
+  const subs = flattenSubs(Array.isArray(t.subtasks) ? t.subtasks : []);
+  if (!subs.length) return null;
+  const done = subs.filter((s) => s.done || s.status === "done").length;
+  return `${done}/${subs.length}`;
+};
+
 /**
- * PANO arayüzü — üç sütunlu Kanban. Kartlardaki düğmelerle durum geçişi
- * (Duraklat / Devam / Tamamla / Geri Al) — gerçek görev durumunu değiştirir.
+ * PANO arayüzü — üç sütunlu Kanban. Artık TAM güç: çoklu seçim + toplu işlem +
+ * karta tıklayınca tam görev kartı (koyu TaskCard) modalı (düzenleme, alt
+ * görevler, promote, kilit, menü). Sütun düğmeleri hızlı durum geçişini korur.
  */
 const PanoInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile }) => {
+  const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [cats, setCats] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
+  const [openId, setOpenId] = useState(null);
 
-  useEffect(() => {
+  const load = () => {
     Promise.all([
       tasksApi.list(false, "mine").catch(() => []),
       taskCategoriesApi.list("my_tasks").catch(() => []),
-    ]).then(([ts, cs]) => {
+      tasksApi.listGroups().catch(() => []),
+    ]).then(([ts, cs, gs]) => {
       setTasks(Array.isArray(ts) ? ts : []);
       setCats(Array.isArray(cs) ? cs : []);
+      setGroups(Array.isArray(gs) ? gs : []);
     }).finally(() => setLoading(false));
-  }, []);
+  };
+  useEffect(() => { load(); }, []);
 
   const catName = (id) => cats.find((c) => c.id === id)?.name || null;
 
@@ -42,6 +63,21 @@ const PanoInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile })
     for (const col of COLUMNS) out[col.key] = filtered.filter(col.match);
     return out;
   }, [tasks, cats, q]);
+
+  // Numaralandırma — çöpte olmayan, aramaya uyan görevler (done → null).
+  const numById = useMemo(
+    () => computeTaskNumbers(tasks.filter((t) => !t.deleted && matchesQuery(t, q, catName))),
+    [tasks, cats, q]
+  );
+  const allVisibleIds = useMemo(() => COLUMNS.flatMap((c) => (grouped[c.key] || []).map((t) => t.id)), [grouped]);
+  const openTask = tasks.find((t) => t.id === openId) || null;
+
+  const actions = useTaskActions({ tasks, setTasks, cats, groups, user, load, numberFor: (id) => numById[id], highlight: q });
+  const bulk = useTaskBulk({ numberFor: (id) => numById[id], refresh: load });
+
+  useEffect(() => {
+    if (openId && (!openTask || openTask.deleted)) setOpenId(null);
+  }, [openId, openTask]);
 
   const move = async (id, status) => {
     try {
@@ -54,6 +90,11 @@ const PanoInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile })
     if (colKey === "done") return [{ label: "Geri Al", icon: RotateCcw, to: "pending" }];
     if (colKey === "paused") return [{ label: "Devam", icon: Play, to: "pending" }, { label: "Bitir", icon: Check, to: "done" }];
     return [{ label: "Beklet", icon: Pause, to: "paused" }, { label: "Bitir", icon: Check, to: "done" }];
+  };
+
+  const cardClick = (t) => {
+    if (bulk.selectMode) { bulk.toggle(t.id); return; }
+    setOpenId(t.id);
   };
 
   return (
@@ -75,6 +116,11 @@ const PanoInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile })
             className="w-full pl-9 pr-3 py-2 rounded-lg bg-sertex-surface/70 border border-sertex-cyan/25 text-sertex-text text-sm placeholder:text-sertex-textMuted focus:border-sertex-cyan outline-none"
           />
         </div>
+        {!bulk.selectMode && allVisibleIds.length > 0 && (
+          <button onClick={() => bulk.start()} data-testid="pano-bulk-select" className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-violet-400/50 bg-violet-500/10 text-violet-200 text-sm hover:bg-violet-500/20 transition-colors">
+            <ListChecks className="h-4 w-4" /> Seç
+          </button>
+        )}
         <button onClick={() => onOpenSection?.("tasks")} data-testid="pano-add-task" className="flex items-center gap-2 px-4 py-2 rounded-lg bg-sertex-cyan/15 border border-sertex-cyan text-sertex-cyan text-sm hover:bg-sertex-cyan/25 transition-colors neon-glow">
           <Plus className="h-4 w-4" /> Yeni Görev
         </button>
@@ -82,6 +128,20 @@ const PanoInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile })
           <Layers className="h-3.5 w-3.5" /> Detaylı
         </button>
       </div>
+
+      {bulk.selectMode && (
+        <div className="shrink-0 px-5 pt-3">
+          <TaskBulkBar
+            count={bulk.ids.length}
+            testPrefix="pano-bulk"
+            categories={cats}
+            onSelectAll={() => bulk.selectAll(allVisibleIds)}
+            onClear={bulk.clear}
+            onCancel={bulk.exit}
+            onAction={bulk.runAction}
+          />
+        </div>
+      )}
 
       {/* Sütunlar */}
       {loading ? (
@@ -107,19 +167,42 @@ const PanoInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile })
                       const b = bucketOf(t);
                       const bc = b.color === "accent" ? "rgb(var(--sx-accent-rgb))" : b.color;
                       const due = fmtDate(t.due_date);
+                      const selected = bulk.has(t.id);
+                      const sc = subLabel(t);
+                      const num = numById[t.id];
                       return (
                         <motion.div
                           key={t.id}
                           initial={{ opacity: 0, y: 8 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: Math.min(i * 0.02, 0.2) }}
-                          className="rounded-lg border border-white/10 bg-sertex-surface/70 p-3"
+                          onClick={() => cardClick(t)}
+                          role="button"
+                          className={`rounded-lg border bg-sertex-surface/70 p-3 cursor-pointer transition-colors ${selected ? "border-violet-400 ring-2 ring-violet-400 shadow-[0_0_16px_rgba(167,139,250,0.5)]" : "border-white/10 hover:border-sertex-cyan/40"}`}
                           data-testid={`pano-card-${t.id}`}
                         >
-                          <div className="text-sm text-sertex-text font-medium leading-snug line-clamp-2 mb-1.5">{t.title}</div>
+                          <div className="flex items-start gap-2 mb-1.5">
+                            {bulk.selectMode && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); bulk.toggle(t.id); }}
+                                data-testid={`pano-select-${t.id}`}
+                                title="Seç"
+                                aria-label="Seç"
+                                className={`mt-0.5 h-5 w-5 flex items-center justify-center rounded-full border shrink-0 transition-all ${selected ? "border-violet-400 bg-violet-500/50 text-white" : "border-violet-400/50 text-violet-300 hover:bg-violet-500/15"}`}
+                              >
+                                {selected ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Circle className="h-3 w-3" />}
+                              </button>
+                            )}
+                            <div className="text-sm text-sertex-text font-medium leading-snug line-clamp-2 min-w-0">
+                              {num != null && <span className="text-sertex-cyan tabular-nums font-mono mr-1">{num}.</span>}
+                              {t.title}
+                            </div>
+                          </div>
                           <div className="flex items-center gap-1.5 mb-2">
                             <span className="h-1.5 w-1.5 rounded-full" style={{ background: bc }} />
                             <span className="text-[10px] font-mono" style={{ color: bc }}>{b.label}</span>
+                            {sc && <span className="text-[10px] font-mono text-sertex-textMuted">· Alt {sc}</span>}
                             {due && <span className="ml-auto text-[10px] font-mono text-sertex-textMuted">{due}</span>}
                           </div>
                           {catName(t.category_id) && (
@@ -131,7 +214,7 @@ const PanoInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile })
                               return (
                                 <button
                                   key={a.label}
-                                  onClick={() => move(t.id, a.to)}
+                                  onClick={(e) => { e.stopPropagation(); move(t.id, a.to); }}
                                   data-testid={`pano-move-${t.id}-${a.to}`}
                                   className="flex items-center gap-1 px-2 py-1 rounded border border-white/10 text-[10px] font-mono text-sertex-textSecondary hover:text-sertex-cyan hover:border-sertex-cyan/40 transition-colors"
                                 >
@@ -150,6 +233,11 @@ const PanoInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile })
           </div>
         </div>
       )}
+
+      {openTask && (
+        <TaskCardModal cardProps={actions.cardPropsFor(openTask)} onClose={() => setOpenId(null)} />
+      )}
+      {actions.modalsElement}
     </div>
   );
 };

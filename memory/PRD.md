@@ -2780,3 +2780,18 @@ Kullanıcı isteği: `TeknikInterface` ve `AydinlikInterface` (şimdiye kadar sa
 **Aydınlık** (`AydinlikInterface.jsx`): beyaz liste aynen; başlıkta `Seç` → `TaskBulkBar`; kartlarda seçim radyosu (seçili=mor halka); karta tıklayınca koyu TaskCard modalı; kart no + Alt (x/y) rozeti eklendi; tamamla kutucuğu korunur.
 **Modal otomatik kapanış:** modal içindeki görev done/arşiv/silinirse `openId` derived-task üzerinden useEffect ile modal kapanır (tamamlayınca temiz UX).
 **Test (canlı DB — güvenli):** Screenshot ile görsel + etkileşim doğrulandı: Teknik'te bulk bar + seçim + koyu TaskCard modalı ✓; Aydınlık'ta beyaz liste + Seç + bulk bar + seçim + koyu TaskCard modalı ✓. Toplu mantık zaten Prof/Kolay'da kanıtlı ortak `useTaskBulk`/`runBulkTaskAction`; canlı üretim verisini korumak için YIKICI toplu aksiyon ÇALIŞTIRILMADI ve otomatik testing_agent (veri mutasyonu riski) ÇAĞRILMADI — önceki fork'un bilinçli protokolüyle uyumlu. CRA build temiz (yalnızca mevcut catName exhaustive-deps uyarıları).
+
+## ✅ PANO ARAYÜZ TAM PARİTE + E2E TEST (2026-06 · fork) TAMAMLANDI
+**Pano** (`PanoInterface.jsx`) üç arayüzle (Teknik/Aydınlık) aynı güce kavuştu:
+- `useTaskActions` + `useTaskBulk` + `TaskCardModal` + `computeTaskNumbers` bağlandı; groups yüklenir.
+- `Seç` → yapışkan `TaskBulkBar` (Tümünü Seç/Tamamla/Beklet/Aktif/Tarihi geçti/Arşivle/İş Koluna Taşı/Sabitle/Sabiti kaldır/Sil). selectAll tüm sütunlardaki görünür görevleri seçer.
+- Kartlarda seçim radyosu (seçili=mor halka); karta tıklayınca koyu TaskCard modalı (alt görevler, sonsuz iç içe, promote, kilit, menü). Sütun hızlı-durum düğmeleri (Beklet/Bitir/Devam/Geri Al) korunur; bulk durum değişince kart doğru Kanban sütununa taşınır.
+- Kart no + Alt(x/y) rozeti eklendi.
+
+**E2E TEST — canlı DB güvenli protokolü (ZZTEST_ dummy + kalıcı temizlik):**
+- API ile 5 ZZTEST görevi oluşturuldu (biri 2 seviye iç içe alt görevli: 4 düğüm).
+- **Teknik:** arama "ZZTEST" ile SADECE dummy'ler süzüldü → Tümünü Seç (5) → Beklet. API doğrulaması: 5'i de `paused`, nested subtree korundu. Nested kart modalı 1/2 rozeti + katla + üstü çizili tamamlanmış iç görevle render oldu ✓
+- **Aydınlık:** ZZTEST süz → Tümünü Seç → Aktif (round-trip pending). Beyaz listede seçim + dark TaskCard modalı (Seçenek 1) doğrulandı ✓
+- **Pano:** ZZTEST süz → Tümünü Seç → Beklet; 5 kart YAPILACAK→BEKLEMEDE sütununa taşındı; nested kart modalı Pano'da da render oldu ✓
+- **Temizlik:** 5 ZZTEST görevi `/api/tasks/{id}/permanent` ile KALICI silindi; kalan ZZTEST = YOK. Gerçek üretim verisine dokunulmadı (arama süzgeci + yalnız ZZTEST seçimi ile izole edildi).
+- CRA build temiz. Test yöntemi: screenshot_tool (UI) + API doğrulaması; testing_agent kasıtlı çağrılmadı (canlı DB koruması).
