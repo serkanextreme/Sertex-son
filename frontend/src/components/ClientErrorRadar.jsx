@@ -55,7 +55,8 @@ const StatCard = ({ label, value, sub, accent, testid }) => (
   </div>
 );
 
-// Son 7 gün günlük hata trendi — küçük çubuk grafik (HUD estetiği, ek bağımlılık yok).
+// Son 7 gün günlük hata trendi — küçük yığılmış çubuk grafik (Hata + Uyarı
+// seviye kırılımı, HUD estetiği, ek bağımlılık yok).
 const ErrorTrendChart = ({ daily }) => {
   const days = Array.isArray(daily) ? daily : [];
   const weekTotal = days.reduce((s, d) => s + (d.count || 0), 0);
@@ -65,6 +66,7 @@ const ErrorTrendChart = ({ daily }) => {
     try { return new Date(iso + "T00:00:00Z").toLocaleDateString("tr-TR", { weekday: "short", timeZone: "UTC" }); }
     catch { return ""; }
   };
+  const H = 48;
   return (
     <div className="glass-panel corner-bracket p-3 border-orange-400/25" data-testid="error-radar-trend">
       <div className="flex items-center justify-between mb-2">
@@ -80,25 +82,42 @@ const ErrorTrendChart = ({ daily }) => {
       ) : weekTotal === 0 ? (
         <div className="py-3 text-center text-[11px] font-mono text-emerald-300 normal-case" data-testid="error-radar-trend-empty">Son 7 günde hata yok ✓</div>
       ) : (
-        <div className="flex items-end justify-between gap-1.5 h-[68px]" data-testid="error-radar-trend-bars">
-          {days.map((d) => {
-            const isToday = d.date === todayStr;
-            const h = d.count > 0 ? Math.max(4, Math.round((d.count / max) * 48)) : 0;
-            return (
-              <div key={d.date} className="flex-1 flex flex-col items-center justify-end gap-1 min-w-0" data-testid={`error-radar-trend-day-${d.date}`}>
-                <span className={`text-[10px] font-mono tabular-nums leading-none ${d.count > 0 ? "text-orange-300" : "text-sertex-textMuted/40"}`}>{d.count}</span>
-                <div className="w-full flex items-end justify-center" style={{ height: 48 }}>
-                  <div
-                    className={`w-full max-w-[22px] rounded-t transition-all ${isToday ? "bg-sertex-cyan/70 border border-sertex-cyan" : "bg-orange-400/60"}`}
-                    style={{ height: `${h}px`, minHeight: d.count > 0 ? 4 : 0 }}
-                    title={`${wd(d.date)} · ${d.count} hata`}
-                  />
+        <>
+          <div className="flex items-end justify-between gap-1.5" style={{ height: H + 20 }} data-testid="error-radar-trend-bars">
+            {days.map((d) => {
+              const isToday = d.date === todayStr;
+              const count = d.count || 0;
+              const errors = d.errors || 0;
+              const warnings = d.warnings || 0;
+              const other = Math.max(0, count - errors - warnings);
+              const barH = count > 0 ? Math.max(4, Math.round((count / max) * H)) : 0;
+              const seg = (n) => (count > 0 ? Math.round((n / count) * barH) : 0);
+              const eH = seg(errors), wH = seg(warnings);
+              const oH = Math.max(0, barH - eH - wH);
+              return (
+                <div key={d.date} className="flex-1 flex flex-col items-center justify-end gap-1 min-w-0" data-testid={`error-radar-trend-day-${d.date}`}>
+                  <span className="text-[10px] font-mono tabular-nums leading-none text-sertex-textMuted/70">{count || ""}</span>
+                  <div className="w-full flex items-end justify-center" style={{ height: H }}>
+                    <div
+                      className={`w-full max-w-[22px] rounded-t overflow-hidden flex flex-col-reverse ${isToday ? "ring-1 ring-sertex-cyan" : ""}`}
+                      style={{ height: `${barH}px` }}
+                      title={`${wd(d.date)} · ${errors} hata · ${warnings} uyarı`}
+                    >
+                      {eH > 0 && <div className="w-full bg-sertex-danger/80" style={{ height: `${eH}px` }} data-testid={`error-radar-trend-err-${d.date}`} />}
+                      {wH > 0 && <div className="w-full bg-orange-400/70" style={{ height: `${wH}px` }} data-testid={`error-radar-trend-warn-${d.date}`} />}
+                      {oH > 0 && <div className="w-full bg-sertex-textMuted/30" style={{ height: `${oH}px` }} />}
+                    </div>
+                  </div>
+                  <span className={`hud-text leading-none ${isToday ? "text-sertex-cyan" : "text-sertex-textMuted"}`}>{wd(d.date)}</span>
                 </div>
-                <span className={`hud-text leading-none ${isToday ? "text-sertex-cyan" : "text-sertex-textMuted"}`}>{wd(d.date)}</span>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+          <div className="flex items-center justify-center gap-4 mt-2 text-[10px] font-mono text-sertex-textMuted normal-case" data-testid="error-radar-trend-legend">
+            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-sertex-danger/80" /> Hata</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-orange-400/70" /> Uyarı</span>
+          </div>
+        </>
       )}
     </div>
   );

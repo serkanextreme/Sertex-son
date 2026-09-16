@@ -838,19 +838,40 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
         cutoff = (now - timedelta(hours=24)).isoformat()
         last_24h = await db.client_logs.count_documents({"created_at": {"$gte": cutoff}})
         # Son 7 gün günlük hata sayısı (UTC gününe göre) — Hata Radarı trend grafiği.
+        # Her gün seviye kırılımıyla: errors (error/critical/fatal) + warnings (warning/warn).
         today = now.date()
         days = [today - timedelta(days=i) for i in range(6, -1, -1)]
         week_cutoff = (now - timedelta(days=7)).isoformat()
-        counts: Dict[str, int] = {}
+        by_day: Dict[str, Dict[str, int]] = {}
         try:
             agg = await db.client_logs.aggregate([
                 {"$match": {"created_at": {"$gte": week_cutoff}}},
-                {"$group": {"_id": {"$substrCP": ["$created_at", 0, 10]}, "count": {"$sum": 1}}},
+                {"$group": {
+                    "_id": {"$substrCP": ["$created_at", 0, 10]},
+                    "count": {"$sum": 1},
+                    "errors": {"$sum": {"$cond": [{"$in": [{"$toLower": {"$ifNull": ["$level", ""]}}, ["error", "critical", "fatal"]]}, 1, 0]}},
+                    "warnings": {"$sum": {"$cond": [{"$in": [{"$toLower": {"$ifNull": ["$level", ""]}}, ["warning", "warn"]]}, 1, 0]}},
+                }},
             ]).to_list(length=32)
-            counts = {row["_id"]: int(row.get("count", 0)) for row in agg if row.get("_id")}
+            by_day = {
+                row["_id"]: {
+                    "count": int(row.get("count", 0)),
+                    "errors": int(row.get("errors", 0)),
+                    "warnings": int(row.get("warnings", 0)),
+                }
+                for row in agg if row.get("_id")
+            }
         except Exception:
-            counts = {}
-        daily = [{"date": d.isoformat(), "count": counts.get(d.isoformat(), 0)} for d in days]
+            by_day = {}
+        daily = [
+            {
+                "date": d.isoformat(),
+                "count": by_day.get(d.isoformat(), {}).get("count", 0),
+                "errors": by_day.get(d.isoformat(), {}).get("errors", 0),
+                "warnings": by_day.get(d.isoformat(), {}).get("warnings", 0),
+            }
+            for d in days
+        ]
         return {"logs": docs, "total": total, "active": active, "last_24h": last_24h, "daily": daily}
 
     @router.delete("/admin/client-logs")
