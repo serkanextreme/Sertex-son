@@ -7,6 +7,7 @@ import { bucketOf, fmtDate, matchesQuery } from "../lib/interfaceHelpers";
 import { useTaskBulk } from "../lib/useTaskBulk";
 import { useTaskActions } from "../lib/useTaskActions";
 import { computeTaskNumbers } from "../lib/taskBulkActions";
+import { groupColorOf } from "../lib/groupColors";
 import { TaskBulkBar } from "./tasks/TaskBulkBar";
 import { TaskCardModal } from "./tasks/TaskCardModal";
 import { AddTaskModal } from "./tasks/AddTaskModal";
@@ -103,8 +104,9 @@ const TeknikInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile 
         if (!seen.has(g)) {
           seen.add(g);
           const members = gridRows.filter((x) => x.group_id === g);
-          seq.push({ kind: "group", gid: g, group: groupById[g], total: members.length, done: members.filter((x) => x.status === "done").length });
-          for (const m of members) seq.push({ kind: "task", task: m, inGroup: true });
+          const gc = groupColorOf(groupById[g]);
+          seq.push({ kind: "group", gid: g, group: groupById[g], color: gc, total: members.length, done: members.filter((x) => x.status === "done").length });
+          for (const m of members) seq.push({ kind: "task", task: m, inGroup: true, color: gc });
         }
       } else {
         seq.push({ kind: "task", task: t });
@@ -240,6 +242,9 @@ const TeknikInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile 
                 />
               </div>
             )}
+            {view === "trash" && (
+              <div className="px-4 pt-3">{actions.groupTrashBanner(archiveVisible)}</div>
+            )}
             {loading ? (
               <div className="p-6 text-xs text-sertex-textMuted" data-testid="teknik-loading">YÜKLENİYOR...</div>
             ) : (
@@ -260,12 +265,13 @@ const TeknikInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile 
                 <tbody>
                   {renderSeq.map((it) => {
                     if (it.kind === "group") {
+                      const gc = it.color;
                       return (
-                        <tr key={`g:${it.gid}`} data-testid={`teknik-group-${it.gid}`} className="bg-sertex-cyan/[0.07] border-b border-sertex-cyan/25">
+                        <tr key={`g:${it.gid}`} data-testid={`teknik-group-${it.gid}`} className="bg-sertex-cyan/[0.07] border-b border-sertex-cyan/25" style={gc ? { background: `${gc}12`, borderColor: `${gc}55` } : undefined}>
                           <td colSpan={9} className="px-4 py-1.5">
                             <div className="flex items-center gap-2 text-[11px]">
-                              <span className="text-sertex-cyan">⛓</span>
-                              <span className="text-sertex-cyan tracking-widest truncate flex-1">{(it.group.name || "BAĞLI GÖREVLER").toUpperCase()}</span>
+                              <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: gc || "rgb(var(--sx-accent-rgb))" }} />
+                              <span className="text-sertex-cyan tracking-widest truncate flex-1" style={gc ? { color: gc } : undefined}>{(it.group.name || "BAĞLI GÖREVLER").toUpperCase()}</span>
                               {it.group.show_progress && <span className="text-sertex-textMuted tabular-nums">[{it.done}/{it.total}]</span>}
                               <button onClick={() => actions.editGroup(it.group)} data-testid={`teknik-group-edit-${it.gid}`} className="text-sertex-textMuted hover:text-sertex-cyan">[DÜZENLE]</button>
                               <button onClick={() => actions.dissolveGroupModed(it.group)} data-testid={`teknik-group-dissolve-${it.gid}`} className="text-rose-300 hover:text-rose-200">[ÇÖZ]</button>
@@ -284,7 +290,8 @@ const TeknikInterface = ({ onOpenSection, onOpenSettings, sidebarOpen, isMobile 
                         key={t.id}
                         onClick={() => rowClick(t)}
                         data-testid={`teknik-row-${t.id}`}
-                        className={`border-b border-white/5 transition-colors ${it.inGroup ? "border-l-2 border-l-sertex-cyan/40" : ""} ${view === "active" ? "cursor-pointer" : ""} ${checked ? "bg-violet-500/15" : on ? "bg-sertex-cyan/10" : "hover:bg-white/5"}`}
+                        style={it.inGroup ? { borderLeft: `3px solid ${it.color || "rgb(var(--sx-accent-rgb))"}` } : undefined}
+                        className={`border-b border-white/5 transition-colors ${view === "active" ? "cursor-pointer" : ""} ${checked ? "bg-violet-500/15" : on ? "bg-sertex-cyan/10" : "hover:bg-white/5"}`}
                       >
                         {view === "active" && bulk.selectMode && (
                           <td className="px-2 py-2">

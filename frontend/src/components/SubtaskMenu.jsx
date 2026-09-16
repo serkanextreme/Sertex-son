@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
-import { Check, Pause, Play, Trash2, Clock, AlertTriangle, X, ChevronRight, GripVertical, Pencil, ArrowUpRight, Anchor, ListChecks, Plus } from "lucide-react";
+import { Check, Pause, Play, Trash2, Clock, AlertTriangle, X, ChevronRight, GripVertical, Pencil, ArrowUpRight, Anchor, ListChecks, Plus, FolderInput } from "lucide-react";
 import { toast } from "sonner";
 
 export const SubtaskMenu = ({ x, y, sub, displayNumber, onAction, onClose }) => {
@@ -67,6 +67,7 @@ export const SubtaskMenu = ({ x, y, sub, displayNumber, onAction, onClose }) => 
     sub.due_date && { icon: X, label: "Tarihi temizle", color: "text-sertex-textMuted hover:bg-sertex-cyan/10", action: "date-clear" },
     { icon: GripVertical, label: "Boyutu sıfırla", color: "text-sertex-cyan hover:bg-sertex-cyan/10", action: "reset-size" },
     { icon: ArrowUpRight, label: "Göreve dönüştür", color: "text-violet-300 hover:bg-violet-500/15", action: "promote" },
+    { icon: FolderInput, label: "Şunun altına taşı", color: "text-sertex-cyan hover:bg-sertex-cyan/10", action: "move" },
     { icon: Anchor, label: sub.number_pinned && sub.pinned_number != null ? `Sıra numarası sabit: ${sub.pinned_number}` : "Sıra numarasını sabitle", color: "text-amber-300 hover:bg-amber-500/15", action: "pin-number", hasSubmenu: true },
     { icon: Trash2, label: "Sil", color: "text-rose-300 hover:bg-rose-500/15", action: "delete" },
   ].filter(Boolean);

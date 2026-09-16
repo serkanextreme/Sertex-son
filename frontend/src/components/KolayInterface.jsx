@@ -83,6 +83,7 @@ import { TemplatesModal } from "./tasks/TemplatesModal";
 import { useTaskClipboard, clearTaskClipboard, setTaskClipboard, updateTaskClipboard } from "../lib/taskClipboard";
 import { printTasks, exportTasksExcel, exportTasksWord } from "../lib/taskExport";
 import { useTaskActions } from "../lib/useTaskActions";
+import { groupColorOf, hexToRgba } from "../lib/groupColors";
 import { TaskCardModal } from "./tasks/TaskCardModal";
 import TaskCategoriesManagement from "./TaskCategoriesManagement";
 import { flattenSubs } from "../lib/subtaskTree";
@@ -110,7 +111,7 @@ const fmtDateTime = (iso) => {
 };
 
 // Zengin kart gövdesi — referans görsele göre (kutucuk + uyarı ikonu + ⚓ + 🕐 + 📄 etiket + küçült/menü).
-const KolayCardBody = ({ task, number, catName, onComplete, onMenu, collapsed, onToggleCollapse, dragHandleProps, selectMode = false, selected = false, onSelectToggle, onOpen }) => {
+const KolayCardBody = ({ task, number, catName, onComplete, onMenu, collapsed, onToggleCollapse, dragHandleProps, selectMode = false, selected = false, onSelectToggle, onOpen, groupColor = null }) => {
   const b = bucketOf(task);
   const badgeColor = b.color === "accent" ? "rgb(var(--sx-accent-rgb))" : b.color;
   const overdue = b.label === "Süresi Geçti";
@@ -209,6 +210,7 @@ const KolayCardBody = ({ task, number, catName, onComplete, onMenu, collapsed, o
           {pinnedNum}.
           {task.number_pinned && <Anchor className="h-3 w-3 ml-0.5 text-amber-300" data-testid={`kolay-pin-${task.id}`} />}
         </span>
+        {groupColor && <span className="inline-block h-2.5 w-2.5 rounded-full mr-1.5 align-middle" style={{ background: groupColor, boxShadow: `0 0 6px ${groupColor}` }} title="Bağlı görev grubu" data-testid={`kolay-group-dot-${task.id}`} />}
         {task.title}
       </div>
       {taskSerialLabel(task) && (
@@ -258,7 +260,7 @@ const KolayCardBody = ({ task, number, catName, onComplete, onMenu, collapsed, o
 };
 
 // dnd-kit sürüklenebilir sarmalayıcı (2 yönlü ızgara sıralaması).
-const KolaySortableCard = ({ task, number, catName, onComplete, onMenu, collapsed, onToggleCollapse, selectMode, selected, onSelectToggle, onOpen }) => {
+const KolaySortableCard = ({ task, number, catName, onComplete, onMenu, collapsed, onToggleCollapse, selectMode, selected, onSelectToggle, onOpen, groupColor = null }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -281,6 +283,7 @@ const KolaySortableCard = ({ task, number, catName, onComplete, onMenu, collapse
         selected={selected}
         onSelectToggle={onSelectToggle}
         onOpen={onOpen}
+        groupColor={groupColor}
       />
     </div>
   );
@@ -572,7 +575,7 @@ const KolayNotes = () => {
 };
 
 // Kolay içi Arşiv — biten görevler + iş koluna göre gruplama toggle'ı.
-const KolayArchive = ({ catName, flatCats = [] }) => {
+const KolayArchive = ({ catName, flatCats = [], groupTrashBanner }) => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [byCat, setByCat] = useState(false);
@@ -726,6 +729,7 @@ const KolayArchive = ({ catName, flatCats = [] }) => {
           )}
         </div>
       </div>
+      {mode === "trash" && !loading && items.length > 0 && groupTrashBanner?.(items, load)}
       {loading ? (
         <div className="hud-text text-sertex-textMuted py-10 text-center">YÜKLENİYOR...</div>
       ) : items.length === 0 ? (
@@ -1412,13 +1416,15 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
                     <div className="hud-text text-sertex-cyan flex items-center gap-1.5"><Link2 className="h-3.5 w-3.5" /> BAĞLI GÖREV GRUPLARI</div>
                     {gids.map((gid) => {
                       const g = groupById[gid];
+                      const gc = groupColorOf(g);
                       const members = activeTasks.filter((t) => t.group_id === gid);
                       const done = members.filter((t) => t.status === "done").length;
                       return (
-                        <div key={gid} data-testid={`kolay-group-${gid}`} className="rounded-xl border border-sertex-cyan/30 bg-sertex-cyan/[0.05] px-4 py-2.5 flex items-center gap-2">
-                          <Link2 className="h-4 w-4 text-sertex-cyan shrink-0" />
+                        <div key={gid} data-testid={`kolay-group-${gid}`} className="rounded-xl border border-sertex-cyan/30 bg-sertex-cyan/[0.05] px-4 py-2.5 flex items-center gap-2" style={gc ? { borderColor: hexToRgba(gc, 0.5), background: hexToRgba(gc, 0.08) } : undefined}>
+                          <span className="h-3 w-3 rounded-full shrink-0" style={{ background: gc || "rgb(var(--sx-accent-rgb))" }} />
+                          <Link2 className="h-4 w-4 text-sertex-cyan shrink-0" style={gc ? { color: gc } : undefined} />
                           <span className="text-sertex-text font-medium truncate flex-1">{g?.name || "Bağlı Görevler"}</span>
-                          {g?.show_progress !== false && <span className="hud-text text-sertex-cyan border border-sertex-cyan/40 bg-sertex-cyan/10 rounded-full px-2 py-0.5 tabular-nums whitespace-nowrap">{done}/{members.length}</span>}
+                          {g?.show_progress !== false && <span className="hud-text text-sertex-cyan border border-sertex-cyan/40 bg-sertex-cyan/10 rounded-full px-2 py-0.5 tabular-nums whitespace-nowrap" style={gc ? { color: gc, borderColor: hexToRgba(gc, 0.4), background: hexToRgba(gc, 0.1) } : undefined}>{done}/{members.length}</span>}
                           <button type="button" onClick={() => setLinkModal({ mode: "edit", groupId: gid })} data-testid={`kolay-group-edit-${gid}`} className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-white/10 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/40 text-xs font-mono transition-colors"><Edit3 className="h-3 w-3" /> Düzenle</button>
                           <button type="button" onClick={() => cardActions.dissolveGroupModed(g || gid)} data-testid={`kolay-group-dissolve-${gid}`} className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-rose-400/40 text-rose-300 hover:bg-rose-500/15 text-xs font-mono transition-colors"><Unlink className="h-3 w-3" /> Çöz</button>
                         </div>
@@ -1453,7 +1459,7 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
                       data-testid="kolay-task-grid"
                     >
                       {activeTasks.map((t) => (
-                        <KolaySortableCard key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} selectMode={kolayBulk.selectMode} selected={kolayBulk.has(t.id)} onSelectToggle={() => kolayBulk.toggle(t.id)} onOpen={(tt) => setOpenId(tt.id)} />
+                        <KolaySortableCard key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} selectMode={kolayBulk.selectMode} selected={kolayBulk.has(t.id)} onSelectToggle={() => kolayBulk.toggle(t.id)} onOpen={(tt) => setOpenId(tt.id)} groupColor={groupColorOf(groupById[t.group_id])} />
                       ))}
                     </div>
                   </SortableContext>
@@ -1461,7 +1467,7 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
               ) : (
                 <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }} data-testid="kolay-task-grid">
                   {activeTasks.map((t) => (
-                    <KolayCardBody key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} selectMode={kolayBulk.selectMode} selected={kolayBulk.has(t.id)} onSelectToggle={() => kolayBulk.toggle(t.id)} onOpen={(tt) => setOpenId(tt.id)} />
+                    <KolayCardBody key={t.id} task={t} number={numberOf[t.id]} catName={catName} onComplete={completeTask} onMenu={openMenu} collapsed={collapsedIds.has(t.id)} onToggleCollapse={toggleCollapse} selectMode={kolayBulk.selectMode} selected={kolayBulk.has(t.id)} onSelectToggle={() => kolayBulk.toggle(t.id)} onOpen={(tt) => setOpenId(tt.id)} groupColor={groupColorOf(groupById[t.group_id])} />
                   ))}
                 </div>
               )}
@@ -1472,7 +1478,7 @@ const KolayInterface = ({ onOpenSettings, sidebarOpen, isMobile }) => {
           {activeKey === "notes" && <KolayNotes />}
 
           {/* ARŞİV — biten görevler + iş koluna göre gruplama */}
-          {activeKey === "archive" && <KolayArchive catName={catName} flatCats={flatCats} />}
+          {activeKey === "archive" && <KolayArchive catName={catName} flatCats={flatCats} groupTrashBanner={cardActions.groupTrashBanner} />}
 
           {/* DOSYALAR — mevcut FilePanel yeniden kullanıldı */}
           {activeKey === "files" && (

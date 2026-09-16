@@ -1585,7 +1585,7 @@ const TasksPanel = ({ refreshSignal, onDataChanged, detached = false, initialCat
       catch (e) { console.error("[TasksPanel] grup çözme hatası:", e); toast.error("İşlem başarısız"); }
       return;
     }
-    const snapshot = { name: group.name || "", show_progress: group.show_progress !== false, task_ids: memberIds };
+    const snapshot = { name: group.name || "", color: group.color || null, show_progress: group.show_progress !== false, task_ids: memberIds };
     try {
       await tasksApi.deleteGroup(gid);
       done();

@@ -472,6 +472,7 @@ class TaskGroup(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: Optional[str] = None
     name: Optional[str] = None
+    color: Optional[str] = None
     show_progress: bool = True
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -479,12 +480,14 @@ class TaskGroup(BaseModel):
 
 class TaskGroupCreate(BaseModel):
     name: Optional[str] = None
+    color: Optional[str] = None
     show_progress: bool = True
     task_ids: List[str] = Field(default_factory=list)
 
 
 class TaskGroupUpdate(BaseModel):
     name: Optional[str] = None
+    color: Optional[str] = None
     show_progress: Optional[bool] = None
     # Verildiğinde grubun üyelerini (ve sırasını) bu listeyle değiştirir.
     task_ids: Optional[List[str]] = None

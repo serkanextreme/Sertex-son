@@ -14,6 +14,8 @@ import {
 } from "./taskClipboard";
 import { EditTaskModal } from "../components/tasks/EditTaskModal";
 import { LinkTasksModal } from "../components/tasks/LinkTasksModal";
+import { Link2, RotateCcw, Trash2 } from "lucide-react";
+import { groupColorOf, hexToRgba } from "./groupColors";
 
 export function useTaskActions({ tasks = [], setTasks, cats = [], groups = [], user, load, numberFor, highlight = "" }) {
   const clipboard = useTaskClipboard();
@@ -180,6 +182,53 @@ export function useTaskActions({ tasks = [], setTasks, cats = [], groups = [], u
     try { await tasksApi.permanentDelete(id); toast.success("Kalıcı olarak silindi"); refresh(); }
     catch (e) { toast.error(e?.response?.data?.detail || "Silinemedi"); }
   };
+  // Çöp'te grup görevlerini toplu geri getir / kalıcı sil — sor/seç mantığıyla.
+  const [trashGrp, setTrashGrp] = useState(null); // { members:[{id,title}], action:'restore'|'permanent', mode:'ask'|'select', checked:Set }
+  const openTrashGroup = (members, action, onDone) => setTrashGrp({ members: members || [], action, mode: "ask", checked: new Set(), onDone });
+  const applyTrashGroup = async (ids) => {
+    const action = trashGrp?.action;
+    const onDone = trashGrp?.onDone;
+    setTrashGrp(null);
+    const list = Array.from(ids || []);
+    if (!list.length) return;
+    try {
+      for (const id of list) {
+        if (action === "restore") await tasksApi.restore(id);
+        else await tasksApi.permanentDelete(id);
+      }
+      toast.success(action === "restore" ? `${list.length} görev geri getirildi` : `${list.length} görev kalıcı silindi`);
+      refresh();
+      onDone?.();
+    } catch (e) { toast.error(e?.response?.data?.detail || "İşlem başarısız"); }
+  };
+  // Çöp görünümünde grup banner'ı — 2+ üyesi çöpte olan her grup için toplu
+  // "Grubu Getir" / "Grubu Sil" sunar. onDone: yerel liste yenileyici (Kolay).
+  const groupTrashBanner = (trashTasks = [], onDone) => {
+    const counts = {};
+    for (const t of trashTasks) { const g = t.group_id && groupById[t.group_id] ? t.group_id : null; if (g) counts[g] = (counts[g] || 0) + 1; }
+    const gids = Object.keys(counts).filter((g) => counts[g] >= 2);
+    if (!gids.length) return null;
+    return (
+      <div className="mb-4 space-y-2" data-testid="trash-groups">
+        <div className="hud-text text-sertex-cyan flex items-center gap-1.5"><Link2 className="h-3.5 w-3.5" /> ÇÖPTEKİ GRUPLAR</div>
+        {gids.map((gid) => {
+          const g = groupById[gid];
+          const gc = groupColorOf(g);
+          const members = trashTasks.filter((t) => t.group_id === gid).map((t) => ({ id: t.id, title: t.title }));
+          return (
+            <div key={gid} data-testid={`trash-group-banner-${gid}`} className="rounded-xl border border-sertex-cyan/30 bg-sertex-cyan/[0.05] px-4 py-2.5 flex items-center gap-2 flex-wrap" style={gc ? { borderColor: hexToRgba(gc, 0.5), background: hexToRgba(gc, 0.08) } : undefined}>
+              <span className="h-3 w-3 rounded-full shrink-0" style={{ background: gc || "rgb(var(--sx-accent-rgb))" }} />
+              <Link2 className="h-4 w-4 text-sertex-cyan shrink-0" style={gc ? { color: gc } : undefined} />
+              <span className="text-sertex-text font-medium truncate flex-1 min-w-0">{g?.name || "Bağlı Görevler"}</span>
+              <span className="hud-text text-sertex-textMuted tabular-nums whitespace-nowrap">{members.length} görev</span>
+              <button type="button" onClick={() => openTrashGroup(members, "restore", onDone)} data-testid={`trash-group-restore-${gid}`} className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-sertex-cyan/40 text-sertex-cyan hover:bg-sertex-cyan/10 text-xs font-mono transition-colors"><RotateCcw className="h-3 w-3" /> Grubu Getir</button>
+              <button type="button" onClick={() => openTrashGroup(members, "permanent", onDone)} data-testid={`trash-group-perm-${gid}`} className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-rose-500/40 text-rose-300 hover:bg-rose-500/15 text-xs font-mono transition-colors"><Trash2 className="h-3 w-3" /> Grubu Sil</button>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
   const emptyTrash = async (scope = "mine") => {
     const ok = await confirmDialog({ title: "ÇÖPÜ BOŞALT", message: "Çöp kutusundaki tüm görevler KALICI silinsin mi? Bu işlem geri alınamaz.", confirmText: "BOŞALT", cancelText: "VAZGEÇ", danger: true });
     if (!ok) return;
@@ -220,7 +269,7 @@ export function useTaskActions({ tasks = [], setTasks, cats = [], groups = [], u
       return;
     }
     // Anlık (geçici) — hemen çöz, 12 sn boyunca "Geri Al" sun.
-    const snapshot = { name: g?.name || "", show_progress: g?.show_progress !== false, task_ids: memberIds };
+    const snapshot = { name: g?.name || "", color: g?.color || null, show_progress: g?.show_progress !== false, task_ids: memberIds };
     try {
       await tasksApi.deleteGroup(gid);
       refresh();
@@ -322,8 +371,49 @@ export function useTaskActions({ tasks = [], setTasks, cats = [], groups = [], u
       {linkModal && (
         <LinkTasksModal candidateTasks={linkCandidates.candidates} preselectedIds={linkCandidates.preselected} group={linkCandidates.group} onClose={() => setLinkModal(null)} onSaved={() => { setLinkModal(null); refresh(); }} />
       )}
+      {trashGrp && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setTrashGrp(null)} data-testid="trash-group-dialog">
+          <div className={`w-[min(440px,92vw)] max-h-[80vh] overflow-y-auto scrollbar-sertex rounded-lg border ${trashGrp.action === "permanent" ? "border-rose-400/40" : "border-sertex-cyan/40"} bg-sertex-surface p-4 shadow-2xl`} onClick={(e) => e.stopPropagation()}>
+            <div className={`flex items-center gap-2 mb-3 font-mono ${trashGrp.action === "permanent" ? "text-rose-300" : "text-sertex-cyan"}`}>
+              {trashGrp.action === "permanent" ? "GRUBU KALICI SİL" : "GRUBU GERİ GETİR"}
+            </div>
+            {trashGrp.mode === "ask" ? (
+              <>
+                <div className="text-xs text-sertex-textMuted mb-4">Çöpteki <span className="text-sertex-text font-semibold">{trashGrp.members.length}</span> grup görevi {trashGrp.action === "permanent" ? "kalıcı silinecek" : "geri getirilecek"}. Nasıl?</div>
+                <div className="space-y-2">
+                  <button onClick={() => applyTrashGroup(trashGrp.members.map((m) => m.id))} data-testid="trash-group-all" className={`w-full text-left px-3 py-2 rounded-md border hud-text transition-colors ${trashGrp.action === "permanent" ? "border-rose-400/60 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25" : "border-sertex-cyan/50 bg-sertex-cyan/10 text-sertex-cyan hover:bg-sertex-cyan/20"}`}>Hepsini ({trashGrp.members.length})</button>
+                  <button onClick={() => setTrashGrp((p) => ({ ...p, mode: "select" }))} data-testid="trash-group-select-open" className="w-full text-left px-3 py-2 rounded-md border border-white/15 text-sertex-textMuted hover:text-sertex-cyan hover:border-sertex-cyan/40 hud-text transition-colors">Seçerek…</button>
+                </div>
+                <div className="flex justify-end mt-4"><button onClick={() => setTrashGrp(null)} data-testid="trash-group-cancel" className="hud-text px-3 py-1 rounded border border-white/15 text-sertex-textMuted hover:text-sertex-text">Vazgeç</button></div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="hud-text text-sertex-textMuted">{trashGrp.checked.size} seçili</span>
+                  <button onClick={() => setTrashGrp((p) => ({ ...p, checked: p.checked.size === p.members.length ? new Set() : new Set(p.members.map((m) => m.id)) }))} data-testid="trash-group-toggle-all" className="hud-text px-2 py-0.5 rounded border border-sertex-cyan/30 text-sertex-cyan hover:bg-sertex-cyan/10">Tümünü Seç/Kaldır</button>
+                </div>
+                <div className="space-y-1 mb-4">
+                  {trashGrp.members.map((m) => {
+                    const on = trashGrp.checked.has(m.id);
+                    return (
+                      <button key={m.id} onClick={() => setTrashGrp((p) => { const n = new Set(p.checked); if (n.has(m.id)) n.delete(m.id); else n.add(m.id); return { ...p, checked: n }; })} data-testid={`trash-group-opt-${m.id}`} className={`w-full flex items-center gap-2 text-left px-2 py-1.5 rounded border transition-colors ${on ? "border-sertex-cyan bg-sertex-cyan/15" : "border-white/10 hover:border-sertex-cyan/30"}`}>
+                        <span className={`h-4 w-4 rounded-sm border flex items-center justify-center shrink-0 ${on ? "border-sertex-cyan bg-sertex-cyan/50" : "border-sertex-cyan/40"}`}>{on && "✓"}</span>
+                        <span className="flex-1 min-w-0 text-xs font-mono text-sertex-text truncate">{m.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <button onClick={() => setTrashGrp((p) => ({ ...p, mode: "ask" }))} data-testid="trash-group-back" className="hud-text px-3 py-1 rounded border border-white/15 text-sertex-textMuted hover:text-sertex-text">← Geri</button>
+                  <button disabled={trashGrp.checked.size === 0} onClick={() => applyTrashGroup(trashGrp.checked)} data-testid="trash-group-apply" className={`hud-text px-3 py-1 rounded border transition-colors ${trashGrp.checked.size === 0 ? "border-white/10 text-sertex-textMuted/40 cursor-not-allowed" : trashGrp.action === "permanent" ? "border-rose-400/60 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25" : "border-sertex-cyan/50 bg-sertex-cyan/10 text-sertex-cyan hover:bg-sertex-cyan/20"}`}>{trashGrp.action === "permanent" ? "Seçilenleri Sil" : "Seçilenleri Getir"} ({trashGrp.checked.size})</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 
-  return { cardPropsFor, modalsElement, collapsedIds, toggleCollapse, reminderConfig, clipboard, clearTaskClipboard, setStatus, setArchived, removeTask, setTaskCategory, setEditing, nudge, cancelTask, uncancelTask, restoreTask, permanentDeleteTask, emptyTrash, dissolveGroup, dissolveGroupModed, editGroup, groupById, handlePaste, handleUseTemplate };
+  return { cardPropsFor, modalsElement, collapsedIds, toggleCollapse, reminderConfig, clipboard, clearTaskClipboard, setStatus, setArchived, removeTask, setTaskCategory, setEditing, nudge, cancelTask, uncancelTask, restoreTask, permanentDeleteTask, emptyTrash, dissolveGroup, dissolveGroupModed, editGroup, openTrashGroup, groupTrashBanner, groupById, handlePaste, handleUseTemplate };
 }

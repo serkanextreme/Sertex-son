@@ -2659,6 +2659,7 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         group = TaskGroup(
             user_id=user["id"],
             name=(req.name or None),
+            color=(req.color or None),
             show_progress=bool(req.show_progress),
         )
         await db.task_groups.insert_one(group.model_dump())
@@ -2684,6 +2685,8 @@ def build_tasks_router(db, licensed_user_dep, current_user_dep) -> APIRouter:
         set_ops: Dict[str, Any] = {"updated_at": datetime.now(timezone.utc).isoformat()}
         if req.name is not None:
             set_ops["name"] = req.name or None
+        if req.color is not None:
+            set_ops["color"] = req.color or None
         if req.show_progress is not None:
             set_ops["show_progress"] = bool(req.show_progress)
         await db.task_groups.update_one({"id": gid}, {"$set": set_ops})

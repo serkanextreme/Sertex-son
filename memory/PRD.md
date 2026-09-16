@@ -1,5 +1,13 @@
 # Sertex — Kişisel AI Asistan · PRD
 
+## ✅ TAMAMLANDI (2026-06, "YAP"): Grup Renk Etiketi (4 tema)
+- Her bağlı görev grubuna **renk** verildi. Backend: `TaskGroup/Create/Update`'e `color` alanı + create/update kaydı; dissolve undo snapshot'ı da color taşır.
+- `lib/groupColors.js` (8 preset + özel renk + `groupColorOf`/`hexToRgba`). `LinkTasksModal`'a "GRUP RENGİ" seçici eklendi (preset swatch + özel renk).
+- Renk uygulaması: grup blokları/başlıkları/bölümleri (Detaylı `TaskGroupViews` StaticTaskGroupBlock + TaskGroupBlock, Teknik tablo başlık satırı + üye satır sol-şeridi, Profesyonel banner + üye kart iç-şeridi, Kolay bölüm satırları) + **kartlarda renkli nokta** (Kolay `KolayCardBody` group dot; Teknik satır sol-şerit; Profesyonel kart iç-şerit) → hangi gruba ait olduğu bir bakışta belli.
+- Renk yoksa tema vurgu rengine (accent) düşer — eski görünüm korunur. E2E doğrulandı (mor grup: Kolay bölüm+kart noktaları, modal seçici, Teknik başlık+satır). Test verisi kalıcı silindi → CANLI DB TEMİZ. Derleme temiz.
+
+
+
 ## ✅ TAMAMLANDI (2026-06, "YAP"): Toplu alt görev silme (sor/seç) + her silmede "Geri Al"
 - **Toplu alt görev silme** (`TaskCard.bulkDelete`): Çoklu seçimde "Sil"e basınca — seçilenlerin hiçbirinin iç görevi yoksa doğrudan siler; en az birinin iç görevi varsa tekil diyaloğun TOPLU sürümü açılır: **HEPSİNİ SİL** (`mutateSelectedSubs`→null), **SADECE SEÇİLENLERİ SİL** (her seçilene `removeNodeKeepChildren`, çocuklar üst seviyeye taşınır), **SEÇEREK SİL** (seçili düğümlerin birleşik alt ağacı, girintili işaretlemeli liste). Diyalog `deleteTarget.bulk` bayrağıyla genelleştirildi.
 - **Silmede Geri Al** (`deleteSubsWithUndo`): Tekil ve toplu tüm alt görev silmelerinde 10 sn "Geri Al" toast'u; silmeden önceki alt görev ağacı snapshot'ı `onSetSubtasks` ile geri yüklenir.
@@ -2894,3 +2902,24 @@ Test: ZZTEST dummy (biri iç içe alt görevli) ile — toolbar/sekmeler/çipler
 ### ⏳ SONRAKI: FAZ 2 — KOLAY, FAZ 3 — TEKNİK
 Kolay eksikleri: satır-içi iç içe alt görev arayüzü (TaskCard/SubtaskTree), iş kolu yönetimi, arşiv/çöp görünümleri, dürt, dışa aktar tamlığı.
 Teknik eksikleri: satır-içi görev ekleme, iş kolu yönetimi, durum filtre çipleri, şablonlar, kopyala-yapıştır, arşiv/çöp, dürt, dışa aktar.
+
+## ✅ ALT GÖREV TAŞIMA + GRUP ÇÖP İŞLEMLERİ — BAĞLAMA & DOĞRULAMA (2026-09-16 · fork)
+İki özellik önceki oturumda kodlanmış ama Group Trash tetikleyicisi bağlanmamıştı. Bu oturumda tamamlanıp CANLI DB'de ZZTEST_ dummy ile E2E test edildi ve tüm test verisi kalıcı temizlendi (0 ZZTEST kaldı).
+
+### C) Alt Görev Taşıma (Subtask Move) — ZATEN TAMDI, DOĞRULANDI
+- `SubtaskMenu.jsx` "Şunun altına taşı" (FolderInput) → `TaskCard.jsx` `moveTarget` dialog → `subtaskTree.js:moveSubUnder` (kendi + torunları hariç hedefler; "En Üst Seviye" seçeneği). `onSetSubtasks` ile backend'e PATCH.
+- E2E: Profesyonel modalında ZZ_A1'i ZZ_B altına taşıdım → toast + ağaç güncellendi + backend'de kalıcı doğrulandı.
+
+### B) Grup Çöp İşlemleri (Group Trash Actions) — BAĞLANDI (eksikti)
+- `useTaskActions.jsx`: `openTrashGroup(members, action, onDone)` export edildi; `applyTrashGroup` `onDone` callback'i alacak şekilde güncellendi (yerel liste yenileme için). Yeni merkezi `groupTrashBanner(trashTasks, onDone)` helper'ı: çöpte 2+ üyesi olan her grup için banner + [Grubu Getir]/[Grubu Sil]. Prompt dialog (`trash-group-dialog`) zaten vardı: Hepsini / Seçerek modları (restore=cyan, permanent=rose).
+- Bağlantı: Profesyonel (`archiveVisible`, ızgara üstü) · Teknik (`archiveVisible`, tablo üstü padded) · Kolay (`KolayArchive`'e `groupTrashBanner` prop geçildi, `mode==="trash"` içinde yerel `load` ile refresh).
+- E2E (3 arayüzde): banner render, "Grubu Getir → Hepsini" (restore, liste yenilendi), "Grubu Sil → Seçerek (2 seç)" (perm-delete, kalan tek üyede banner kayboldu — doğru). Kolay'ın özel `onDone=load` refresh yolu da doğrulandı.
+- Testleri MAIN AGENT kendi yaptı (canlı DB kısıtı) — testing_agent kullanılmadı.
+
+### Dokunulan dosyalar
+`frontend/src/lib/useTaskActions.jsx`, `frontend/src/components/ProfesyonelInterface.jsx`, `frontend/src/components/TeknikInterface.jsx`, `frontend/src/components/KolayInterface.jsx`. Sadece WEB; mobil dokunulmadı. CRA build temiz (1 uyarı — normal).
+
+### Kalan (beklemede — kullanıcı komutu bekliyor)
+- Aydınlık + Pano temalarına tam parite (grup katmanı, menü renkleri, akıllı alt görev silme, grup renkleri, grup çöp) — kullanıcı "sonra" dedi.
+- Mobil Arşiv Gruplama · Mobil Hata Radarı paritesi (Çöz/Geri Al/Önem/Gruplama).
+- Yönetici "Gecikmiş Görevler" toplu dürtme paneli · Süreli süper-admin "Sebep/Not" alanı · Kartlarda renkli kategori etiketi.

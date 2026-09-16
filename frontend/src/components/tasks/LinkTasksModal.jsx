@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Link2, X, ChevronUp, ChevronDown, Check, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { tasksApi } from "../../lib/api";
+import { GROUP_COLORS } from "../../lib/groupColors";
 
 export const LinkTasksModal = ({ candidateTasks = [], preselectedIds = [], group = null, onClose, onSaved }) => {
   const isEdit = !!group;
@@ -14,6 +15,7 @@ export const LinkTasksModal = ({ candidateTasks = [], preselectedIds = [], group
     (preselectedIds || []).filter((id) => candidateTasks.some((t) => t.id === id))
   );
   const [name, setName] = useState(group?.name || "");
+  const [color, setColor] = useState(group?.color || GROUP_COLORS[0].value);
   const [showProgress, setShowProgress] = useState(group ? !!group.show_progress : true);
   const [saving, setSaving] = useState(false);
 
@@ -44,7 +46,7 @@ export const LinkTasksModal = ({ candidateTasks = [], preselectedIds = [], group
     }
     setSaving(true);
     try {
-      const payload = { name: name.trim() || null, show_progress: showProgress, task_ids: selected };
+      const payload = { name: name.trim() || null, color: color || null, show_progress: showProgress, task_ids: selected };
       if (isEdit) await tasksApi.updateGroup(group.id, payload);
       else await tasksApi.createGroup(payload);
       toast.success(isEdit ? "Grup güncellendi" : `${selected.length} görev bağlandı`);
@@ -99,6 +101,31 @@ export const LinkTasksModal = ({ candidateTasks = [], preselectedIds = [], group
               />
               İlerleme göster (ör. "2/4 tamamlandı")
             </label>
+            <div>
+              <div className="hud-text text-sertex-textMuted mb-1">GRUP RENGİ</div>
+              <div className="flex items-center gap-1.5 flex-wrap" data-testid="link-group-colors">
+                {GROUP_COLORS.map((c) => {
+                  const on = (color || "").toLowerCase() === c.value.toLowerCase();
+                  return (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => setColor(c.value)}
+                      title={c.name}
+                      data-testid={`link-color-${c.value.replace("#", "")}`}
+                      className={`h-7 w-7 rounded-full transition-transform ${on ? "scale-110 ring-2 ring-offset-2 ring-offset-sertex-bg" : "hover:scale-105"}`}
+                      style={{ background: c.value, boxShadow: on ? `0 0 10px ${c.value}` : "none", ...(on ? { "--tw-ring-color": c.value } : {}) }}
+                    >
+                      {on && <Check className="h-3.5 w-3.5 mx-auto text-black/70" />}
+                    </button>
+                  );
+                })}
+                <label className="h-7 w-7 rounded-full border border-dashed border-sertex-cyan/40 flex items-center justify-center cursor-pointer overflow-hidden relative" title="Özel renk">
+                  <span className="h-4 w-4 rounded-full" style={{ background: color }} />
+                  <input type="color" value={color} onChange={(e) => setColor(e.target.value)} data-testid="link-color-custom" className="absolute inset-0 opacity-0 cursor-pointer" />
+                </label>
+              </div>
+            </div>
           </div>
 
           {/* Seçili görevler — sıralı */}

@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import {
   Check, Pause, Plus, MoreVertical, BellRing, RotateCcw, Clock, AlertTriangle,
   Bell, GripVertical, User, Building2, Tag, Lock, Unlock, Eye, Users, BellOff,
-  ChevronsDownUp, ChevronsUpDown, Maximize2, Minimize2, CircleCheckBig, RefreshCw, CornerLeftUp, CornerDownRight, Undo2, Anchor, ChevronRight, ChevronDown, Hash, Play, Trash2, X, ListChecks, Circle, CheckCircle2,
+  ChevronsDownUp, ChevronsUpDown, Maximize2, Minimize2, CircleCheckBig, RefreshCw, CornerLeftUp, CornerDownRight, Undo2, Anchor, ChevronRight, ChevronDown, Hash, Play, Trash2, X, ListChecks, Circle, CheckCircle2, FolderInput,
 } from "lucide-react";
 import { tasksApi, taskLockApi } from "../lib/api";
 import { toast } from "sonner";
@@ -26,6 +26,7 @@ import {
   removeSubById,
   removeNodeKeepChildren,
   flattenSubsDepth,
+  moveSubUnder,
   addChildById,
   replaceChildrenById,
   findSubById,
@@ -123,6 +124,8 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
   const [deleteTarget, setDeleteTarget] = useState(null); // { id, text, kidCount, subtree:[{node,depth}] }
   const [deleteMode, setDeleteMode] = useState("ask");     // "ask" | "select"
   const [deleteChecked, setDeleteChecked] = useState(new Set());
+  // Alt görev taşıma — hedef üst görev seçtiren pencere.
+  const [moveTarget, setMoveTarget] = useState(null); // { id, text, options:[{node,depth}] }
   // İç içe alt görev ekleme — hangi alt görevin altına ekleniyor (id) + metin.
   const [addChildParent, setAddChildParent] = useState(null);
   const [newChildText, setNewChildText] = useState("");
@@ -191,6 +194,13 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
       setDeleteTarget({ id, text: node.text, kidCount: flattenSubs(kids).length, subtree: flattenSubsDepth([node]) });
       setDeleteMode("ask");
       setDeleteChecked(new Set());
+      return;
+    }
+    if (action === "move") {
+      const node = findSubById(subtasks, id);
+      const descIds = new Set(flattenSubs(node?.children || []).map((s) => s.id));
+      const options = flattenSubsDepth(subtasks).filter((x) => x.node.id !== id && !descIds.has(x.node.id));
+      setMoveTarget({ id, text: node?.text || "", options });
       return;
     }
     if (action === "reset-size") {
@@ -1547,6 +1557,55 @@ export const TaskCard = ({ task, displayNumber, onStatusChange, onDelete, onEdit
                     </div>
                   </>
                 )}
+              </div>
+            </div>,
+            document.body,
+          )}
+        {moveTarget &&
+          createPortal(
+            <div
+              className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+              onClick={() => setMoveTarget(null)}
+              data-testid="subtask-move-dialog"
+            >
+              <div
+                className="w-[min(440px,92vw)] max-h-[80vh] overflow-y-auto scrollbar-sertex rounded-lg border border-sertex-cyan/40 bg-sertex-surface p-4 shadow-2xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center gap-2 mb-1 text-sertex-cyan font-mono">
+                  <FolderInput className="h-4 w-4" /> ALT GÖREVİ TAŞI
+                </div>
+                <div className="text-xs text-sertex-textMuted mb-3">
+                  <span className="text-sertex-text font-semibold">"{moveTarget.text}"</span> hangi görevin altına taşınsın? (Çocukları birlikte taşınır)
+                </div>
+                <div className="space-y-1">
+                  <button
+                    onClick={() => { onSetSubtasks(moveSubUnder(subtasks, moveTarget.id, null)); toast.success("En üst seviyeye taşındı"); setMoveTarget(null); }}
+                    data-testid="subtask-move-root"
+                    className="w-full flex items-center gap-2 text-left px-3 py-2 rounded-md border border-sertex-cyan/40 bg-sertex-cyan/10 text-sertex-cyan hover:bg-sertex-cyan/20 transition-colors"
+                  >
+                    <CornerLeftUp className="h-4 w-4 shrink-0" /> <span className="hud-text">En Üst Seviye</span>
+                  </button>
+                  {moveTarget.options.length === 0 ? (
+                    <div className="hud-text text-sertex-textMuted/70 text-center py-2">Başka uygun üst görev yok</div>
+                  ) : (
+                    moveTarget.options.map(({ node, depth }) => (
+                      <button
+                        key={node.id}
+                        onClick={() => { onSetSubtasks(moveSubUnder(subtasks, moveTarget.id, node.id)); toast.success(`"${node.text}" altına taşındı`); setMoveTarget(null); }}
+                        data-testid={`subtask-move-opt-${node.id}`}
+                        style={{ paddingLeft: 12 + depth * 16 }}
+                        className="w-full flex items-center gap-2 text-left pr-2 py-1.5 rounded border border-white/10 hover:border-sertex-cyan/40 hover:bg-sertex-cyan/5 transition-colors"
+                      >
+                        {depth > 0 && <CornerDownRight className="h-3 w-3 text-sertex-textMuted shrink-0" />}
+                        <span className="flex-1 min-w-0 text-xs font-mono text-sertex-text truncate">{node.text}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+                <div className="flex justify-end mt-4">
+                  <button onClick={() => setMoveTarget(null)} data-testid="subtask-move-cancel" className="hud-text px-3 py-1 rounded border border-white/15 text-sertex-textMuted hover:text-sertex-text">Vazgeç</button>
+                </div>
               </div>
             </div>,
             document.body,

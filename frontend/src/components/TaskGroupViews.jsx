@@ -5,6 +5,7 @@ import { Rnd } from "react-rnd";
 import { Edit3, GripVertical, Maximize2, Minimize2, ArrowLeft, Link2, Unlink } from "lucide-react";
 import { TaskCard } from "./TaskCard";
 import { ResizeGrip } from "./ResizeGrip";
+import { groupColorOf, hexToRgba } from "../lib/groupColors";
 
 export const ReorderableTaskCard = ({ task, onDragToCategory, onDropToCategory, ...rest }) => {
   const controls = useDragControls();
@@ -100,19 +101,23 @@ export const GroupWindowMemberRow = ({ task, cardProps }) => {
 // GÖREV BAĞLAMA — Personel Görevleri (team) için statik grup bloğu (sürükleme yok).
 export const StaticTaskGroupBlock = ({ group, tasks, renderStaticMember, onEditGroup, onDissolve }) => {
   const doneCount = tasks.filter((t) => t.status === "done").length;
+  const c = groupColorOf(group);
   return (
     <div
       className="rounded-xl border-2 border-sertex-cyan/40 bg-sertex-cyan/[0.04] p-1.5 space-y-1.5 shadow-[0_0_18px_rgba(34,211,238,0.08)]"
+      style={c ? { borderColor: hexToRgba(c, 0.55), background: hexToRgba(c, 0.06), boxShadow: `0 0 18px ${hexToRgba(c, 0.14)}` } : undefined}
       data-testid={`task-group-${group.id}`}
     >
       <div className="flex items-center gap-1.5 px-1 py-0.5">
-        <Link2 className="h-3.5 w-3.5 text-sertex-cyan shrink-0" />
-        <span className="hud-text text-sertex-cyan flex-1 truncate tracking-wider">
+        <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: c || "rgb(var(--sx-accent-rgb))" }} />
+        <Link2 className="h-3.5 w-3.5 text-sertex-cyan shrink-0" style={c ? { color: c } : undefined} />
+        <span className="hud-text text-sertex-cyan flex-1 truncate tracking-wider" style={c ? { color: c } : undefined}>
           {group.name || "BAĞLI GÖREVLER"}
         </span>
         {group.show_progress && (
           <span
             className="hud-text px-1.5 py-0.5 rounded border border-sertex-cyan/40 text-sertex-cyan bg-sertex-cyan/10 whitespace-nowrap"
+            style={c ? { color: c, borderColor: hexToRgba(c, 0.4), background: hexToRgba(c, 0.1) } : undefined}
             data-testid={`group-progress-${group.id}`}
           >
             {doneCount}/{tasks.length} tamamlandı
@@ -147,10 +152,12 @@ export const StaticTaskGroupBlock = ({ group, tasks, renderStaticMember, onEditG
 export const TaskGroupBlock = ({ rowKey, group, tasks, renderMember, onReorderGroup, onEditGroup, onDissolve, onDetach }) => {
   const controls = useDragControls();
   const doneCount = tasks.filter((t) => t.status === "done").length;
+  const c = groupColorOf(group);
   return (
     <Reorder.Item value={rowKey} dragListener={false} dragControls={controls} layout>
       <div
         className="rounded-xl border-2 border-sertex-cyan/40 bg-sertex-cyan/[0.04] p-1.5 space-y-1.5 shadow-[0_0_18px_rgba(34,211,238,0.08)]"
+        style={c ? { borderColor: hexToRgba(c, 0.55), background: hexToRgba(c, 0.06), boxShadow: `0 0 18px ${hexToRgba(c, 0.14)}` } : undefined}
         data-testid={`task-group-${group.id}`}
       >
         <div className="flex items-center gap-1.5 px-1 py-0.5">
@@ -162,13 +169,15 @@ export const TaskGroupBlock = ({ rowKey, group, tasks, renderMember, onReorderGr
           >
             <GripVertical className="h-4 w-4" />
           </button>
-          <Link2 className="h-3.5 w-3.5 text-sertex-cyan shrink-0" />
-          <span className="hud-text text-sertex-cyan flex-1 truncate tracking-wider">
+          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: c || "rgb(var(--sx-accent-rgb))" }} />
+          <Link2 className="h-3.5 w-3.5 text-sertex-cyan shrink-0" style={c ? { color: c } : undefined} />
+          <span className="hud-text text-sertex-cyan flex-1 truncate tracking-wider" style={c ? { color: c } : undefined}>
             {group.name || "BAĞLI GÖREVLER"}
           </span>
           {group.show_progress && (
             <span
               className="hud-text px-1.5 py-0.5 rounded border border-sertex-cyan/40 text-sertex-cyan bg-sertex-cyan/10 whitespace-nowrap"
+              style={c ? { color: c, borderColor: hexToRgba(c, 0.4), background: hexToRgba(c, 0.1) } : undefined}
               data-testid={`group-progress-${group.id}`}
             >
               {doneCount}/{tasks.length} tamamlandı

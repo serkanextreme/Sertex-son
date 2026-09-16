@@ -57,6 +57,29 @@ export const flattenSubsDepth = (nodes = [], depth = 0) => {
   return out;
 };
 
+// Bir alt görevi (çocuklarıyla) başka bir üst görevin altına taşı.
+// targetId null ise en üst seviyeye taşınır. Kendi altına taşınamaz.
+export const moveSubUnder = (nodes = [], sourceId, targetId) => {
+  let moved = null;
+  const detach = (arr) => {
+    const out = [];
+    for (const s of arr) {
+      if (s.id === sourceId) { moved = s; continue; }
+      out.push(Array.isArray(s.children) && s.children.length ? { ...s, children: detach(s.children) } : s);
+    }
+    return out;
+  };
+  const without = detach(nodes);
+  if (!moved) return nodes;
+  if (targetId == null) return [...without, moved];
+  const insert = (arr) =>
+    arr.map((s) => {
+      if (s.id === targetId) return { ...s, children: [...(s.children || []), moved] };
+      return Array.isArray(s.children) && s.children.length ? { ...s, children: insert(s.children) } : s;
+    });
+  return insert(without);
+};
+
 // parentId null/undefined → köke ekle.
 export const addChildById = (nodes = [], parentId, child) => {
   if (parentId == null) return [...nodes, child];
