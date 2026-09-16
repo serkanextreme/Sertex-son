@@ -883,7 +883,32 @@ def build_admin_router(db, current_user_dep, require_admin, hash_password) -> AP
             }
             for d in days
         ]
-        return {"logs": docs, "total": total, "active": active, "last_24h": last_24h, "daily": daily}
+        # En çok hata üreten ilk 3 kaynak (son 7 gün) — seviye kırılımıyla.
+        top_sources = []
+        try:
+            src_agg = await db.client_logs.aggregate([
+                {"$match": {"created_at": {"$gte": week_cutoff}}},
+                {"$group": {
+                    "_id": {"$ifNull": ["$source", ""]},
+                    "count": {"$sum": 1},
+                    "errors": {"$sum": {"$cond": [{"$in": [{"$toLower": {"$ifNull": ["$level", ""]}}, ["error", "critical", "fatal"]]}, 1, 0]}},
+                    "warnings": {"$sum": {"$cond": [{"$in": [{"$toLower": {"$ifNull": ["$level", ""]}}, ["warning", "warn"]]}, 1, 0]}},
+                }},
+                {"$sort": {"count": -1}},
+                {"$limit": 3},
+            ]).to_list(length=3)
+            top_sources = [
+                {
+                    "source": row.get("_id") or "",
+                    "count": int(row.get("count", 0)),
+                    "errors": int(row.get("errors", 0)),
+                    "warnings": int(row.get("warnings", 0)),
+                }
+                for row in src_agg
+            ]
+        except Exception:
+            top_sources = []
+        return {"logs": docs, "total": total, "active": active, "last_24h": last_24h, "daily": daily, "top_sources": top_sources}
 
     @router.delete("/admin/client-logs")
     async def admin_clear_client_logs(user: dict = Depends(current_user_dep)):

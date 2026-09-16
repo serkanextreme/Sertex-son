@@ -159,6 +159,53 @@ const Chip = ({ active, onClick, children, testid }) => (
   </button>
 );
 
+// En çok hata üreten ilk 3 kaynak — yatay yığılmış mini çubuklar (Hata + Uyarı).
+const TopSourcesMini = ({ topSources, onPick }) => {
+  const items = (Array.isArray(topSources) ? topSources : []).filter((s) => (s.count || 0) > 0);
+  if (items.length === 0) return null;
+  const max = Math.max(1, ...items.map((s) => s.count || 0));
+  return (
+    <div className="glass-panel corner-bracket p-3 border-sertex-danger/20" data-testid="error-radar-topsources">
+      <div className="hud-text text-sertex-danger flex items-center gap-1.5 mb-2">
+        <FileCode2 className="h-3 w-3" /> EN ÇOK HATA ÜRETEN KAYNAKLAR · 7G
+      </div>
+      <div className="space-y-1.5">
+        {items.map((s, idx) => {
+          const label = (s.source || "").trim() || "(kaynak yok)";
+          const errors = s.errors || 0;
+          const warnings = s.warnings || 0;
+          const count = s.count || 0;
+          const fillPct = Math.max(6, Math.round((count / max) * 100));
+          const ePct = count > 0 ? (errors / count) * 100 : 0;
+          const wPct = count > 0 ? (warnings / count) * 100 : 0;
+          const oPct = Math.max(0, 100 - ePct - wPct);
+          return (
+            <button
+              type="button"
+              key={label}
+              onClick={() => onPick?.(s.source || "")}
+              data-testid={`error-radar-topsource-${idx}`}
+              title={`${label} · ${errors} hata · ${warnings} uyarı — kaynağa göre grupla`}
+              className="w-full flex items-center gap-2 text-left group"
+            >
+              <span className="text-[11px] font-mono text-sertex-textSecondary normal-case truncate w-28 shrink-0 group-hover:text-sertex-cyan">{label}</span>
+              <span className="flex-1 h-3 rounded-sm bg-white/5 overflow-hidden">
+                <span className="flex h-full" style={{ width: `${fillPct}%` }}>
+                  {ePct > 0 && <span className="h-full bg-sertex-danger/80" style={{ width: `${ePct}%` }} />}
+                  {wPct > 0 && <span className="h-full bg-orange-400/70" style={{ width: `${wPct}%` }} />}
+                  {oPct > 0 && <span className="h-full bg-sertex-textMuted/40" style={{ width: `${oPct}%` }} />}
+                </span>
+              </span>
+              <span className="text-[11px] font-mono tabular-nums text-sertex-danger w-6 text-right shrink-0">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+
 const ClientErrorRadar = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -298,6 +345,9 @@ const ClientErrorRadar = () => {
         selectedDay={day}
         onSelectDay={(dstr) => setDay((prev) => (prev === dstr ? "" : dstr))}
       />
+
+      {/* En çok hata üreten ilk 3 kaynak */}
+      <TopSourcesMini topSources={data?.top_sources} onPick={() => setGroupMode("source")} />
 
       {/* Bildirim ayarı — ayarlanabilir cooldown */}
       <div className="glass-panel corner-bracket p-3 border-sertex-cyan/25 space-y-2.5" data-testid="error-radar-notify">
